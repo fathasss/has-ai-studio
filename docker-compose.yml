@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  orchestrator:
+    build: ./orchestrator
+    container_name: orchestrator
+    ports:
+      - "8000:8000"
+    volumes:
+      - orchestrator_data:/app/data
+    depends_on:
+      - frontend_agent
+      - backend_agent
+      - designer_agent
+
+  frontend_agent:
+    build: ./agent
+    container_name: frontend_agent
+    environment:
+      - AGENT_ROLE=frontend_dev
+    ports:
+      - "5001:5000"
+
+  backend_agent:
+    build: ./agent
+    container_name: backend_agent
+    environment:
+      - AGENT_ROLE=backend_dev
+    ports:
+      - "5002:5000"
+
+  designer_agent:
+    build: ./agent
+    container_name: designer_agent
+    environment:
+      - AGENT_ROLE=designer
+    ports:
+      - "5003:5000"
+
+  web:
+    build: ./web
+    container_name: web
+    ports:
+      - "8080:80"
+
+volumes:
+  orchestrator_data:

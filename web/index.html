@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AI Software Team</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #0f172a;
+        color: #e5e7eb;
+        padding: 30px;
+      }
+      h1 {
+        color: #38bdf8;
+      }
+      select,
+      input,
+      button {
+        padding: 10px;
+        margin: 5px 0;
+        width: 300px;
+      }
+      button {
+        background: #38bdf8;
+        border: none;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .log {
+        background: #020617;
+        padding: 15px;
+        margin-top: 20px;
+        border-radius: 8px;
+      }
+      .success {
+        color: #22c55e;
+      }
+      .error {
+        color: #ef4444;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🤖 AI Software Team Dashboard</h1>
+
+    <label>Agent seç:</label><br />
+    <select id="role">
+      <option value="frontend_dev">Frontend Developer</option>
+      <option value="backend_dev">Backend Developer</option>
+      <option value="designer">Designer</option></select
+    ><br />
+
+    <label>Görev:</label><br />
+    <input id="task" placeholder="Ne yapılacak?" /><br />
+
+    <button onclick="sendTask()">Görev Gönder</button>
+
+    <div class="log" id="log"></div>
+
+    <button onclick="loadAgents()">🔄 Agent Durumları</button>
+    <div id="agents"></div>
+
+    <script>
+      async function loadAgents() {
+        const res = await fetch("http://localhost:8000/agents");
+        const agents = await res.json();
+
+        document.getElementById("agents").innerHTML = agents
+          .map(
+            (a) => `
+    <div>
+      🧠 <b>${a.role}</b> |
+      status: ${a.agent_status || a.status} |
+      tasks: ${a.tasks_completed ?? "-"}
+    </div>
+  `,
+          )
+          .join("");
+      }
+      
+      async function sendTask() {
+        const role = document.getElementById("role").value;
+        const task = document.getElementById("task").value;
+        const log = document.getElementById("log");
+
+        log.innerHTML = "⏳ Görev gönderiliyor...";
+
+        try {
+          const res = await fetch("http://localhost:8000/assign-task", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ role, task }),
+          });
+
+          const data = await res.json();
+
+          if (res.ok) {
+            log.innerHTML = `<p class="success">✅ ${data.agent_response.result}</p>`;
+          } else {
+            log.innerHTML = `<p class="error">❌ ${data.error}</p>`;
+          }
+        } catch (err) {
+          log.innerHTML = `<p class="error">❌ Server bağlantı hatası</p>`;
+        }
+      }
+    </script>
+  </body>
+</html>
