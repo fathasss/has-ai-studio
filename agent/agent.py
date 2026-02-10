@@ -20,20 +20,18 @@ SYSTEM_PROMPTS = {
     "designer": "You are a product designer. Focus on UX, UI, colors, spacing and usability."
 }
 
-
 def build_prompt(task: str, context_summary: str) -> str:
     return f"""
-{SYSTEM_PROMPTS.get(AGENT_ROLE, "")}
+            {SYSTEM_PROMPTS.get(AGENT_ROLE, "")}
 
-Previous context (summary):
-{context_summary if context_summary else "No prior context"}
+            Previous context (summary):
+            {context_summary if context_summary else "No prior context"}
 
-Current task:
-{task}
+            Current task:
+            {task}
 
-Respond clearly, professionally and with actionable output.
-""".strip()
-
+            Respond clearly, professionally and with actionable output.
+            """.strip()
 
 def call_ollama(payload):
     retries = 5
