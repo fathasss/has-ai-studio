@@ -2,9 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 🔥 TÜM PY DOSYALARINI KOPYALA
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
 
-RUN pip install flask flask-cors requests
+EXPOSE 8000
 
 CMD ["python", "main.py"]

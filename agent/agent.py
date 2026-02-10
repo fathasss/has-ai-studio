@@ -2,12 +2,13 @@ import os
 import requests
 from flask import Flask, request, jsonify
 from datetime import datetime
+import time
 
 app = Flask(__name__)
 
 AGENT_ROLE = os.getenv("AGENT_ROLE", "unknown")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
-AGENT_MODEL = os.getenv("AGENT_MODEL", "llama3")
+AGENT_MODEL = os.getenv("AGENT_MODEL", "llama3:latest")
 
 STATUS = "idle"
 TASK_HISTORY = []
@@ -34,19 +35,18 @@ Respond clearly, professionally and with actionable output.
 """.strip()
 
 
-def call_llm(prompt: str) -> str:
-    response = requests.post(
-        f"{OLLAMA_URL}/api/generate",
-        json={
-            "model": AGENT_MODEL,
-            "prompt": prompt,
-            "stream": False
-        },
-        timeout=300
-    )
-
-    response.raise_for_status()
-    return response.json().get("response", "").strip()
+def call_ollama(payload):
+    retries = 5
+    url = f"{OLLAMA_URL}/v1/completions" 
+    for i in range(retries):
+        try:
+            response = requests.post(url, json=payload, timeout=60)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"Attempt {i+1} failed: {e}")
+            time.sleep(5)
+    raise RuntimeError("Ollama unreachable after multiple attempts")
 
 
 @app.route("/health", methods=["GET"])
@@ -74,17 +74,22 @@ def execute_task():
 
     STATUS = "thinking"
 
-    # 🧠 Context özetleme
+    # Context özetleme
     context_summary = ""
     if context:
         context_summary = "\n".join(
             f"- {c['task']} → {c['result'][:200]}"
-            for c in context[-5:]  # 🔥 sadece son 5
+            for c in context[-5:]
         )
 
     try:
         prompt = build_prompt(task, context_summary)
-        llm_result = call_llm(prompt)
+        payload = {
+            "model": AGENT_MODEL,
+            "prompt": prompt,
+            "max_tokens": 256
+        }
+        llm_result = call_ollama(payload)["choices"][0]["text"]
     except Exception as e:
         STATUS = "idle"
         return jsonify({
@@ -100,7 +105,6 @@ def execute_task():
         "time": datetime.utcnow().isoformat()
     })
 
-    # 🔥 Memory limit
     if len(TASK_HISTORY) > MAX_MEMORY:
         TASK_HISTORY.pop(0)
 

@@ -19,6 +19,7 @@
         padding: 10px;
         margin: 5px 0;
         width: 300px;
+        border-radius: 5px;
       }
       button {
         background: #38bdf8;
@@ -31,12 +32,22 @@
         padding: 15px;
         margin-top: 20px;
         border-radius: 8px;
+        max-height: 300px;
+        overflow-y: auto;
       }
       .success {
         color: #22c55e;
+        white-space: pre-wrap;
       }
       .error {
         color: #ef4444;
+        white-space: pre-wrap;
+      }
+      .agent-card {
+        background: #1e293b;
+        padding: 10px;
+        margin: 5px 0;
+        border-radius: 6px;
       }
     </style>
   </head>
@@ -47,17 +58,19 @@
     <select id="role">
       <option value="frontend_dev">Frontend Developer</option>
       <option value="backend_dev">Backend Developer</option>
-      <option value="designer">Designer</option></select
-    ><br />
+      <option value="designer">Designer</option>
+    </select><br />
 
     <label>Görev:</label><br />
     <input id="task" placeholder="Ne yapılacak?" /><br />
 
     <button onclick="sendTask()">Görev Gönder</button>
+    <button onclick="runProject()">📦 Proje Çalıştır</button>
 
     <div class="log" id="log"></div>
 
-    <button onclick="loadAgents()">🔄 Agent Durumları</button>
+    <h2>Agent Durumları</h2>
+    <button onclick="loadAgents()">🔄 Yenile</button>
     <div id="agents"></div>
 
     <script>
@@ -66,18 +79,13 @@
         const agents = await res.json();
 
         document.getElementById("agents").innerHTML = agents
-          .map(
-            (a) => `
-    <div>
-      🧠 <b>${a.role}</b> |
-      status: ${a.agent_status || a.status} |
-      tasks: ${a.tasks_completed ?? "-"}
-    </div>
-  `,
-          )
-          .join("");
+          .map(a => `
+            <div class="agent-card">
+              🧠 <b>${a.role}</b> | status: ${a.status || a.agent_state} | tasks: ${a.tasks_completed ?? "-"}
+            </div>
+          `).join("");
       }
-      
+
       async function sendTask() {
         const role = document.getElementById("role").value;
         const task = document.getElementById("task").value;
@@ -88,12 +96,9 @@
         try {
           const res = await fetch("http://localhost:8000/assign-task", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ role, task }),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ role, task })
           });
-
           const data = await res.json();
 
           if (res.ok) {
@@ -105,6 +110,43 @@
           log.innerHTML = `<p class="error">❌ Server bağlantı hatası</p>`;
         }
       }
+
+      async function runProject() {
+        const task = document.getElementById("task").value;
+        const log = document.getElementById("log");
+
+        if (!task) {
+          log.innerHTML = `<p class="error">❌ Task boş olamaz</p>`;
+          return;
+        }
+
+        log.innerHTML = "⏳ Proje başlatılıyor...";
+
+        try {
+          const res = await fetch("http://localhost:8000/run-project", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ task })
+          });
+          const data = await res.json();
+
+          if (res.ok) {
+            let output = `📌 Task: ${data.task}\n\n`;
+            data.agents.forEach(a => {
+              output += `🧑‍💻 ${a.role}: ${a.result}\n\n`;
+            });
+            output += `📝 Final summary:\n${data.final_summary}`;
+            log.innerHTML = `<p class="success">${output}</p>`;
+          } else {
+            log.innerHTML = `<p class="error">❌ ${data.error}</p>`;
+          }
+        } catch (err) {
+          log.innerHTML = `<p class="error">❌ Server bağlantı hatası</p>`;
+        }
+      }
+
+      // Sayfa yüklendiğinde agent durumlarını getir
+      window.onload = loadAgents;
     </script>
   </body>
 </html>

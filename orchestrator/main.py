@@ -10,7 +10,7 @@ app = Flask(__name__)
 CORS(app)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
-DECOMPOSER_MODEL = "llama3"
+DECOMPOSER_MODEL = "llama3:latest"
 
 # 🚀 Docker service isimleri
 AGENTS = {
@@ -57,9 +57,9 @@ Task:
         json={
             "model": DECOMPOSER_MODEL,
             "prompt": prompt,
-            "stream": False
+            "max_tokens": 50
         },
-        timeout=120
+        timeout=300
     )
 
     res.raise_for_status()
@@ -168,7 +168,7 @@ def assign_task():
                 "task": task,
                 "context": context
             },
-            timeout=30
+            timeout=300
         )
         agent_response = res.json()
     except Exception as e:

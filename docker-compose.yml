@@ -12,6 +12,11 @@ services:
       - frontend_agent
       - backend_agent
       - designer_agent
+      - ollama
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+    networks:
+      - ai_team_net
 
   frontend_agent:
     build: ./agent
@@ -19,10 +24,13 @@ services:
     environment:
       - AGENT_ROLE=frontend_dev
       - OLLAMA_URL=http://ollama:11434
+      - AGENT_MODEL=llama3:latest
     depends_on:
       - ollama
     ports:
       - "5001:5000"
+    networks:
+      - ai_team_net
 
   backend_agent:
     build: ./agent
@@ -30,10 +38,13 @@ services:
     environment:
       - AGENT_ROLE=backend_dev
       - OLLAMA_URL=http://ollama:11434
+      - AGENT_MODEL=llama3:latest
     depends_on:
       - ollama
     ports:
       - "5002:5000"
+    networks:
+      - ai_team_net
 
   designer_agent:
     build: ./agent
@@ -41,25 +52,48 @@ services:
     environment:
       - AGENT_ROLE=designer
       - OLLAMA_URL=http://ollama:11434
+      - AGENT_MODEL=llama3:latest
     depends_on:
       - ollama
     ports:
       - "5003:5000"
+    networks:
+      - ai_team_net
 
   ollama:
-      image: ollama/ollama
-      container_name: ollama
-      ports:
-        - "11434:11434"
-      volumes:
-        - ollama:/root/.ollama
+    image: ollama/ollama:latest
+    container_name: ollama
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - OLLAMA_GPU=1
+    ports:
+      - "36621:36621"
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    networks:
+      - ai_team_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      interval: 10s
+      retries: 10
+      timeout: 5s
+      start_period: 30s
+
 
   web:
     build: ./web
     container_name: web
     ports:
       - "8080:80"
+    networks:
+      - ai_team_net
 
 volumes:
   ollama:
   orchestrator_data:
+
+networks:
+  ai_team_net:
+    driver: bridge
