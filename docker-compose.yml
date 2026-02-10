@@ -18,6 +18,9 @@ services:
     container_name: frontend_agent
     environment:
       - AGENT_ROLE=frontend_dev
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - ollama
     ports:
       - "5001:5000"
 
@@ -26,6 +29,9 @@ services:
     container_name: backend_agent
     environment:
       - AGENT_ROLE=backend_dev
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - ollama
     ports:
       - "5002:5000"
 
@@ -34,8 +40,19 @@ services:
     container_name: designer_agent
     environment:
       - AGENT_ROLE=designer
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - ollama
     ports:
       - "5003:5000"
+
+  ollama:
+      image: ollama/ollama
+      container_name: ollama
+      ports:
+        - "11434:11434"
+      volumes:
+        - ollama:/root/.ollama
 
   web:
     build: ./web
@@ -44,4 +61,5 @@ services:
       - "8080:80"
 
 volumes:
+  ollama:
   orchestrator_data:
