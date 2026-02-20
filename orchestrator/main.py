@@ -33,22 +33,30 @@ def health():
 # --------------------------------------------------
 def decompose_task(user_task: str):
     prompt = f"""
-You are a technical project manager.
+You are an expert Technical Project Manager. 
+Your goal is to decompose a complex software development request into a structured plan for your team.
 
-Break the following task into smaller tasks.
-Each task must have a role:
-- frontend_dev
-- backend_dev
-- designer
+Team Members:
+1. frontend_dev: Responsible for UI components, styling, and user interactions.
+2. backend_dev: Responsible for API design, logic, database integration, and server-side processing.
+3. designer: Responsible for UX flow, visual assets, color palettes, and overall usability.
 
-Respond ONLY with valid JSON in this format:
+Rules:
+- Break the task into 3-5 logical sub-tasks.
+- Assign each sub-task to exactly one role.
+- Ensure the tasks are sequential or logically linked.
+- Respond ONLY with a valid JSON object. No conversational text.
+
+Format Example:
 {{
   "tasks": [
-    {{ "role": "...", "task": "..." }}
+    {{ "role": "designer", "task": "Design a modern landing page for a coffee shop." }},
+    {{ "role": "frontend_dev", "task": "Implement the landing page using React and Tailwind CSS." }},
+    {{ "role": "backend_dev", "task": "Create a simple API to handle order requests." }}
   ]
 }}
 
-Task:
+User Request:
 {user_task}
 """.strip()
 
@@ -57,7 +65,7 @@ Task:
         json={
             "model": DECOMPOSER_MODEL,
             "prompt": prompt,
-            "max_tokens": 50
+            "max_tokens": 512
         },
         timeout=300
     )
@@ -209,7 +217,6 @@ def tasks():
 @app.route("/agents", methods=["GET"])
 def agents():
     statuses = []
-
     for role, url in AGENTS.items():
         try:
             res = requests.get(f"{url}/health", timeout=2)
@@ -221,8 +228,23 @@ def agents():
                 "role": role,
                 "status": "offline"
             })
-
     return jsonify(statuses)
+
+# --------------------------------------------------
+# WORKSPACE
+# --------------------------------------------------
+@app.route("/workspace", methods=["GET"])
+def list_workspace():
+    workspace_path = "/app/workspace"
+    if not os.path.exists(workspace_path):
+        return jsonify([])
+    
+    files = []
+    for root, dirs, filenames in os.walk(workspace_path):
+        for f in filenames:
+            rel_path = os.path.relpath(os.path.join(root, f), workspace_path)
+            files.append(rel_path)
+    return jsonify(files)
 
 # --------------------------------------------------
 # SUMMARY & CONTEXT BUILDING

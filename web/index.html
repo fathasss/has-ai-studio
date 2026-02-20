@@ -2,88 +2,261 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>AI Software Team</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Software Studio | Team MVP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --bg-color: #020617;
+        --card-bg: rgba(30, 41, 59, 0.5);
+        --accent-color: #38bdf8;
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
+        --border-color: rgba(255, 255, 255, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', sans-serif;
+      }
+
       body {
-        font-family: Arial, sans-serif;
-        background: #0f172a;
-        color: #e5e7eb;
-        padding: 30px;
+        background: var(--bg-color);
+        color: var(--text-primary);
+        min-height: 100vh;
+        padding: 40px;
+        display: grid;
+        grid-template-columns: 350px 1fr;
+        gap: 30px;
       }
+
       h1 {
-        color: #38bdf8;
+        grid-column: 1 / -1;
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        background: linear-gradient(to right, #38bdf8, #818cf8);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
       }
-      select,
-      input,
-      button {
-        padding: 10px;
-        margin: 5px 0;
-        width: 300px;
-        border-radius: 5px;
+
+      .panel {
+        background: var(--card-bg);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
       }
+
+      label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+      }
+
+      select, input, button {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 10px;
+        border: 1px solid var(--border-color);
+        background: rgba(15, 23, 42, 0.8);
+        color: white;
+        font-size: 1rem;
+        outline: none;
+        transition: all 0.3s ease;
+      }
+
       button {
-        background: #38bdf8;
+        background: var(--accent-color);
+        color: #0f172a;
+        font-weight: 700;
         border: none;
         cursor: pointer;
-        font-weight: bold;
+        margin-top: 8px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       }
-      .log {
+
+      button:hover {
+        transform: translateY(-2px);
+        filter: brightness(1.1);
+      }
+
+      button.secondary {
+        background: transparent;
+        border: 1px solid var(--accent-color);
+        color: var(--accent-color);
+      }
+
+      .log-container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .log-box {
         background: #020617;
-        padding: 15px;
-        margin-top: 20px;
-        border-radius: 8px;
-        max-height: 300px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 20px;
+        height: 400px;
         overflow-y: auto;
-      }
-      .success {
-        color: #22c55e;
+        font-size: 0.9375rem;
+        line-height: 1.6;
         white-space: pre-wrap;
       }
-      .error {
-        color: #ef4444;
-        white-space: pre-wrap;
+
+      .agent-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-top: 10px;
       }
+
       .agent-card {
-        background: #1e293b;
-        padding: 10px;
-        margin: 5px 0;
-        border-radius: 6px;
+        background: rgba(30, 41, 59, 0.3);
+        border: 1px solid var(--border-color);
+        padding: 16px;
+        border-radius: 12px;
+        font-size: 0.875rem;
       }
+
+      .agent-card b {
+        color: var(--accent-color);
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .status-tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .status-online { background: #065f46; color: #34d399; }
+      .status-offline { background: #7f1d1d; color: #f87171; }
+      .status-thinking { background: #1e3a8a; color: #60a5fa; animation: pulse 1.5s infinite; }
+
+      @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.6; }
+        100% { opacity: 1; }
+      }
+
+      .workspace-list {
+        list-style: none;
+        margin-top: 10px;
+      }
+
+      .workspace-item {
+        padding: 8px 12px;
+        background: rgba(15, 23, 42, 0.5);
+        border-radius: 6px;
+        margin-bottom: 4px;
+        font-size: 0.8125rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid transparent;
+      }
+
+      .workspace-item:hover {
+        border-color: var(--accent-color);
+      }
+
+      .workspace-item:before {
+        content: '📄';
+      }
+
+      .success-text { color: #10b981; }
+      .error-text { color: #ef4444; }
     </style>
   </head>
   <body>
-    <h1>🤖 AI Software Team Dashboard</h1>
+    <h1>🤖 AI Software Studio</h1>
 
-    <label>Agent seç:</label><br />
-    <select id="role">
-      <option value="frontend_dev">Frontend Developer</option>
-      <option value="backend_dev">Backend Developer</option>
-      <option value="designer">Designer</option>
-    </select><br />
+    <div class="panel">
+      <div>
+        <label>Agent Role</label>
+        <select id="role">
+          <option value="frontend_dev">Frontend Developer</option>
+          <option value="backend_dev">Backend Developer</option>
+          <option value="designer">Product Designer</option>
+        </select>
+      </div>
 
-    <label>Görev:</label><br />
-    <input id="task" placeholder="Ne yapılacak?" /><br />
+      <div>
+        <label>Your Instructions</label>
+        <input id="task" placeholder="Describe what needs to be built..." />
+      </div>
 
-    <button onclick="sendTask()">Görev Gönder</button>
-    <button onclick="runProject()">📦 Proje Çalıştır</button>
+      <button onclick="sendTask()">Execute Single Task</button>
+      <button class="secondary" onclick="runProject()">📦 Deploy Team Project</button>
 
-    <div class="log" id="log"></div>
+      <div style="margin-top: 20px;">
+        <label>Workspace Files</label>
+        <div id="workspaceFiles" class="workspace-list">
+          <p style="font-size: 0.8rem; color: var(--text-secondary);">No files generated yet.</p>
+        </div>
+      </div>
+    </div>
 
-    <h2>Agent Durumları</h2>
-    <button onclick="loadAgents()">🔄 Yenile</button>
-    <div id="agents"></div>
+    <div class="log-container">
+      <div class="panel">
+        <label>Agent Activity Status</label>
+        <div id="agents" class="agent-grid"></div>
+        <button onclick="loadAgents()" class="secondary" style="width: auto; padding: 4px 12px; font-size: 0.75rem; margin-top: 10px;">🔄 Refresh Status</button>
+      </div>
+
+      <div class="log-box" id="log">Logs will appear here...</div>
+    </div>
 
     <script>
-      async function loadAgents() {
-        const res = await fetch("http://localhost:8000/agents");
-        const agents = await res.json();
+      const API_URL = "http://localhost:8000";
 
-        document.getElementById("agents").innerHTML = agents
-          .map(a => `
-            <div class="agent-card">
-              🧠 <b>${a.role}</b> | status: ${a.status || a.agent_state} | tasks: ${a.tasks_completed ?? "-"}
-            </div>
-          `).join("");
+      async function loadAgents() {
+        try {
+          const res = await fetch(`${API_URL}/agents`);
+          const agents = await res.json();
+
+          document.getElementById("agents").innerHTML = agents
+            .map(a => {
+              const state = a.status || a.agent_state;
+              const statusClass = state === 'offline' ? 'status-offline' : (state === 'thinking' ? 'status-thinking' : 'status-online');
+              return `
+                <div class="agent-card">
+                  <b>${a.role.replace('_', ' ').toUpperCase()}</b>
+                  <span class="status-tag ${statusClass}">${state}</span>
+                  <div style="margin-top: 8px; color: var(--text-secondary)">Tasks: ${a.tasks_completed ?? "0"}</div>
+                </div>
+              `;
+            }).join("");
+        } catch (e) { console.error("Agent load failed", e); }
+      }
+
+      async function loadWorkspace() {
+        try {
+          const res = await fetch(`${API_URL}/workspace`);
+          const files = await res.json();
+          const container = document.getElementById("workspaceFiles");
+
+          if (files.length === 0) {
+            container.innerHTML = '<p style="font-size: 0.8rem; color: var(--text-secondary);">Workspace is empty.</p>';
+            return;
+          }
+
+          container.innerHTML = files
+            .map(f => `<div class="workspace-item">${f}</div>`)
+            .join("");
+        } catch (e) { console.error("Workspace load failed", e); }
       }
 
       async function sendTask() {
@@ -91,10 +264,12 @@
         const task = document.getElementById("task").value;
         const log = document.getElementById("log");
 
-        log.innerHTML = "⏳ Görev gönderiliyor...";
+        if (!task) return alert("Please enter a task.");
 
+        log.innerHTML = `<span style="color: var(--accent-color)">[SYSTEM] Sending task to ${role}...</span>\n`;
+        
         try {
-          const res = await fetch("http://localhost:8000/assign-task", {
+          const res = await fetch(`${API_URL}/assign-task`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ role, task })
@@ -102,28 +277,27 @@
           const data = await res.json();
 
           if (res.ok) {
-            log.innerHTML = `<p class="success">✅ ${data.agent_response.result}</p>`;
+            log.innerHTML += `<p class="success-text">${data.agent_response.result}</p>\n`;
+            loadWorkspace();
           } else {
-            log.innerHTML = `<p class="error">❌ ${data.error}</p>`;
+            log.innerHTML += `<p class="error-text">❌ Error: ${data.error}</p>\n`;
           }
         } catch (err) {
-          log.innerHTML = `<p class="error">❌ Server bağlantı hatası</p>`;
+          log.innerHTML += `<p class="error-text">❌ Connection failed</p>\n`;
         }
+        loadAgents();
       }
 
       async function runProject() {
         const task = document.getElementById("task").value;
         const log = document.getElementById("log");
 
-        if (!task) {
-          log.innerHTML = `<p class="error">❌ Task boş olamaz</p>`;
-          return;
-        }
+        if (!task) return alert("Task cannot be empty.");
 
-        log.innerHTML = "⏳ Proje başlatılıyor...";
+        log.innerHTML = `<span style="color: var(--accent-color)">[SYSTEM] Initializing Team Project: "${task}"</span>\n`;
 
         try {
-          const res = await fetch("http://localhost:8000/run-project", {
+          const res = await fetch(`${API_URL}/run-project`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ task })
@@ -131,22 +305,27 @@
           const data = await res.json();
 
           if (res.ok) {
-            let output = `📌 Task: ${data.task}\n\n`;
+            let output = `📌 Final Project Report\n\n`;
             data.agents.forEach(a => {
-              output += `🧑‍💻 ${a.role}: ${a.result}\n\n`;
+              output += `--- ${a.role.toUpperCase()} ---\n${a.result}\n\n`;
             });
-            output += `📝 Final summary:\n${data.final_summary}`;
-            log.innerHTML = `<p class="success">${output}</p>`;
+            output += `📝 Team Lead Summary:\n${data.final_summary}`;
+            log.innerHTML += `<div class="success-text">${output}</div>`;
+            loadWorkspace();
           } else {
-            log.innerHTML = `<p class="error">❌ ${data.error}</p>`;
+            log.innerHTML += `<p class="error-text">❌ Error: ${data.error}</p>\n`;
           }
         } catch (err) {
-          log.innerHTML = `<p class="error">❌ Server bağlantı hatası</p>`;
+          log.innerHTML += `<p class="error-text">❌ Connection failed</p>\n`;
         }
+        loadAgents();
       }
 
-      // Sayfa yüklendiğinde agent durumlarını getir
-      window.onload = loadAgents;
+      // Init
+      loadAgents();
+      loadWorkspace();
+      setInterval(loadAgents, 5000);
+      setInterval(loadWorkspace, 10000);
     </script>
   </body>
 </html>
