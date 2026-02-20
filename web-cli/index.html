@@ -3,174 +3,294 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Software Factory | Control Center</title>
+    <title>HAS-AI-TEAM | Control Center</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
       :root {
         --bg: #050505;
         --card: #111111;
         --accent: #facc15; /* Gold */
+        --accent-glow: rgba(250, 204, 21, 0.4);
         --text: #ffffff;
         --text-dim: #a1a1aa;
         --border: rgba(255,255,255,0.05);
+        --success: #22c55e;
+        --danger: #ef4444;
+        --info: #3b82f6;
       }
       * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
-      body { background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: grid; grid-template-columns: 280px 1fr 350px; }
+      body { background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: grid; grid-template-columns: 280px 1fr 320px; }
       
       /* Sidebar */
-      aside { background: var(--card); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; gap: 32px; }
-      .logo { font-size: 1.5rem; font-weight: 800; letter-spacing: -1px; color: var(--accent); }
+      aside { background: var(--card); border-right: 1px solid var(--border); padding: 32px 24px; display: flex; flex-direction: column; gap: 40px; }
+      .logo { font-size: 1.6rem; font-weight: 800; letter-spacing: -1px; color: var(--accent); display: flex; align-items: center; gap: 10px; }
+      .logo::before { content: ''; width: 12px; height: 12px; background: var(--accent); border-radius: 2px; box-shadow: 0 0 10px var(--accent-glow); }
+      
       nav { display: flex; flex-direction: column; gap: 8px; }
-      .nav-item { padding: 12px 16px; border-radius: 8px; cursor: pointer; transition: all 0.2s; color: var(--text-dim); }
-      .nav-item:hover, .nav-item.active { background: rgba(250, 204, 21, 0.1); color: var(--accent); }
+      .nav-item { padding: 14px 18px; border-radius: 12px; cursor: pointer; transition: all 0.25s; color: var(--text-dim); font-weight: 500; display: flex; align-items: center; gap: 12px; }
+      .nav-item:hover { background: rgba(255,255,255,0.03); color: #fff; }
+      .nav-item.active { background: rgba(250, 204, 21, 0.1); color: var(--accent); box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.2); }
       
-      /* Main Chat */
-      main { display: flex; flex-direction: column; background: #000; position: relative; }
-      .chat-header { padding: 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-      .chat-messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 24px; }
-      .message { max-width: 80%; padding: 16px; border-radius: 12px; line-height: 1.5; font-size: 0.95rem; }
-      .message.po { align-self: flex-end; background: var(--accent); color: #000; font-weight: 600; }
-      .message.tl { align-self: flex-start; background: var(--card); border: 1px solid var(--border); }
-      .chat-input { padding: 24px; border-top: 1px solid var(--border); display: flex; gap: 12px; }
-      input { flex: 1; background: var(--card); border: 1px solid var(--border); padding: 14px 20px; border-radius: 12px; color: #fff; outline: none; }
-      button { background: var(--accent); border: none; padding: 0 24px; border-radius: 12px; font-weight: 700; cursor: pointer; }
-      
-      /* Right Panel (Activity & Status) */
-      .status-panel { background: var(--card); border-left: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; gap: 24px; }
-      .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 12px; }
-      .stat-card { background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border); }
-      .agent-pill { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
-      .status { width: 8px; height: 8px; border-radius: 50%; }
-      .status.online { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-      .status.thinking { background: #3b82f6; animation: pulse 1s infinite; }
-      
-      @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-      
-      .sprint-card { border: 2px solid var(--accent); padding: 16px; border-radius: 12px; margin-top: 8px; display: flex; flex-direction: column; gap: 12px; }
-      .sprint-card h4 { color: var(--accent); }
-      /* Observability Tab Styles */
-      .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; padding: 24px; }
-      .metric-box { background: var(--card); border: 1px solid var(--border); padding: 20px; border-radius: 12px; }
-      .metric-value { font-size: 1.8rem; font-weight: 800; color: var(--accent); margin: 8px 0; }
-      .metric-label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-      
-      .hidden { display: none !important; }
+      /* Main Content Area */
+      .main-container { display: flex; flex-direction: column; background: #000; position: relative; overflow: hidden; height: 100vh; }
+      .view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+      .view.hidden { display: none !important; }
+
+      .header { padding: 24px 32px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px); z-index: 10; }
+      .header-title h2 { font-size: 1.1rem; font-weight: 700; color: #fff; }
+      .header-title p { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
+
+      /* Dashboard / Chat */
+      .chat-messages { flex: 1; overflow-y: auto; padding: 32px; display: flex; flex-direction: column; gap: 24px; scroll-behavior: smooth; }
+      .message { max-width: 85%; padding: 18px 22px; border-radius: 16px; line-height: 1.6; font-size: 0.95rem; position: relative; }
+      .message.po { align-self: flex-end; background: var(--accent); color: #000; font-weight: 600; box-shadow: 0 4px 15px rgba(250,204,21,0.2); }
+      .message.tl { align-self: flex-start; background: #111; border: 1px solid var(--border); color: #e4e4e7; }
+      .chat-input-area { padding: 32px; border-top: 1px solid var(--border); background: #000; }
+      .input-wrapper { display: flex; gap: 12px; background: #111; padding: 8px; border-radius: 16px; border: 1px solid var(--border); transition: border-color 0.2s; }
+      .input-wrapper:focus-within { border-color: var(--accent); }
+      .input-wrapper input { flex: 1; background: transparent; border: none; padding: 12px 16px; color: #fff; outline: none; font-size: 1rem; }
+      .btn { background: var(--accent); border: none; padding: 0 24px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; height: 48px; color: #000; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .btn-outline { background: transparent; border: 1px solid var(--border); color: #fff; }
+      .btn-outline:hover { background: rgba(255,255,255,0.05); }
+
+      /* Sprints View */
+      .sprint-split { display: grid; grid-template-columns: 320px 1fr; flex: 1; overflow: hidden; }
+      .sprint-list { border-right: 1px solid var(--border); overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+      .sprint-detail { flex: 1; overflow-y: auto; padding: 32px; display: flex; flex-direction: column; gap: 24px; }
+      .sprint-item { padding: 16px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); cursor: pointer; transition: all 0.2s; }
+      .sprint-item:hover { border-color: var(--accent); background: rgba(250, 204, 21, 0.05); }
+      .sprint-item.active { border-color: var(--accent); background: rgba(250, 204, 21, 0.1); }
+      .sprint-item h4 { color: var(--accent); font-size: 0.9rem; margin-bottom: 4px; }
+      .sprint-item p { font-size: 0.7rem; color: var(--text-dim); }
+
+      /* Traces / Replay View */
+      .trace-card { background: #111; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+      .trace-header { padding: 16px 20px; background: rgba(255,255,255,0.02); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+      .trace-content { padding: 20px; font-family: 'Courier New', monospace; font-size: 0.85rem; color: #a1a1aa; white-space: pre-wrap; max-height: 400px; overflow-y: auto; background: #000; }
+
+      /* Observability View */
+      .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; padding: 32px; }
+      .stat-box { background: var(--card); border: 1px solid var(--border); padding: 32px; border-radius: 20px; position: relative; overflow: hidden; }
+      .stat-box::after { content: ''; position: absolute; top: 0; right: 0; width: 60px; height: 60px; background: var(--accent); opacity: 0.03; border-radius: 0 0 0 100%; }
+      .stat-label { font-size: 0.8rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+      .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--accent); margin: 12px 0 4px 0; }
+      .stat-sub { font-size: 0.75rem; color: var(--success); display: flex; align-items: center; gap: 4px; }
+
+      /* Settings Form */
+      .settings-form { padding: 32px; max-width: 600px; display: flex; flex-direction: column; gap: 32px; }
+      .form-group { display: flex; flex-direction: column; gap: 12px; }
+      .form-group label { font-size: 0.85rem; font-weight: 600; color: var(--text-dim); }
+      .form-group input, .form-group select { background: #111; border: 1px solid var(--border); padding: 14px; border-radius: 12px; color: #fff; outline: none; }
+      .form-group input:focus { border-color: var(--accent); }
+
+      /* Right Status Panel */
+      .side-panel { background: var(--card); border-left: 1px solid var(--border); padding: 32px 24px; display: flex; flex-direction: column; gap: 32px; }
+      .panel-section { display: flex; flex-direction: column; gap: 16px; }
+      .agent-list { display: flex; flex-direction: column; gap: 12px; }
+      .agent-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid var(--border); }
+      .agent-info { display: flex; align-items: center; gap: 12px; }
+      .agent-name { font-size: 0.85rem; font-weight: 600; color: #fff; }
+      .agent-status-lite { width: 8px; height: 8px; border-radius: 50%; }
+      .status-idle { background: var(--text-dim); }
+      .status-thinking { background: var(--info); box-shadow: 0 0 10px var(--info); animation: pulse 1.5s infinite; }
+      .status-waiting { background: var(--accent); box-shadow: 0 0 10px var(--accent-glow); animation: pulse 2s infinite; }
+      .status-online { background: var(--success); box-shadow: 0 0 10px var(--success); }
+
+      @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
+      .system-card { background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 20px; border-radius: 16px; border: 1px solid var(--info); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
     </style>
   </head>
   <body>
     <aside>
-      <div class="logo">HAS AI STUDIO.</div>
+      <div class="logo">HAS-AI-TEAM</div>
       <nav>
-        <div class="nav-item active" onclick="switchTab('dashboard')">Dashboard</div>
-        <div class="nav-item" id="nav-sprints" onclick="switchTab('sprints')">Active Sprints</div>
-        <div class="nav-item" onclick="switchTab('observability')">Observability</div>
-        <div class="nav-item">Traces (Replay)</div>
-        <div class="nav-item">Settings</div>
+        <div class="nav-item active" id="nav-dashboard" onclick="switchTab('dashboard')">Dashboard</div>
+        <div class="nav-item" id="nav-sprints" onclick="switchTab('sprints')">Active Projects</div>
+        <div class="nav-item" id="nav-observability" onclick="switchTab('observability')">Observability</div>
+        <div class="nav-item" id="nav-traces" onclick="switchTab('traces')">Execution Traces</div>
+        <div class="nav-item" id="nav-settings" onclick="switchTab('settings')">Settings</div>
       </nav>
       <div style="margin-top: auto;">
-        <div class="section-title">System Health</div>
-        <div class="stat-card">
-          <div style="font-size: 0.8rem; margin-bottom: 4px;">Memory Usage</div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <div id="memStatus" class="status online"></div>
-            <span id="memValue" style="font-weight: 600; font-size: 0.9rem;">-- MB</span>
+        <div class="system-card">
+          <div style="font-size: 0.85rem; font-weight: 700; margin-bottom: 12px; display: flex; justify-content: space-between;">
+            <span id="factory-status">LIVE HUB</span>
+            <span id="memValue" style="color: var(--accent);">-- MB</span>
           </div>
+          <div style="height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden;">
+            <div id="memBar" style="width: 30%; height: 100%; background: var(--accent); box-shadow: 0 0 8px var(--accent-glow);"></div>
+          </div>
+          <p id="uptimeLabel" style="font-size: 0.65rem; color: var(--text-dim); margin-top: 8px;">Uptime: 00:00:00</p>
         </div>
       </div>
     </aside>
 
-    <main id="dashboardTab">
-      <div class="chat-header">
-        <div>
-          <h2 style="font-size: 1.1rem;">TeamLead Orchestration</h2>
-          <p id="currentSprintLabel" style="font-size: 0.75rem; color: var(--text-dim);">Awaiting project initiation from PO</p>
+    <div class="main-container">
+      <!-- DASHBOARD VIEW -->
+      <section id="dashboardView" class="view">
+        <header class="header">
+          <div class="header-title">
+            <h2 id="currentSprintLabel">Target: Awaiting Task</h2>
+            <p>TeamLead Orchestration Logic: Phased Context Chaining</p>
+          </div>
+          <div style="display: flex; gap: 12px;">
+            <button class="btn btn-outline" style="height: 38px; font-size: 0.75rem;" onclick="resetEnvironment()">Clean State</button>
+          </div>
+        </header>
+        <div class="chat-messages" id="chat">
+          <div class="message tl">
+            <b>TeamLead initialized.</b> Factory environment is secured and sequential orchestration bridge is hot-loaded. <br/>Awaiting your project requirements, PO.
+          </div>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button style="font-size: 0.75rem; padding: 8px 16px;">Veto Current</button>
-        </div>
-      </div>
-
-      <div class="chat-messages" id="chat">
-        <div class="message tl">
-          Welcome, PO. I am the TeamLead. I've initialized our secure, sequential factory environment. How can I help you build today?
-        </div>
-      </div>
-
-      <div class="chat-input">
-        <input type="text" id="userInput" placeholder="I want to build a decentralized voting app..." />
-        <button onclick="sendMessage()">Send</button>
-      </div>
-    </main>
-
-    <main id="sprintsTab" class="hidden">
-        <div class="chat-header">
-            <h2>Active Sprints</h2>
-            <button onclick="loadSprints()" style="padding: 8px 16px; font-size: 0.75rem;">Refresh</button>
-        </div>
-        <div style="display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 80px);">
-            <div id="sprintList" style="padding: 24px; border-right: 1px solid var(--border); overflow-y: auto;">
-                <p style="color: var(--text-dim);">Loading active project pipelines...</p>
-            </div>
-            <div id="sprintDetail" style="padding: 24px; overflow-y: auto;">
-                <div style="text-align: center; color: var(--text-dim); margin-top: 100px;">
-                    Select a sprint to view trace details and job distribution.
+        <div class="chat-input-area">
+          <div id="approvalPanel" style="background: rgba(250, 204, 21, 0.05); border: 1px solid var(--accent); padding: 16px; border-radius: 16px; margin-bottom: 20px; display: none;">
+             <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h4 style="color: var(--accent); font-size: 0.9rem;">Strategy Approval Required</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-dim);">The TeamLead has drafted the architecture. Review required to commence Phase 1 Execution.</p>
                 </div>
+                <button class="btn" id="approveBtn" onclick="approveSprint()">Authorize Execution</button>
+             </div>
+          </div>
+          <div class="input-wrapper">
+            <input type="text" id="userInput" placeholder="Draft a minimal FastAPI service with SQLite..." onkeypress="if(event.key==='Enter') sendMessage()" />
+            <button class="btn" onclick="sendMessage()" id="sendBtn">Send Task</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROJECTS/SPRINTS VIEW -->
+      <section id="sprintsView" class="view hidden">
+        <header class="header">
+          <div class="header-title">
+            <h2>Active Project Pipelines</h2>
+            <p>Real-time job tracking and trace aggregation</p>
+          </div>
+          <button class="btn btn-outline" style="height: 38px;" onclick="loadSprints()">Refresh All</button>
+        </header>
+        <div class="sprint-split">
+          <div class="sprint-list" id="sprintList"></div>
+          <div class="sprint-detail" id="sprintDetail"></div>
+        </div>
+      </section>
+
+      <!-- OBSERVABILITY VIEW -->
+      <section id="observabilityView" class="view hidden">
+        <header class="header">
+          <div class="header-title">
+            <h2>Hardware & Factory Metrics</h2>
+            <p>LLM Throughput and Resource Integrity</p>
+          </div>
+        </header>
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-label">LLM Queue Depth</div>
+                <div class="stat-value" id="m_queue_depth">0</div>
+                <div class="stat-sub">Active Workers: 1 Sequential</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Factory Token Rate</div>
+                <div class="stat-value" id="m_token_rate">0</div>
+                <div class="stat-sub" style="color: var(--info);">Tokens Per Minute</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Total Computed Tokens</div>
+                <div class="stat-value" id="m_total_tokens">0</div>
+                <div class="stat-sub">Lifetime Consumption</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Process Memory RSS</div>
+                <div class="stat-value" id="m_memory">--</div>
+                <div class="stat-sub">Stability Verified</div>
             </div>
         </div>
-    </main>
+      </section>
 
-    <main id="observabilityTab" class="hidden">
-        <div class="chat-header">
-            <h2>Observability Hub</h2>
+      <!-- TRACES VIEW -->
+      <section id="tracesView" class="view hidden">
+        <header class="header">
+          <div class="header-title">
+            <h2>Global Execution Traces</h2>
+            <p>Historical agent output replay (Raw Responses)</p>
+          </div>
+        </header>
+        <div style="padding: 32px; overflow-y: auto;" id="globalTracesList"></div>
+      </section>
+
+       <!-- SETTINGS VIEW -->
+       <section id="settingsView" class="view hidden">
+        <header class="header">
+          <div class="header-title">
+            <h2>Factory Configuration</h2>
+            <p>Model selection and orchestration parameters</p>
+          </div>
+        </header>
+        <div class="settings-form">
+           <div class="form-group">
+                <label>Primary Agent Model</label>
+                <input type="text" id="cfg_model" placeholder="llama3.1:latest" />
+           </div>
+           <div class="form-group">
+                <label>Ollama Server URL</label>
+                <input type="text" id="cfg_ollama" placeholder="http://ollama:11434" />
+           </div>
+           <div class="form-group">
+                <label>LLM Provider</label>
+                <select id="cfg_provider">
+                    <option value="ollama">Ollama (Local)</option>
+                    <option value="openai">OpenAI Compatible (Remote)</option>
+                </select>
+           </div>
+           <button class="btn" style="width: 200px;" onclick="saveConfig()">Apply Configuration</button>
         </div>
-        <div class="metrics-grid">
-            <div class="metric-box">
-                <div class="metric-label">Queue Depth</div>
-                <div class="metric-value" id="m_queue_depth">0</div>
-                <div style="font-size: 0.75rem; color: #22c55e;">Workers: Sequential (1)</div>
-            </div>
-            <div class="metric-box">
-                <div class="metric-label">Token Rate</div>
-                <div class="metric-value" id="m_token_rate">0</div>
-                <div style="font-size: 0.75rem; color: var(--text-dim);">Tokens per minute</div>
-            </div>
-            <div class="metric-box">
-                <div class="metric-label">Avg Latency</div>
-                <div class="metric-value" id="m_latency">--</div>
-                <div style="font-size: 0.75rem; color: var(--text-dim);">Milliseconds</div>
-            </div>
-            <div class="metric-box">
-                <div class="metric-label">Memory Growth</div>
-                <div class="metric-value" id="m_memory">--</div>
-                <div style="font-size: 0.75rem; color: #3b82f6;">RSS Stability Check</div>
-            </div>
-        </div>
-    </main>
+      </section>
+    </div>
 
-    <div class="status-panel">
-      <div>
-        <div class="section-title">Active Queue</div>
-        <div class="stat-card">
-          <div id="queueCount" style="font-size: 1.5rem; font-weight: 800;">0</div>
-          <div style="font-size: 0.7rem; color: var(--text-dim);">LLM Jobs Pending</div>
-        </div>
-      </div>
-
-      <div>
-        <div class="section-title">Agent Workers</div>
-        <div class="agent-pill"><span>TeamLead</span> <div class="status online"></div></div>
-        <div class="agent-pill"><span>Frontend Agent</span> <div class="status online"></div></div>
-        <div class="agent-pill"><span>Backend Agent</span> <div class="status online"></div></div>
-        <div class="agent-pill"><span>Security Manager</span> <div class="status online"></div></div>
-        <div class="agent-pill"><span>Tester Agent</span> <div class="status online"></div></div>
-      </div>
-
-      <div id="approvalPanel" style="display: none;">
-        <div class="section-title">Approval Required</div>
-        <div class="sprint-card">
-          <h4>Sprint #1: Foundation</h4>
-          <p style="font-size: 0.8rem; color: var(--text-dim);">Architecture: Next.js + FastAPI. Focus on Core Models and API design.</p>
-          <button id="approveBtn" style="width: 100%;" onclick="approveSprint()">Approve & Start</button>
+    <!-- SIDE PANEL: STATUS -->
+    <div class="side-panel">
+      <div class="panel-section">
+        <div class="section-title">Agent Deployment</div>
+        <div class="agent-list" id="agentStatusList">
+          <div class="agent-item">
+            <div class="agent-info">
+              <div class="agent-status-lite status-online" id="status-TeamLead"></div>
+              <span class="agent-name">TeamLead</span>
+            </div>
+            <span style="font-size: 0.65rem; color: var(--text-dim);" id="label-TeamLead">IDLE</span>
+          </div>
+          <div class="agent-item">
+            <div class="agent-info">
+              <div class="agent-status-lite status-idle" id="status-Frontend"></div>
+              <span class="agent-name">Frontend Engineer</span>
+            </div>
+            <span style="font-size: 0.65rem; color: var(--text-dim);" id="label-Frontend">IDLE</span>
+          </div>
+          <div class="agent-item">
+            <div class="agent-info">
+              <div class="agent-status-lite status-idle" id="status-Backend"></div>
+              <span class="agent-name">Backend Engineer</span>
+            </div>
+            <span style="font-size: 0.65rem; color: var(--text-dim);" id="label-Backend">IDLE</span>
+          </div>
+          <div class="agent-item">
+            <div class="agent-info">
+              <div class="agent-status-lite status-idle" id="status-Security"></div>
+              <span class="agent-name">Security Manager</span>
+            </div>
+            <span style="font-size: 0.65rem; color: var(--text-dim);" id="label-Security">IDLE</span>
+          </div>
+          <div class="agent-item">
+            <div class="agent-info">
+              <div class="agent-status-lite status-idle" id="status-Tester"></div>
+              <span class="agent-name">Tester Agent</span>
+            </div>
+            <span style="font-size: 0.65rem; color: var(--text-dim);" id="label-Tester">IDLE</span>
+          </div>
         </div>
       </div>
     </div>
@@ -178,191 +298,167 @@
     <script>
       const API_URL = "/api";
       let currentSprintId = "SPRINT-" + Math.floor(Math.random() * 90000 + 10000);
-      let lastUserInput = "";
+      let activeDetailId = null;
+
+      const socket = io("/");
+      socket.on("connect", () => {
+          document.getElementById('factory-status').innerText = "LIVE (SOCKET)";
+          document.getElementById('factory-status').style.color = "var(--success)";
+      });
+      socket.on("job_update", (data) => {
+          updateSystemStatus();
+          if (activeDetailId === data.sprint_id) loadSprintDetail(data.sprint_id);
+      });
+      socket.on("metric_update", (data) => {
+          loadMetrics();
+      });
 
       window.onload = () => {
-          document.getElementById('currentSprintLabel').innerText = "Target Pipeline: " + currentSprintId;
+          document.getElementById('currentSprintLabel').innerText = "Active Pipeline: " + currentSprintId;
+          updateSystemStatus();
+          loadMetrics();
+          loadSettings();
+          setInterval(updateSystemStatus, 5000);
       };
 
-      async function approveSprint() {
-          const btn = document.getElementById('approveBtn');
-          btn.innerText = "Launching Factory...";
-          btn.disabled = true;
-          
-          try {
-              const res = await fetch(`${API_URL}/llm/submit`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      agent_name: "TeamLead",
-                      sprint_id: currentSprintId,
-                      priority: 1,
-                      prompt: `Project Requirement: ${lastUserInput || "Initiate default factory build sequence."}`,
-                      params: { "temperature": 0.5 }
-                  })
-              });
-              const data = await res.json();
-              
-              const chat = document.getElementById('chat');
-              chat.innerHTML += `<div class="message tl"><b>TeamLead:</b> Sprint <b>${currentSprintId}</b> approved. Commencing architectural drafting. <br/><small>Job ID: ${data.job_id}</small></div>`;
-              
-              document.getElementById('approvalPanel').style.display = 'none';
-              // Automatically switch to the sprint view to show it's active
-              setTimeout(() => {
-                  switchTab('sprints');
-                  loadSprintDetail(currentSprintId);
-              }, 1000);
-          } catch(e) {
-              btn.innerText = "Bridge Error - Retry";
-              btn.disabled = false;
-          }
+      function switchTab(tab) {
+          document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+          document.getElementById(tab + 'View').classList.remove('hidden');
+          document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+          document.getElementById('nav-' + tab).classList.add('active');
+          if(tab === 'sprints') loadSprints();
       }
 
-      async function updateStatus() {
-        try {
-          const res = await fetch(`${API_URL}/metrics`);
-          const data = await res.json();
-          
-          document.getElementById('queueCount').innerText = data.queue_depth;
-          document.getElementById('m_queue_depth').innerText = data.queue_depth;
-          // Note: main.py metrics names might vary, using what I saw in code
-          document.getElementById('m_memory').innerText = Math.round(data.memory_rss_mb) + " MB";
-          document.getElementById('memValue').innerText = Math.round(data.memory_rss_mb) + " MB";
-          
-        } catch(e) {}
+      function addChatMessage(role, text, cls) {
+          const chat = document.getElementById('chat');
+          chat.innerHTML += `<div class="message ${cls}"><b>${role}:</b> ${text}</div>`;
+          chat.scrollTop = chat.scrollHeight;
       }
 
-      async function loadSprints() {
+      async function updateSystemStatus() {
           try {
-              const res = await fetch(`${API_URL}/sprints`);
-              const data = await res.json();
-              const list = document.getElementById('sprintList');
-              if(data.sprints.length === 0) {
-                  list.innerHTML = '<p style="color: var(--text-dim);">No active pipelines found.</p>';
-                  return;
+              const res = await fetch(`${API_URL}/system/status`);
+              const status = await res.json();
+              document.getElementById('memValue').innerText = Math.round(status.memory_rss_mb) + " MB";
+              document.getElementById('m_queue_depth').innerText = status.queue_depth;
+              for(const [agent, state] of Object.entries(status.agent_states)) {
+                  const el = document.getElementById('status-' + agent);
+                  const label = document.getElementById('label-' + agent);
+                  if(el && label) { el.className = 'agent-status-lite status-' + state; label.innerText = state.toUpperCase(); }
               }
-              list.innerHTML = data.sprints.sort().reverse().map(s => `
-                  <div class="stat-card" style="border: 1px solid var(--accent); cursor: pointer; margin-bottom: 12px; position: relative;" onclick="loadSprintDetail('${s}')">
-                      ${s === currentSprintId ? '<span style="position: absolute; top: -8px; right: -8px; background: #3b82f6; color: #fff; font-size: 0.6rem; padding: 2px 6px; border-radius: 4px;">CURRENT</span>' : ''}
-                      <div style="color: var(--accent); font-weight: 800; font-size: 0.9rem;">${s}</div>
-                      <div style="font-size: 0.7rem; color: var(--text-dim); margin-top: 4px;">Pipeline Discovery Trace</div>
-                  </div>
-              `).join('');
           } catch(e) {}
       }
 
-      async function loadSprintDetail(sid) {
-          const detail = document.getElementById('sprintDetail');
-          detail.innerHTML = `<div style="color: var(--accent);">Fetching status for ${sid}...</div>`;
-          
+      async function loadMetrics() {
           try {
-              // Fetch both jobs and traces
-              const [resJobs, resTraces] = await Promise.all([
-                  fetch(`${API_URL}/jobs/${sid}`),
-                  fetch(`${API_URL}/traces/${sid}`)
-              ]);
-              const dataJobs = await resJobs.json();
-              const dataTraces = await resTraces.json();
-              
-              if(dataJobs.jobs.length === 0 && dataTraces.traces.length === 0) {
-                  detail.innerHTML = `
-                    <h3 style="color: var(--accent); margin-bottom: 24px;">Sprint Detail: ${sid}</h3>
-                    <div class="stat-card">No data found yet. Start the sprint from Dashboard!</div>
-                  `;
-                  return;
-              }
-
-              let jobsHtml = dataJobs.jobs.map(j => `
-                  <div class="agent-pill" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding: 12px 0;">
-                      <div>
-                        <div style="font-weight: 600;">${j.agent}</div>
-                        <div style="font-size: 0.7rem; color: var(--text-dim);">Prio: ${j.priority}</div>
-                      </div>
-                      <div style="text-align: right;">
-                        <span class="status ${j.status === 'PROCESSING' ? 'thinking' : ''}" style="display: inline-block; vertical-align: middle; margin-right: 8px;"></span>
-                        <span style="color: ${j.status === 'PROCESSING' ? '#3b82f6' : '#facc15'}; font-size: 0.8rem; font-weight: 700;">${j.status}</span>
-                      </div>
-                  </div>
-              `).join('');
-
-              let tracesHtml = dataTraces.traces.map(t => `
-                  <div class="agent-pill" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding: 12px 0; opacity: 0.8;">
-                      <div>
-                        <div style="font-weight: 600;">${t.agent}</div>
-                        <div style="font-size: 0.7rem; color: var(--text-dim);">${new Date(t.timestamp).toLocaleTimeString()}</div>
-                      </div>
-                      <div style="text-align: right;">
-                        <span style="color: #22c55e; font-size: 0.8rem; font-weight: 700;">COMPLETED</span>
-                        <div style="font-size: 0.7rem; color: var(--text-dim);">${Math.round(t.duration_ms)}ms</div>
-                      </div>
-                  </div>
-              `).join('');
-
-              detail.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <h3 style="color: var(--accent);">Sprint Detail: ${sid}</h3>
-                    <button onclick="loadSprintDetail('${sid}')" style="background: transparent; border: 1px solid var(--accent); color: var(--accent); font-size: 0.7rem; padding: 4px 12px;">Refresh</button>
-                </div>
-                
-                <div class="stat-card" style="margin-bottom: 24px;">
-                    <p style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); margin-bottom: 16px;">Active Pipeline (Jobs)</p>
-                    <div style="display: flex; flex-direction: column;">
-                        ${jobsHtml || '<p style="font-size: 0.8rem; color: var(--text-dim);">No pending or active jobs.</p>'}
-                    </div>
-                </div>
-
-                <div class="stat-card">
-                    <p style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); margin-bottom: 16px;">Execution Log (Traces)</p>
-                    <div style="display: flex; flex-direction: column;">
-                        ${tracesHtml || '<p style="font-size: 0.8rem; color: var(--text-dim);">No completed traces yet.</p>'}
-                    </div>
-                </div>
-
-                <div style="margin-top: 24px;">
-                    <button onclick="switchTab('dashboard')" style="padding: 10px 20px; background: transparent; border: 1px solid var(--border); color: #fff; font-size: 0.8rem;">Back to Dashboard</button>
-                </div>
-              `;
-          } catch(e) {
-              detail.innerHTML = `<div style="color: #ef4444;">Error loading status for ${sid}</div>`;
-          }
+              const res = await fetch(`${API_URL}/metrics`);
+              const metrics = await res.json();
+              document.getElementById('m_token_rate').innerText = Math.round(metrics.performance.token_rate_per_min);
+              document.getElementById('m_total_tokens').innerText = metrics.performance.total_tokens.toLocaleString();
+              const uptime = metrics.performance.uptime_sec;
+              const h = Math.floor(uptime/3600); const m = Math.floor((uptime%3600)/60); const s = Math.floor(uptime%60);
+              document.getElementById('uptimeLabel').innerText = `Uptime: ${h}:${m}:${s}`;
+          } catch(e) {}
       }
 
-      function switchTab(tab) {
-          document.getElementById('dashboardTab').classList.add('hidden');
-          document.getElementById('observabilityTab').classList.add('hidden');
-          document.getElementById('sprintsTab').classList.add('hidden');
-          document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-          
-          if(tab === 'dashboard') {
-              document.getElementById('dashboardTab').classList.remove('hidden');
-          } else if(tab === 'observability') {
-              document.getElementById('observabilityTab').classList.remove('hidden');
-          } else if(tab === 'sprints') {
-              document.getElementById('sprintsTab').classList.remove('hidden');
-              loadSprints();
-          }
-          // Mark target item as active
-          event.target.classList.add('active');
+      async function loadSettings() {
+          const res = await fetch(`${API_URL}/config`);
+          const cfg = await res.json();
+          document.getElementById('cfg_model').value = cfg.AGENT_MODEL;
+          document.getElementById('cfg_ollama').value = cfg.OLLAMA_URL;
+          document.getElementById('cfg_provider').value = cfg.LLM_PROVIDER;
+      }
+
+      async function saveConfig() {
+          await fetch(`${API_URL}/config`, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({
+                  AGENT_MODEL: document.getElementById('cfg_model').value,
+                  OLLAMA_URL: document.getElementById('cfg_ollama').value,
+                  LLM_PROVIDER: document.getElementById('cfg_provider').value
+              })
+          });
+          alert("Configuration Updated & Persisted.");
       }
 
       function sendMessage() {
-        const input = document.getElementById('userInput');
-        const text = input.value;
-        if(!text) return;
-        
-        lastUserInput = text;
-        const chat = document.getElementById('chat');
-        chat.innerHTML += `<div class="message po">${text}</div>`;
-        input.value = '';
-        
-        // Simulate TeamLead thinking
-        setTimeout(() => {
-          chat.innerHTML += `<div class="message tl">I've received your request. I am drafting the sprint plan and architecture for your approval. Please check the sidebar in a moment.</div>`;
-          document.getElementById('approvalPanel').style.display = 'block';
-        }, 1500);
+          const input = document.getElementById('userInput');
+          if(!input.value.trim()) return;
+          window.lastReq = input.value;
+          addChatMessage("PO", input.value, "po");
+          input.value = "";
+          setTimeout(() => {
+              addChatMessage("TeamLead", "Requirement acknowledged. Phasing logic triggered.", "tl");
+              document.getElementById('approvalPanel').style.display = 'block';
+          }, 1000);
       }
 
-      setInterval(updateStatus, 3000);
+      async function approveSprint() {
+          document.getElementById('approvalPanel').style.display = 'none';
+          await fetch(`${API_URL}/llm/submit`, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({
+                  agent_name: "TeamLead",
+                  sprint_id: currentSprintId,
+                  priority: 5,
+                  prompt: `Project: ${window.lastReq}`
+              })
+          });
+          addChatMessage("TeamLead", `Authorized. ID: ${currentSprintId}`, "tl");
+      }
+
+      async function loadSprints() {
+          const res = await fetch(`${API_URL}/sprints`);
+          const data = await res.json();
+          document.getElementById('sprintList').innerHTML = data.sprints.sort().reverse().map(s => `
+              <div class="sprint-item ${s === activeDetailId ? 'active' : ''}" onclick="loadSprintDetail('${s}')">
+                  <h4>${s}</h4>
+                  <p>Operational Pipeline</p>
+              </div>
+          `).join('');
+      }
+
+      async function loadSprintDetail(sid) {
+          activeDetailId = sid;
+          const [resJobs, resTraces] = await Promise.all([
+              fetch(`${API_URL}/jobs/${sid}`),
+              fetch(`${API_URL}/traces/${sid}`)
+          ]);
+          const dataJobs = await resJobs.json();
+          const dataTraces = await resTraces.json();
+          
+          let tlTrace = dataTraces.traces.find(t => t.agent === 'TeamLead');
+          if (tlTrace && !window[`notified_${sid}`]) {
+              try {
+                  const plan = JSON.parse(tlTrace.response.match(/\{[\s\S]*\}/)[0]);
+                  if (plan.summary_tr) addChatMessage("TeamLead", `<b>Summary:</b> ${plan.summary_tr}`, "tl");
+                  window[`notified_${sid}`] = true;
+              } catch(e) {}
+          }
+
+          let html = `<h3 style="color:var(--accent)">Pipeline Detail: ${sid}</h3>`;
+          html += `<div class="trace-card"><div class="trace-content" style="background:#000;">`;
+          ["TeamLead", "Frontend", "Backend", "Security", "Tester"].forEach(role => {
+              const job = dataJobs.jobs.find(j => j.agent === role);
+              const status = job ? job.status : "WAITING";
+              const color = status === 'COMPLETED' ? 'var(--success)' : (status === 'PROCESSING' ? 'var(--info)' : 'var(--text-dim)');
+              html += `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+                  <span>${role}</span><span style="color:${color}; font-weight:800;">${status}</span>
+              </div>`;
+          });
+          html += `</div></div>`;
+          html += dataTraces.traces.map(t => `
+            <div class="trace-card">
+                <div class="trace-header"><span>${t.agent}</span><span>${t.timestamp}</span></div>
+                <div class="trace-content">${t.response}</div>
+            </div>
+          `).join('');
+          document.getElementById('sprintDetail').innerHTML = html;
+      }
+
+      function resetEnvironment() { if(confirm("Clean State?")) location.reload(); }
     </script>
   </body>
 </html>

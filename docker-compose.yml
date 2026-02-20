@@ -1,9 +1,9 @@
 version: "3.9"
 
 services:
-  ollama:
+  has-ai-ollama:
     image: ollama/ollama:latest
-    container_name: ollama
+    container_name: has-ai-ollama
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
@@ -13,21 +13,21 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     networks:
-      - ai_factory_net
+      - has_ai_net
     healthcheck:
       test: [ "CMD", "ollama", "list" ]
       interval: 10s
       retries: 5
 
-  api-orchestrator:
+  has-ai-orchestrator:
     build:
       context: .
       dockerfile: ./docker/orchestrator.Dockerfile
-    container_name: api-orchestrator
+    container_name: has-ai-orchestrator
     ports:
       - "${ORCHESTRATOR_PORT:-8000}:8000"
     environment:
-      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_URL=http://has-ai-ollama:11434
       - AGENT_MODEL=${AGENT_MODEL:-llama3.1:latest}
       - TEAMLEAD_MODEL=${TEAMLEAD_MODEL:-llama3.1:latest}
       - LLM_TIMEOUT_SEC=${LLM_TIMEOUT_SEC:-600}
@@ -37,42 +37,43 @@ services:
       - ./apps:/app/apps
       - orchestrator_data:/app/data
     depends_on:
-      ollama:
+      has-ai-ollama:
         condition: service_healthy
     networks:
-      - ai_factory_net
+      - has_ai_net
 
-  web-cli:
+  has-ai-web-cli:
     build:
       context: .
       dockerfile: ./docker/web-cli.Dockerfile
-    container_name: web-cli
+    container_name: has-ai-web-cli
     ports:
       - "4000:80"
     volumes:
       - ./web-cli:/usr/share/nginx/html
     depends_on:
-      - api-orchestrator
+      - has-ai-orchestrator
     networks:
-      - ai_factory_net
+      - has_ai_net
 
-  agent-worker:
+  has-ai-agent-worker:
     build:
       context: .
       dockerfile: ./docker/agent-worker.Dockerfile
+    container_name: has-ai-agent-worker
     environment:
-      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_URL=http://has-ai-ollama:11434
       - AGENT_MODEL=${AGENT_MODEL:-llama3.1:latest}
-      - ORCHESTRATOR_URL=http://api-orchestrator:8000
+      - ORCHESTRATOR_URL=http://has-ai-orchestrator:8000
       - AGENT_ROLE=worker
     volumes:
       - ./apps:/app/apps
     depends_on:
-      - api-orchestrator
+      - has-ai-orchestrator
     networks:
-      - ai_factory_net
+      - has_ai_net
     deploy:
-      replicas: 1 # Can be scaled up with: docker-compose up --scale agent-worker=3
+      replicas: 1
 
 volumes:
   ollama_data:
@@ -80,5 +81,5 @@ volumes:
 
 
 networks:
-  ai_factory_net:
+  has_ai_net:
     driver: bridge
