@@ -183,29 +183,48 @@ def safe_json_loads(text: str):
     if not text:
         return None
     text = text.strip()
+    
+    # Try direct parse
     try:
         return json.loads(text)
     except:
         pass
-    json_blocks = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        
+    # Helper to clean up common LLM JSON errors
+    def clean_json_str(s):
+        # Remove trailing commas before closing braces/brackets
+        s = re.sub(r',\s*\}', '}', s)
+        s = re.sub(r',\s*\]', ']', s)
+        return s
+
+    # Try extracting markdown blocks
+    json_blocks = re.findall(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
     for block in json_blocks:
         try:
-            return json.loads(block.strip())
+            return json.loads(clean_json_str(block.strip()))
         except:
             pass
+
+    # Try finding any JSON-like object
     match = re.search(r"(\{.*\})", text, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group(1).strip())
+            return json.loads(clean_json_str(match.group(1).strip()))
         except:
             pass
-    return None
+            
+    # Absolute fallback: if everything fails, at least regex out the project_name
+    fallback = {}
+    pmatch = re.search(r'"project_name"\s*:\s*"([^"]+)"', text, re.IGNORECASE)
+    if pmatch:
+        fallback["project_name"] = pmatch.group(1)
+    
+    return fallback if fallback else None
 
 
 token_counters = {"prompt": 0, "completion": 0, "start_time": time.time()}
 
 
-# --- QUEUE ---
 class LLMJobRequest(BaseModel):
     agent_name: str
     sprint_id: str
@@ -213,6 +232,14 @@ class LLMJobRequest(BaseModel):
     prompt: str
     params: Optional[dict] = {}
 
+class ChatRequest(BaseModel):
+    history: list
+    params: Optional[dict] = {}
+
+class ExecuteRequest(BaseModel):
+    sprint_id: str
+    plan: dict
+    history: list
 
 class LLMJobCompletion(BaseModel):
     result: str
@@ -256,6 +283,11 @@ sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 sio_app = socketio.ASGIApp(sio, app)
 
 
+@app.get("/")
+async def root():
+    return {"message": "HAS-AI-TEAM Orchestrator API", "status": "running"}
+
+
 @app.get("/config")
 async def get_config():
     return load_config()
@@ -296,6 +328,111 @@ async def submit_llm_job(job: LLMJobRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/chat/teamlead")
+async def chat_teamlead(req: ChatRequest):
+    sys_prompt = {"role": "system", "content": "Sen kıdemli bir yazılım mimarı ve TeamLead ajanısın. Konuşma dili olarak Türkçe kullanabilirsin ama teknik tasarımlarda, proje adlarında, klasör/dosya isimlerinde ÇOK KESİN olarak İngilizce kullanmalısın (Örn: 'Hesap Makinesi' yerine 'calculator'). Kullanıcının projesi için teknik mimari, yol haritası ve isterleri üzerine sohbet et. Kısa, zekice ve net cevaplar ver. Kullanıcı teknik tasarıma onay verene kadar json çıktısı üretme, sadece tartış."}
+    messages = [sys_prompt] + req.history
+    try:
+        res = requests.post(
+            f"{OLLAMA_URL}/api/chat",
+            json={
+                "model": TEAMLEAD_MODEL,
+                "messages": messages,
+                "stream": False,
+                "options": req.params
+            },
+            timeout=120
+        ).json()
+        return {"response": res.get("message", {}).get("content", "")}
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat/preview")
+async def chat_preview(req: ChatRequest):
+    # Same prompt used in the orchestrator worker for TeamLead plan generation
+    sys = (
+        "Sen bir TeamLead ajanısın. Konuşma geçmişini SATIR SATIR KIL DEDEĞİ GİBİ İNCELE (METICULOUS ANALYSIS). "
+        "Kullanıcının bahsettiği ÖZELLİKLERİ, KISITLAMALARI ve DETAYLARI asla atlamadan Frontend ve Backend görevlerini belirle. "
+        "KESİNLİKLE KULLANICININ İSTEMEDİĞİ ÖZELLİKLERİ EKLEME (Örn: Kullanıcı istemedikçe asla Login, Kayıt Ol, Ad-Soyad Formu ekleme). Sadece ama sadece istenen odak noktasına göre bir UI tasarla. "
+        "Security ve Tester otomatik olarak ekleneceği için sadece Frontend ve Backend (dev) rollerini üret. "
+        "YANITIN SADECE JSON OLMALIDIR. ÇOK ÖNEMLİ: project_name, task içerikleri, dosya adları ve tech_stack dahil teknik olan HER ŞEY "
+        "inşaa edileceği için kesinlikle İNGİLİZCE olmalıdır (Örn: 'hesap_makinesi' DEĞİL 'calculator'). "
+        "Format: {project_name, tech_stack, summary_tr: 'Genel özet', tasks:[{role: 'Frontend' | 'Backend', task: 'Piksel Mükemmelliğinde Kesin UI ve İşlevsellik Kuralları (İNGİLİZCE YAZILACAK)', phase: 'Development'}]}."
+    )
+    
+    # We add this system message at the END to force it to output JSON for the preview
+    formatted_history = "\n".join([f"[{m.get('role', '').upper()}]: {m.get('content', '')}" for m in req.history])
+    promptText = f"Aşağıdaki konuşma geçmişini EN İNCE AYRINTISINA KADAR analiz et. Kullanıcının bahsettiği hiçbir detayı, özelliği veya kısıtlamayı atlamadan projeyi geliştirmek için sadece Frontend ve Backend (dev) rollerini içeren kesin bir JSON planı üret. ÖNEMLİ: project_name ve task detayları %100 İngilizce olmalı. JSON çıktısında 'tasks' dizisi olmalıdır.\n\nGEÇMİŞ:\n{formatted_history}"
+    
+    try:
+        res = requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={
+                "model": TEAMLEAD_MODEL,
+                "prompt": f"{sys}\n\nTask: {promptText}",
+                "stream": False,
+                "options": req.params
+            },
+            timeout=120
+        ).json()
+        return {"response": res.get("response", "")}
+    except Exception as e:
+        logger.error(f"Preview error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/sprint/execute")
+async def execute_sprint(req: ExecuteRequest):
+    # This endpoint locks in the exact previewed JSON plan
+    db = SessionLocal()
+    try:
+        # Create a synthetic trace representing TeamLead's final decision
+        # so that extract_files can read the project_name deterministically
+        db.add(
+            LLMTrace(
+                id=str(uuid.uuid4()),
+                sprint_id=req.sprint_id,
+                agent_name="TeamLead",
+                worker_id="orchestrator",
+                execution_node="orchestrator",
+                priority=1,
+                prompt="Generated from UI Preview",
+                response=f"```json\n{json.dumps(req.plan, indent=2)}\n```",
+                status="SUCCESS"
+            )
+        )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Execute trace error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+    # Automatically queue Dev tasks from the exact plan
+    queued_jobs = []
+    if req.plan and "tasks" in req.plan:
+        for t in req.plan["tasks"]:
+            role = t.get("role")
+            if role in ["Frontend", "Backend"]:
+                try:
+                    res = requests.post(
+                        f"{ORCHESTRATOR_URL}/llm/submit",
+                        json={
+                            "agent_name": role,
+                            "sprint_id": req.sprint_id,
+                            "priority": 2,
+                            "prompt": t.get("task", ""),
+                        },
+                        timeout=5,
+                    )
+                    queued_jobs.append(role)
+                except Exception as e:
+                    logger.error(f"Execute submit error for {role}: {e}")
+
+    await sio.emit("job_update", {"job_id": "system", "status": "COMPLETED", "sprint_id": req.sprint_id})
+    return {"status": "ok", "queued": queued_jobs}
 
 @app.post("/jobs/pull")
 async def pull_job(worker_id: str, hostname: str):
@@ -459,7 +596,7 @@ def get_system_status(db: Session = Depends(get_db)):
 
 
 @app.get("/traces/{sprint_id}")
-def get_traces(sprint_id: str, db: Session = Depends(get_db)):
+def get_traces_by_sprint(sprint_id: str, db: Session = Depends(get_db)):
     traces = (
         db.query(LLMTrace)
         .filter(LLMTrace.sprint_id == sprint_id)
@@ -469,6 +606,28 @@ def get_traces(sprint_id: str, db: Session = Depends(get_db)):
     return {
         "traces": [
             {
+                "agent": t.agent_name,
+                "status": t.status,
+                "duration_ms": t.duration_ms,
+                "timestamp": t.timestamp.isoformat(),
+                "response": t.response,
+            }
+            for t in traces
+        ]
+    }
+
+@app.get("/traces")
+def get_global_traces(db: Session = Depends(get_db)):
+    traces = (
+        db.query(LLMTrace)
+        .order_by(LLMTrace.timestamp.desc())
+        .limit(50)
+        .all()
+    )
+    return {
+        "traces": [
+            {
+                "sprint_id": t.sprint_id,
                 "agent": t.agent_name,
                 "status": t.status,
                 "duration_ms": t.duration_ms,
@@ -590,15 +749,15 @@ def llm_worker():
             )
             sys = "You are an AI Software Engineer."
             if agent == "TeamLead":
-                sys = "Sen bir TeamLead ajanısın. Frontend, Backend, Security, Tester görevleri oluştur. Yanıt: JSON {project_name, tech_stack, summary_tr, tasks:[{role, task, phase}]}."
+                sys = "Sen bir TeamLead ajanısın. Frontend ve Backend görevlerini belirle. YANITIN SADECE JSON OLMALIDIR. ÇOK ÖNEMLİ: project_name, task içerikleri ve dosya adları kesinlikle İNGİLİZCE olmalıdır (Örn: 'hesap_makinesi' DEĞİL 'calculator'). KESİNLİKLE İSTENMEYEN ÖZELLİKLERİ (Örn: Login) EKLEME. Format: {project_name, tech_stack, summary_tr, tasks:[{role: 'Frontend' | 'Backend', task: 'detayli aciklama (ENG)', phase: 'Development'}]}."
             elif agent == "Frontend":
-                sys = "Frontend dev. Use ### FILE: path. README.md mandatory."
+                sys = "Sen kıdemli bir Frontend geliştiricisisin. SADECE KOD ÜRET. SADECE GÖREVDE İSTENENİ YAP. İSTENMEYEN HİÇBİR EKRAN VEYA KULLANICI GİRİŞ FORMU EKLEME. ÇOK ÖNEMLİ: Dosya adları, değişkenler, sınıflar ve yorum satırları dahil KOD İÇİNDEKİ HER ŞEY %100 İNGİLİZCE olmalıdır. Çıktını sadece şu formatta ver: \n### FILE: my_real_file_name.js\n```javascript\n// code here\n```"
             elif agent == "Backend":
-                sys = "Backend dev. Use ### FILE: path."
+                sys = "Sen kıdemli bir Backend geliştiricisisin. SADECE KOD ÜRET. SADECE GÖREVDE İSTENENİ YAP. İSTENMEYEN HİÇBİR SERVİS VEYA VERİ TABANI TABLOSU EKLEME. ÇOK ÖNEMLİ: Dosya adları, değişkenler, sınıflar ve yorum satırları dahil KOD İÇİNDEKİ HER ŞEY %100 İNGİLİZCE olmalıdır. Çıktını sadece şu formatta ver: \n### FILE: my_real_file_name.py\n```python\n# code here\n```"
             elif agent == "Security":
                 sys = "Security audit. Save to ### FILE: security_audit.md."
             elif agent == "Tester":
-                sys = "QA Engineer. Save to ### FILE: tests/test_main.py."
+                sys = "QA Engineer. Olası hataları tespit et ve bir test paketi yaz. Save to ### FILE: tests/test_main.py. EĞER bir hata veya yanlışlık tespit edersen Raporunun en sonuna mutlaka '### RESULT: FAILED' ibaresini ekle. Sorun yoksa bu ibareyi kullanma."
 
             start = time.time()
             ollama = requests.post(
@@ -612,8 +771,27 @@ def llm_worker():
                 timeout=LLM_TIMEOUT,
             ).json()
             resp = ollama.get("response", "")
+            
+            target_dir = f"apps/{sid}"
+            db = SessionLocal()
+            try:
+                tl_trace = db.query(LLMTrace).filter(
+                    LLMTrace.sprint_id == sid, 
+                    LLMTrace.agent_name == "TeamLead"
+                ).order_by(LLMTrace.timestamp.desc()).first()
+                if tl_trace:
+                    plan = safe_json_loads(tl_trace.response)
+                    if plan and "project_name" in plan:
+                        import string
+                        safe_name = "".join(c for c in plan["project_name"] if c.isalnum() or c in (" ", "-", "_")).strip()
+                        safe_name = safe_name.replace(" ", "-").lower()
+                        if safe_name:
+                            target_dir = f"apps/{safe_name}"
+            finally:
+                db.close()
+                
             if agent != "TeamLead":
-                extract_files(resp, f"apps/{sid}")
+                extract_files(resp, target_dir)
             requests.post(
                 f"{ORCHESTRATOR_URL}/jobs/complete/{jid}?worker_id={worker_id}",
                 json={
@@ -630,6 +808,23 @@ def llm_worker():
             requests.post(
                 f"{ORCHESTRATOR_URL}/llm/lock/release?worker_id={worker_id}", timeout=5
             )
+
+            if agent == "TeamLead":
+                plan = safe_json_loads(resp)
+                if plan and "tasks" in plan:
+                    for t in plan["tasks"]:
+                        role = t.get("role")
+                        if role in ["Frontend", "Backend"]:
+                            requests.post(
+                                f"{ORCHESTRATOR_URL}/llm/submit",
+                                json={
+                                    "agent_name": role,
+                                    "sprint_id": sid,
+                                    "priority": 2,
+                                    "prompt": t.get("task", ""),
+                                },
+                                timeout=5,
+                            )
 
             if agent in ["Frontend", "Backend"]:
                 db = SessionLocal()
@@ -657,36 +852,74 @@ def llm_worker():
                     )
                 finally:
                     db.close()
+                
+                # Deterministic QA Trigger
                 if tot > 0 and done == tot:
+                    # Sadece Dev görevleri tamamsa QA kuyruğa girsin (tek seferlik tetiklenme)
+                    # Check if already triggered
                     db = SessionLocal()
                     try:
-                        tl = (
-                            db.query(LLMTrace)
-                            .filter(
-                                LLMTrace.sprint_id == sid,
-                                LLMTrace.agent_name == "TeamLead",
-                            )
-                            .first()
-                        )
+                        qa_exists = db.query(LLMJobRecord).filter(
+                            LLMJobRecord.sprint_id == sid,
+                            LLMJobRecord.agent_name == "Tester"
+                        ).first()
                     finally:
                         db.close()
-                    if tl:
-                        plan = safe_json_loads(tl.response)
-                        if plan and "tasks" in plan:
-                            for t in plan["tasks"]:
-                                if t.get("phase") == "qa":
-                                    requests.post(
-                                        f"{ORCHESTRATOR_URL}/llm/submit",
-                                        json={
-                                            "agent_name": t["role"],
-                                            "sprint_id": sid,
-                                            "priority": (
-                                                1 if t["role"] == "Security" else 4
-                                            ),
-                                            "prompt": t["task"],
-                                        },
-                                        timeout=5,
-                                    )
+                        
+                    if not qa_exists:
+                        # Queue Security
+                        requests.post(
+                            f"{ORCHESTRATOR_URL}/llm/submit",
+                            json={
+                                "agent_name": "Security",
+                                "sprint_id": sid,
+                                "priority": 3,
+                                "prompt": f"Please review the code generated for project in {target_dir} and output security_audit.md.",
+                            },
+                            timeout=5,
+                        )
+                        # Queue Tester
+                        requests.post(
+                            f"{ORCHESTRATOR_URL}/llm/submit",
+                            json={
+                                "agent_name": "Tester",
+                                "sprint_id": sid,
+                                "priority": 4,
+                                "prompt": f"Please thoroughly review and test the code generated in {target_dir}. Write unit tests to tests/test_main.py. If any issues or errors are found, you MUST append '### RESULT: FAILED' at the very end of your response.",
+                            },
+                            timeout=5,
+                        )
+
+            # Max Feedback Loop Logic
+            if agent == "Tester" and "FAILED" in resp.upper():
+                db = SessionLocal()
+                try:
+                    failed_count = (
+                        db.query(LLMTrace)
+                        .filter(
+                            LLMTrace.sprint_id == sid,
+                            LLMTrace.agent_name == "Tester",
+                            LLMTrace.response.like("%FAILED%")
+                        )
+                        .count()
+                    )
+                finally:
+                    db.close()
+                logger.warning(f"Tester reported FAILED for {sid}. Previous failures: {failed_count - 1}")
+                if failed_count <= 3:
+                     # Re-submit TeamLead with bug fix instructions
+                     requests.post(
+                         f"{ORCHESTRATOR_URL}/llm/submit",
+                         json={
+                             "agent_name": "TeamLead",
+                             "sprint_id": sid,
+                             "priority": 1, # High Priority Fix
+                             "prompt": f"BUGS DETECTED BY TESTER. Max Feedback Cycle: {failed_count}/3. \nReview the following tester report and output a new JSON plan to assign fixing tasks to Frontend/Backend ONLY.\n\nTESTER REPORT:\n{resp}\n\nOutput JSON ONLY.",
+                         },
+                         timeout=5,
+                     )
+                else:
+                     logger.error(f"Max feedback cycle reached for {sid} (Count: {failed_count}). Aborting further auto-fixes.")
         except Exception as e:
             logger.error(f"Worker err: {e}")
             time.sleep(5)
