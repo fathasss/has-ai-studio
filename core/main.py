@@ -59,6 +59,15 @@ def save_config(config):
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f)
 
+def load_prompt(filename: str, key: str, fallback: str) -> str:
+    path = os.path.join(os.path.dirname(__file__), "..", "prompts", filename)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get(key, fallback)
+    except Exception as e:
+        logger.warning(f"Could not load prompt {key} from {filename}: {e}")
+        return fallback
 
 runtime_config = load_config()
 
@@ -331,7 +340,8 @@ async def submit_llm_job(job: LLMJobRequest):
 
 @app.post("/chat/teamlead")
 async def chat_teamlead(req: ChatRequest):
-    sys_prompt = {"role": "system", "content": "Sen kıdemli bir yazılım mimarı ve TeamLead ajanısın. Konuşma dili olarak Türkçe kullanabilirsin ama teknik tasarımlarda, proje adlarında, klasör/dosya isimlerinde ÇOK KESİN olarak İngilizce kullanmalısın (Örn: 'Hesap Makinesi' yerine 'calculator'). Kullanıcının projesi için teknik mimari, yol haritası ve isterleri üzerine sohbet et. Kısa, zekice ve net cevaplar ver. Kullanıcı teknik tasarıma onay verene kadar json çıktısı üretme, sadece tartış."}
+    sys_content = load_prompt("teamlead.json", "TM_teamlead_chat", "Error: Prompt missing")
+    sys_prompt = {"role": "system", "content": sys_content}
     messages = [sys_prompt] + req.history
     try:
         res = requests.post(
@@ -352,26 +362,18 @@ async def chat_teamlead(req: ChatRequest):
 @app.post("/chat/preview")
 async def chat_preview(req: ChatRequest):
     # Same prompt used in the orchestrator worker for TeamLead plan generation
-    sys = (
-        "Sen bir TeamLead ajanısın. Konuşma geçmişini SATIR SATIR KIL DEDEĞİ GİBİ İNCELE (METICULOUS ANALYSIS). "
-        "Kullanıcının bahsettiği ÖZELLİKLERİ, KISITLAMALARI ve DETAYLARI asla atlamadan Frontend ve Backend görevlerini belirle. "
-        "KESİNLİKLE KULLANICININ İSTEMEDİĞİ ÖZELLİKLERİ EKLEME (Örn: Kullanıcı istemedikçe asla Login, Kayıt Ol, Ad-Soyad Formu ekleme). Sadece ama sadece istenen odak noktasına göre bir UI tasarla. "
-        "Security ve Tester otomatik olarak ekleneceği için sadece Frontend ve Backend (dev) rollerini üret. "
-        "YANITIN SADECE JSON OLMALIDIR. ÇOK ÖNEMLİ: project_name, task içerikleri, dosya adları ve tech_stack dahil teknik olan HER ŞEY "
-        "inşaa edileceği için kesinlikle İNGİLİZCE olmalıdır (Örn: 'hesap_makinesi' DEĞİL 'calculator'). "
-        "Format: {project_name, tech_stack, summary_tr: 'Genel özet', tasks:[{role: 'Frontend' | 'Backend', task: 'Piksel Mükemmelliğinde Kesin UI ve İşlevsellik Kuralları (İNGİLİZCE YAZILACAK)', phase: 'Development'}]}."
-    )
+    sys = load_prompt("teamlead.json", "TM_teamlead_preview", "Error: Prompt missing")
     
     # We add this system message at the END to force it to output JSON for the preview
     formatted_history = "\n".join([f"[{m.get('role', '').upper()}]: {m.get('content', '')}" for m in req.history])
-    promptText = f"Aşağıdaki konuşma geçmişini EN İNCE AYRINTISINA KADAR analiz et. Kullanıcının bahsettiği hiçbir detayı, özelliği veya kısıtlamayı atlamadan projeyi geliştirmek için sadece Frontend ve Backend (dev) rollerini içeren kesin bir JSON planı üret. ÖNEMLİ: project_name ve task detayları %100 İngilizce olmalı. JSON çıktısında 'tasks' dizisi olmalıdır.\n\nGEÇMİŞ:\n{formatted_history}"
+    final_prompt = f"{sys}\n\nGEÇMİŞ:\n{formatted_history}\n\nLÜTFEN SADECE JSON ÇIKTISI ÜRET."
     
     try:
         res = requests.post(
             f"{OLLAMA_URL}/api/generate",
             json={
                 "model": TEAMLEAD_MODEL,
-                "prompt": f"{sys}\n\nTask: {promptText}",
+                "prompt": final_prompt,
                 "stream": False,
                 "options": req.params
             },
@@ -415,14 +417,15 @@ async def execute_sprint(req: ExecuteRequest):
     if req.plan and "tasks" in req.plan:
         for t in req.plan["tasks"]:
             role = t.get("role")
-            if role in ["Frontend", "Backend"]:
+            if role in ["Frontend", "Backend", "Tester", "Security"]:
                 try:
+                    priority = 3 if role in ["Tester", "Security"] else 2
                     res = requests.post(
                         f"{ORCHESTRATOR_URL}/llm/submit",
                         json={
                             "agent_name": role,
                             "sprint_id": req.sprint_id,
-                            "priority": 2,
+                            "priority": priority,
                             "prompt": t.get("task", ""),
                         },
                         timeout=5,
@@ -747,17 +750,17 @@ def llm_worker():
             ctx = "Prior Work:\n" + "\n".join(
                 [f"{p.agent_name}: {p.response}" for p in prior]
             )
-            sys = "You are an AI Software Engineer."
+            sys = "Error: Prompt missing"
             if agent == "TeamLead":
-                sys = "Sen bir TeamLead ajanısın. Frontend ve Backend görevlerini belirle. YANITIN SADECE JSON OLMALIDIR. ÇOK ÖNEMLİ: project_name, task içerikleri ve dosya adları kesinlikle İNGİLİZCE olmalıdır (Örn: 'hesap_makinesi' DEĞİL 'calculator'). KESİNLİKLE İSTENMEYEN ÖZELLİKLERİ (Örn: Login) EKLEME. Format: {project_name, tech_stack, summary_tr, tasks:[{role: 'Frontend' | 'Backend', task: 'detayli aciklama (ENG)', phase: 'Development'}]}."
+                sys = load_prompt("teamlead.json", "TM_teamlead_worker", sys)
             elif agent == "Frontend":
-                sys = "Sen kıdemli bir Frontend geliştiricisisin. SADECE KOD ÜRET. SADECE GÖREVDE İSTENENİ YAP. İSTENMEYEN HİÇBİR EKRAN VEYA KULLANICI GİRİŞ FORMU EKLEME. ÇOK ÖNEMLİ: Dosya adları, değişkenler, sınıflar ve yorum satırları dahil KOD İÇİNDEKİ HER ŞEY %100 İNGİLİZCE olmalıdır. Çıktını sadece şu formatta ver: \n### FILE: my_real_file_name.js\n```javascript\n// code here\n```"
+                sys = load_prompt("frontend.json", "FE_frontend_worker", sys)
             elif agent == "Backend":
-                sys = "Sen kıdemli bir Backend geliştiricisisin. SADECE KOD ÜRET. SADECE GÖREVDE İSTENENİ YAP. İSTENMEYEN HİÇBİR SERVİS VEYA VERİ TABANI TABLOSU EKLEME. ÇOK ÖNEMLİ: Dosya adları, değişkenler, sınıflar ve yorum satırları dahil KOD İÇİNDEKİ HER ŞEY %100 İNGİLİZCE olmalıdır. Çıktını sadece şu formatta ver: \n### FILE: my_real_file_name.py\n```python\n# code here\n```"
+                sys = load_prompt("backend.json", "BE_backend_worker", sys)
             elif agent == "Security":
-                sys = "Security audit. Save to ### FILE: security_audit.md."
+                sys = load_prompt("security.json", "SM_security_worker", sys)
             elif agent == "Tester":
-                sys = "QA Engineer. Olası hataları tespit et ve bir test paketi yaz. Save to ### FILE: tests/test_main.py. EĞER bir hata veya yanlışlık tespit edersen Raporunun en sonuna mutlaka '### RESULT: FAILED' ibaresini ekle. Sorun yoksa bu ibareyi kullanma."
+                sys = load_prompt("tester.json", "TT_tester_worker", sys)
 
             start = time.time()
             ollama = requests.post(

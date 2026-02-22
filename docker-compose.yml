@@ -35,6 +35,7 @@ services:
     volumes:
       - ./core:/app/core
       - ./apps:/app/apps
+      - ./prompts:/app/prompts
       - orchestrator_data:/app/data
     depends_on:
       has-ai-ollama:
@@ -68,6 +69,7 @@ services:
       - AGENT_ROLE=worker
     volumes:
       - ./apps:/app/apps
+      - ./prompts:/app/prompts
     depends_on:
       - has-ai-orchestrator
     networks:

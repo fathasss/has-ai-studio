@@ -72,6 +72,33 @@
       .trace-content { padding: 20px; font-family: 'Courier New', monospace; font-size: 0.85rem; color: #a1a1aa; white-space: pre-wrap; max-height: 400px; overflow-y: auto; background: #000; }
 
       /* Observability View */
+      .sprint-status-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+      }
+      .sprint-status-card {
+          background: var(--card);
+          border: 1px solid var(--border);
+          padding: 12px 16px;
+          border-radius: 8px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+      }
+      .sprint-status-card .role {
+          font-size: 0.9rem;
+          color: var(--text);
+          font-weight: 600;
+          text-transform: uppercase;
+      }
+      .sprint-status-card .state {
+          font-weight: 800;
+          font-size: 0.85rem;
+          padding: 4px 8px;
+          border-radius: 4px;
+          background: rgba(255,255,255,0.05);
+      }
       .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; padding: 32px; }
       .stat-box { background: var(--card); border: 1px solid var(--border); padding: 32px; border-radius: 20px; position: relative; overflow: hidden; }
       .stat-box::after { content: ''; position: absolute; top: 0; right: 0; width: 60px; height: 60px; background: var(--accent); opacity: 0.03; border-radius: 0 0 0 100%; }
@@ -595,8 +622,12 @@
               } catch(e) {}
           }
 
-          let html = `<h3 style="color:var(--accent)">Pipeline Detail: ${sid}</h3>`;
-          html += `<div class="trace-card"><div class="trace-content" style="background:#000;">`;
+          let html = `<h3 style="color:var(--accent); margin-bottom:15px; flex-shrink:0;">Pipeline Detail: ${sid}</h3>`;
+          
+          // 1. Fixed Header Area for Agent Statuses
+          html += `<div class="sprint-status-header">
+                     <div class="sprint-status-grid">`;
+                     
           ["TeamLead", "Frontend", "Backend", "Security", "Tester"].forEach(role => {
               const job = dataJobs.jobs.find(j => j.agent === role);
               let status = "WAITING";
@@ -604,7 +635,7 @@
                   status = job.status;
               } else {
                   if (role === "Security" || role === "Tester") {
-                      status = "STANDBY (AWAITING DEV)";
+                      status = "STANDBY";
                   } else if (role === "Frontend" || role === "Backend") {
                       status = "AWAITING PLAN";
                   } else {
@@ -612,17 +643,28 @@
                   }
               }
               const color = status === 'COMPLETED' ? 'var(--success)' : (status === 'PROCESSING' ? 'var(--info)' : 'var(--text-dim)');
-              html += `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
-                  <span>${role}</span><span style="color:${color}; font-weight:800;">${status}</span>
-              </div>`;
+              html += `<div class="sprint-status-card">
+                         <div class="role">${role}</div>
+                         <div class="state" style="color:${color};">${status}</div>
+                       </div>`;
           });
-          html += `</div></div>`;
-          html += dataTraces.traces.map(t => `
-            <div class="trace-card">
-                <div class="trace-header"><span>${t.agent}</span><span>${t.timestamp}</span></div>
-                <div class="trace-content">${t.response}</div>
-            </div>
-          `).join('');
+          html += `  </div>
+                   </div>`;
+                   
+          // 2. Scrollable Terminal Area for Traces
+          html += `<div class="sprint-terminal-logs">`;
+          if (dataTraces.traces.length === 0) {
+               html += `<div style="text-align:center; color:var(--text-dim); padding:20px;">No execution traces yet...</div>`;
+          } else {
+              html += dataTraces.traces.map(t => `
+                <div class="trace-card" style="border:none; border-bottom:1px solid #333; border-radius:0; background:transparent;">
+                    <div class="trace-header"><span><strong style="color:var(--info)">[${t.agent}]</strong></span><span style="color:#666">${t.timestamp}</span></div>
+                    <div class="trace-content" style="background:transparent; border:none; padding:10px 0;">${t.response}</div>
+                </div>
+              `).join('');
+          }
+          html += `</div>`;
+          
           document.getElementById('sprintDetail').innerHTML = html;
       }
 
