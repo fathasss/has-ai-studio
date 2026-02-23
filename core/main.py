@@ -1156,18 +1156,18 @@ def llm_worker():
                 
                 # Deterministic QA Trigger
                 if tot > 0 and done == tot:
-                    # Sadece Dev görevleri tamamsa QA kuyruğa girsin (tek seferlik tetiklenme)
-                    # Check if already triggered
+                    # Allow QA to trigger if no QA jobs are currently running (to close the loop)
                     db = SessionLocal()
                     try:
-                        qa_exists = db.query(LLMJobRecord).filter(
+                        active_qa = db.query(LLMJobRecord).filter(
                             LLMJobRecord.sprint_id == sid,
-                            LLMJobRecord.agent_name == "Tester"
-                        ).first()
+                            LLMJobRecord.agent_name.in_(["Tester", "Security", "TeamLead"]),
+                            LLMJobRecord.status.in_(["PENDING", "PROCESSING"])
+                        ).count()
                     finally:
                         db.close()
                         
-                    if not qa_exists:
+                    if active_qa == 0:
                         logger.info(f"Triggering QA (Security & Tester) for {sid}")
                         # Queue Security
                         requests.post(
@@ -1192,38 +1192,51 @@ def llm_worker():
                             timeout=5,
                         )
                     else:
-                        logger.info(f"QA already exists for {sid}, skipping trigger.")
+                        logger.info(f"Active QA/Fix jobs running for {sid}, skipping trigger.")
 
-            # Max Feedback Loop Logic
-            if agent == "Tester" and "FAILED" in resp.upper():
-                db = SessionLocal()
-                try:
-                    failed_count = (
-                        db.query(LLMTrace)
-                        .filter(
-                            LLMTrace.sprint_id == sid,
-                            LLMTrace.agent_name == "Tester",
-                            LLMTrace.response.like("%FAILED%")
+            # Max Feedback Loop Logic & README Generation
+            if agent == "Tester":
+                if "FAILED" in resp.upper():
+                    db = SessionLocal()
+                    try:
+                        failed_count = (
+                            db.query(LLMTrace)
+                            .filter(
+                                LLMTrace.sprint_id == sid,
+                                LLMTrace.agent_name == "Tester",
+                                LLMTrace.response.like("%FAILED%")
+                            )
+                            .count()
                         )
-                        .count()
-                    )
-                finally:
-                    db.close()
-                logger.warning(f"Tester reported FAILED for {sid}. Previous failures: {failed_count - 1}")
-                if failed_count <= 3:
-                     # Re-submit TeamLead with bug fix instructions
-                     requests.post(
-                         f"{ORCHESTRATOR_URL}/llm/submit",
-                         json={
-                             "agent_name": "TeamLead",
-                             "sprint_id": sid,
-                             "priority": 1, # High Priority Fix
-                             "prompt": f"BUGS DETECTED BY TESTER. Max Feedback Cycle: {failed_count}/3. \nReview the following tester report and output a new JSON plan to assign fixing tasks to Frontend/Backend ONLY.\n\nTESTER REPORT:\n{resp}\n\nOutput JSON ONLY.",
-                         },
-                         timeout=5,
-                     )
+                    finally:
+                        db.close()
+                    logger.warning(f"Tester reported FAILED for {sid}. Previous failures: {failed_count - 1}")
+                    if failed_count <= 3:
+                         # Re-submit TeamLead with bug fix instructions
+                         requests.post(
+                             f"{ORCHESTRATOR_URL}/llm/submit",
+                             json={
+                                 "agent_name": "TeamLead",
+                                 "sprint_id": sid,
+                                 "priority": 1, # High Priority Fix
+                                 "prompt": f"BUGS DETECTED BY TESTER. Max Feedback Cycle: {failed_count}/3. \nReview the following tester report and output a new JSON plan to assign fixing tasks to Frontend/Backend ONLY.\n\nTESTER REPORT:\n{resp}\n\nOutput JSON ONLY.",
+                             },
+                             timeout=5,
+                         )
+                    else:
+                         logger.error(f"Max feedback cycle reached for {sid} (Count: {failed_count}). Aborting further auto-fixes.")
                 else:
-                     logger.error(f"Max feedback cycle reached for {sid} (Count: {failed_count}). Aborting further auto-fixes.")
+                    logger.info(f"Tester reported SUCCESS for {sid}. Queuing final README generation.")
+                    requests.post(
+                        f"{ORCHESTRATOR_URL}/llm/submit",
+                        json={
+                            "agent_name": "TeamLead",
+                            "sprint_id": sid,
+                            "priority": 5, # Final priority
+                            "prompt": f"The project in {target_dir} has successfully passed all QA tests! Please generate a comprehensive README.md file summarizing the project, its tech stack, and installation/run instructions. Note: write ONLY the README.md content and save it to {target_dir}/README.md.",
+                        },
+                        timeout=5,
+                    )
         except Exception as e:
             logger.error(f"Worker err: {e}")
             time.sleep(5)
