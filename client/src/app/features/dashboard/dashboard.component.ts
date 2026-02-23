@@ -32,7 +32,7 @@ export class DashboardComponent implements AfterViewChecked {
   public isTyping: boolean = false;
   public hasPendingPlan: boolean = false;
   
-  public chatSessions: string[] = [];
+  public chatSessions: {id: string, name: string}[] = [];
   public selectedSession: string | null = null;
   
   // Modal State
@@ -42,16 +42,38 @@ export class DashboardComponent implements AfterViewChecked {
   public planError: string = '';
 
   constructor(private orchestratorService: OrchestratorService, private router: Router) {
-    this.generateSprintId();
   }
 
   ngOnInit() {
     this.loadSessions();
+    this.restoreState();
+  }
+
+  restoreState() {
+    const saved = this.orchestratorService.chatState;
+    if (saved) {
+      this.currentSprintId = saved.currentSprintId;
+      this.chatHistory = saved.chatHistory;
+      this.rawAgentHistory = saved.rawAgentHistory;
+      this.selectedSession = saved.selectedSession;
+    } else {
+      this.generateSprintId();
+      this.syncState();
+    }
+  }
+
+  syncState() {
+    this.orchestratorService.chatState = {
+      currentSprintId: this.currentSprintId,
+      chatHistory: this.chatHistory,
+      rawAgentHistory: this.rawAgentHistory,
+      selectedSession: this.selectedSession
+    };
   }
 
   loadSessions() {
     this.orchestratorService.getChatSessions().subscribe(res => {
-      this.chatSessions = res.sessions || [];
+      this.chatSessions = res.sessions;
     });
   }
 
@@ -67,6 +89,7 @@ export class DashboardComponent implements AfterViewChecked {
         role: m.role === 'TeamLead' ? 'assistant' : 'user',
         content: m.content
       }));
+      this.syncState();
     });
   }
 
@@ -85,6 +108,7 @@ export class DashboardComponent implements AfterViewChecked {
     this.selectedSession = null;
     this.generateSprintId();
     this.loadSessions();
+    this.syncState();
   }
 
   scrollToBottom(): void {
@@ -101,6 +125,7 @@ export class DashboardComponent implements AfterViewChecked {
     
     this.chatHistory.push({ role: 'PO', content: userText });
     this.rawAgentHistory.push({ role: 'user', content: userText });
+    this.syncState();
     
     // Save User message
     this.orchestratorService.saveChatMessage(this.currentSprintId, 'user', userText).subscribe();
@@ -117,6 +142,7 @@ export class DashboardComponent implements AfterViewChecked {
         const assistantContent = cleanResponse || rawResponse;
         this.chatHistory.push({ role: 'TeamLead', content: assistantContent });
         this.rawAgentHistory.push({ role: 'assistant', content: rawResponse });
+        this.syncState();
         
         // Save Assistant message
         this.orchestratorService.saveChatMessage(this.currentSprintId, 'TeamLead', rawResponse).subscribe(() => {
@@ -165,25 +191,26 @@ export class DashboardComponent implements AfterViewChecked {
   approveSprint() {
     if (!this.parsedPlan) return;
     
-    // Generate a descriptive ID based on project name if available
+    const oldId = this.currentSprintId;
     if (this.parsedPlan.project_name) {
       this.currentSprintId = this.slugify(this.parsedPlan.project_name);
     }
 
-    this.closePreviewModal();
-    this.hasPendingPlan = false;
-    
-    const tlMsg = `Sprint Authorized from Preview. Locking in architecture for project: ${this.parsedPlan.project_name || 'unknown'}. Execution starting...`;
-    this.chatHistory.push({ role: 'TeamLead', content: tlMsg });
-    
-    this.orchestratorService.executeSprint(this.currentSprintId, this.parsedPlan, this.rawAgentHistory).subscribe({
-      next: (res) => {
-        setTimeout(() => {
-          // Sprint başlatılınca projeler ekranına yönlendir 
-          this.router.navigate(['/active-projects']);
-        }, 1500);
+    this.orchestratorService.migrateChatHistory(oldId, this.currentSprintId).subscribe({
+      next: () => {
+        this.closePreviewModal();
+        this.hasPendingPlan = false;
+        
+        this.orchestratorService.executeSprint(this.currentSprintId, this.parsedPlan, this.rawAgentHistory).subscribe({
+          next: () => {
+            this.router.navigate(['/active-projects']);
+          },
+          error: (err) => console.error("Sprint execution failed", err)
+        });
+        
+        this.syncState();
       },
-      error: (err) => console.error("Sprint execution failed", err)
+      error: (err) => console.error("Migration failed", err)
     });
   }
 

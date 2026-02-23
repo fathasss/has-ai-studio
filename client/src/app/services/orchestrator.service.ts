@@ -22,6 +22,14 @@ export interface MetricData {
 export class OrchestratorService {
   private apiUrl = '/api';
 
+  // State Persistence for Dashboard Chat
+  public chatState: {
+    currentSprintId: string,
+    chatHistory: any[],
+    rawAgentHistory: any[],
+    selectedSession: string | null
+  } | null = null;
+
   constructor(private http: HttpClient) { }
 
   getConfig(): Observable<DefaultConfig> {
@@ -76,6 +84,10 @@ export class OrchestratorService {
     return this.http.post(`${this.apiUrl}/sprint/execute`, { sprint_id: sprintId, plan, history });
   }
 
+  migrateChatHistory(oldId: string, newId: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/chat/history/migrate`, { old_id: oldId, new_id: newId });
+  }
+
   submitLlmJob(jobRequest: any): Observable<any> {
     return this.http.post(`${this.apiUrl}/llm/submit`, jobRequest);
   }
@@ -88,7 +100,7 @@ export class OrchestratorService {
     return this.http.post(`${this.apiUrl}/chat/history`, { sprint_id: sprintId, role, content });
   }
 
-  getChatSessions(): Observable<{sessions: string[]}> {
-    return this.http.get<{sessions: string[]}>(`${this.apiUrl}/chat/sessions`);
+  getChatSessions(): Observable<{sessions: {id: string, name: string}[]}> {
+    return this.http.get<{sessions: {id: string, name: string}[]}>(`${this.apiUrl}/chat/sessions`);
   }
 }

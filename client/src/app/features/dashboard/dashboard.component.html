@@ -7,12 +7,17 @@
     </div>
     <div class="flex-1 overflow-y-auto p-2 space-y-1">
       <div *ngIf="chatSessions.length === 0" class="p-4 text-xs text-gray-500 italic">No project history yet.</div>
-      <div *ngFor="let sid of chatSessions" 
-           (click)="loadHistory(sid)"
-           class="p-3 rounded-lg text-sm cursor-pointer border border-transparent transition-all hover:bg-white/5"
-           [ngClass]="selectedSession === sid ? 'bg-white/10 border-yellow-400/50 text-white' : 'text-gray-400'">
-        <div class="font-medium truncate">{{ sid }}</div>
-        <div class="text-[0.6rem] uppercase tracking-wider opacity-50 mt-1">Authorized</div>
+      <div class="space-y-2 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 custom-scrollbar">
+        <div *ngFor="let session of chatSessions" 
+             (click)="loadHistory(session.id)"
+             [ngClass]="{
+               'bg-blue-600 border-blue-400': selectedSession === session.id,
+               'bg-gray-700/50 border-gray-600 hover:bg-gray-600/50': selectedSession !== session.id
+             }"
+             class="p-3 rounded-lg cursor-pointer transition-all duration-300">
+          <div class="text-xs text-gray-400 font-mono mb-1 truncate">{{ session.id }}</div>
+          <div class="text-sm text-gray-100 font-medium truncate">{{ session.name }}</div>
+        </div>
       </div>
     </div>
     <div class="p-3 border-t border-white/10">

@@ -175,18 +175,31 @@ def get_db():
 
 # --- UTILS ---
 def extract_files(text: str, project_dir: str):
-    pattern = r"### FILE:\s*([^\n\r\*` ]+)(.*?)(?=### FILE:|$)"
-    matches = re.finditer(pattern, text, re.DOTALL)
+    """Parses LLM output for file content and writes to disk."""
+    os.makedirs(project_dir, exist_ok=True)
     created_files = []
+    
+    # Pattern for ### FILE: filename format
+    pattern = r"### FILE:\s*([^\n\r\*` ]+)(.*?)(?=### FILE:|$)"
+    matches = list(re.finditer(pattern, text, re.DOTALL))
+    
+    if not matches:
+        # Fallback to checking for markdown blocks with // filename annotation
+        pattern_md = r"```(?:\w+)?\s*//\s*([\w\.\-/]+)\n(.*?)\n```"
+        matches = list(re.finditer(pattern_md, text, re.DOTALL))
+
     for match in matches:
         raw_path = match.group(1).strip()
         content = match.group(2).strip()
-        code_block_match = re.search(r"```(?:\w+)?\s*(.*?)\s*```", content, re.DOTALL)
-        if code_block_match:
-            content = code_block_match.group(1)
+        
+        # If content still has markdown fences, strip them
+        content = re.sub(r"^```(?:\w+)?\n", "", content)
+        content = re.sub(r"\n```$", "", content)
+        
         rel_path = raw_path.replace("\\", "/").lstrip("/")
         if ".." in rel_path:
             continue
+            
         full_path = os.path.join(project_dir, rel_path)
         try:
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
@@ -196,8 +209,52 @@ def extract_files(text: str, project_dir: str):
             logger.info(f"Extracted: {full_path}")
         except Exception as e:
             logger.error(f"Extract failed {raw_path}: {e}")
+    
+    # Auto-install dependencies if manifests were created
+    if created_files:
+        install_dependencies(project_dir)
     return created_files
 
+def install_dependencies(project_dir: str):
+    """Checks for package managers and installs dependencies if present."""
+    import subprocess
+    # Node.js
+    if os.path.exists(os.path.join(project_dir, "package.json")):
+        logger.info(f"Detected package.json in {project_dir}, running npm install...")
+        try:
+            # Using --no-audit and --no-fund for speed
+            subprocess.run(["npm", "install", "--no-audit", "--no-fund"], cwd=project_dir, capture_output=True, timeout=600)
+            logger.info(f"npm install completed for {project_dir}")
+        except Exception as e:
+            logger.error(f"npm install failed for {project_dir}: {e}")
+
+    # Python
+    if os.path.exists(os.path.join(project_dir, "requirements.txt")):
+        logger.info(f"Detected requirements.txt in {project_dir}, running pip install...")
+        try:
+            subprocess.run(["pip", "install", "-r", "requirements.txt"], cwd=project_dir, capture_output=True, timeout=600)
+            logger.info(f"pip install completed for {project_dir}")
+        except Exception as e:
+            logger.error(f"pip install failed for {project_dir}: {e}")
+
+
+def execute_setup_commands(commands: List[str], project_dir: str):
+    """Executes a list of setup commands in the project directory."""
+    import subprocess
+    os.makedirs(project_dir, exist_ok=True)
+    for cmd in commands:
+        if not cmd: continue
+        logger.info(f"Executing setup command in {project_dir}: {cmd}")
+        try:
+            # Removed framework-specific hardcoded flag injections (npm/dotnet)
+            # Full authority is now delegated to the TeamLead agent.
+            subprocess.run(cmd, shell=True, cwd=project_dir, capture_output=True, timeout=600, check=True)
+            logger.info(f"Command success: {cmd}")
+        except subprocess.CalledProcessError as e:
+            err_msg = e.stderr.decode() if e.stderr else str(e)
+            logger.error(f"Command failed: {cmd}. Error: {err_msg}")
+        except Exception as e:
+            logger.error(f"Command execution error: {cmd}. Error: {e}")
 
 def safe_json_loads(text: str):
     if not text:
@@ -270,6 +327,10 @@ class ChatMessageSchema(BaseModel):
     sprint_id: str
     role: str
     content: str
+
+class MigrateHistoryRequest(BaseModel):
+    old_id: str
+    new_id: str
 
 
 class JobQueue:
@@ -378,25 +439,27 @@ async def chat_teamlead(req: ChatRequest):
 
 @app.post("/chat/preview")
 async def chat_preview(req: ChatRequest):
-    # Same prompt used in the orchestrator worker for TeamLead plan generation
-    sys = load_prompt("teamlead.json", "TM_teamlead_preview", "Error: Prompt missing")
+    # System prompt for structured plan generation
+    sys_content = load_prompt("teamlead.json", "TM_teamlead_preview", "Error: Prompt missing")
+    sys_prompt = {"role": "system", "content": sys_content}
     
-    # We add this system message at the END to force it to output JSON for the preview
-    formatted_history = "\n".join([f"[{m.get('role', '').upper()}]: {m.get('content', '')}" for m in req.history])
-    final_prompt = f"{sys}\n\nGEÇMİŞ:\n{formatted_history}\n\nLÜTFEN SADECE JSON ÇIKTISI ÜRET."
+    # We add a trailing instruction as a user message to force the output format
+    format_instruction = {"role": "user", "content": "LÜTFEN ANALİZİNİ TAMAMLA VE SADECE BELİRTİLEN JSON FORMATINDA ÇIKTI VEREREK PLANI OLUŞTUR."}
+    
+    messages = [sys_prompt] + req.history + [format_instruction]
     
     try:
         res = requests.post(
-            f"{OLLAMA_URL}/api/generate",
+            f"{OLLAMA_URL}/api/chat",
             json={
                 "model": TEAMLEAD_MODEL,
-                "prompt": final_prompt,
+                "messages": messages,
                 "stream": False,
                 "options": req.params
             },
-            timeout=120
+            timeout=180
         ).json()
-        return {"response": res.get("response", "")}
+        return {"response": res.get("message", {}).get("content", "")}
     except Exception as e:
         logger.error(f"Preview error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -650,12 +713,47 @@ def save_chat_message(msg: ChatMessageSchema, db: Session = Depends(get_db)):
 
 @app.get("/chat/sessions")
 def list_chat_sessions(db: Session = Depends(get_db)):
-    sessions = (
+    # Get all distinct sprint IDs
+    sprint_ids = (
         db.query(ChatMessageRecord.sprint_id)
         .distinct()
         .all()
     )
-    return {"sessions": [s[0] for s in sessions]}
+    
+    sessions = []
+    for (sid,) in sprint_ids:
+        # Try to find a display name from TeamLead's response
+        display_name = sid
+        tl_trace = (
+            db.query(LLMTrace)
+            .filter(LLMTrace.sprint_id == sid, LLMTrace.agent_name == "TeamLead")
+            .order_by(LLMTrace.timestamp.desc())
+            .first()
+        )
+        if tl_trace:
+            plan = safe_json_loads(tl_trace.response)
+            if plan and "project_name" in plan:
+                display_name = plan["project_name"]
+        
+        sessions.append({"id": sid, "name": display_name})
+    
+    return {"sessions": sessions}
+
+@app.post("/chat/history/migrate")
+def migrate_chat_history(req: MigrateHistoryRequest, db: Session = Depends(get_db)):
+    try:
+        # Update Chat history
+        db.query(ChatMessageRecord).filter(ChatMessageRecord.sprint_id == req.old_id).update({"sprint_id": req.new_id})
+        # Update Traces
+        db.query(LLMTrace).filter(LLMTrace.sprint_id == req.old_id).update({"sprint_id": req.new_id})
+        # Update Jobs
+        db.query(LLMJobRecord).filter(LLMJobRecord.sprint_id == req.old_id).update({"sprint_id": req.new_id})
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 @app.get("/ollama/models")
 def get_ollama_models():
     try:
@@ -883,7 +981,22 @@ def llm_worker():
                 continue
 
             db = SessionLocal()
+            project_context = ""
             try:
+                # Get Project Context from TeamLead's plan
+                tl_trace = db.query(LLMTrace).filter(
+                    LLMTrace.sprint_id == sid, 
+                    LLMTrace.agent_name == "TeamLead"
+                ).order_by(LLMTrace.timestamp.desc()).first()
+                
+                if tl_trace:
+                    plan = safe_json_loads(tl_trace.response)
+                    if plan:
+                        p_name = plan.get("project_name", "Unknown")
+                        p_stack = plan.get("tech_stack", [])
+                        p_summary = plan.get("summary_tr", "No summary")
+                        project_context = f"[PROJECT CONTEXT]\nProject: {p_name}\nTech Stack: {', '.join(p_stack) if isinstance(p_stack, list) else p_stack}\nGoal: {p_summary}\n\n"
+
                 prior = (
                     db.query(LLMTrace)
                     .filter(LLMTrace.sprint_id == sid, LLMTrace.status == "SUCCESS")
@@ -912,7 +1025,7 @@ def llm_worker():
                 f"{OLLAMA_URL}/api/generate",
                 json={
                     "model": model,
-                    "prompt": f"{sys}\n{ctx}\nTask: {job['prompt']}",
+                    "prompt": f"{project_context}{sys}\n{ctx}\nTask: {job['prompt']}",
                     "stream": False,
                     "options": job["params"],
                 },
@@ -929,12 +1042,19 @@ def llm_worker():
                 ).order_by(LLMTrace.timestamp.desc()).first()
                 if tl_trace:
                     plan = safe_json_loads(tl_trace.response)
-                    if plan and "project_name" in plan:
-                        import string
-                        safe_name = "".join(c for c in plan["project_name"] if c.isalnum() or c in (" ", "-", "_")).strip()
-                        safe_name = safe_name.replace(" ", "-").lower()
-                        if safe_name:
-                            target_dir = f"apps/{safe_name}"
+                    if plan:
+                        if "project_name" in plan:
+                            import string
+                            safe_name = "".join(c for c in plan["project_name"] if c.isalnum() or c in (" ", "-", "_")).strip()
+                            safe_name = safe_name.replace(" ", "-").lower()
+                            if safe_name:
+                                target_dir = f"apps/{safe_name}"
+                        
+                        # EXECUTE SETUP COMMANDS
+                        if "setup_commands" in plan and isinstance(plan["setup_commands"], list):
+                            # Only run if directory is relatively empty (avoid re-running on every file edit)
+                            if not os.path.exists(target_dir) or len(os.listdir(target_dir)) <= 1:
+                                execute_setup_commands(plan["setup_commands"], target_dir)
             finally:
                 db.close()
                 
@@ -960,9 +1080,10 @@ def llm_worker():
             if agent == "TeamLead":
                 plan = safe_json_loads(resp)
                 if plan and "tasks" in plan:
+                    logger.info(f"Processing {len(plan['tasks'])} tasks from TeamLead plan for {sid}")
                     for t in plan["tasks"]:
                         role = t.get("role")
-                        if role in ["Frontend", "Backend"]:
+                        if role in ["Frontend", "Backend", "Tester", "Security"]:
                             requests.post(
                                 f"{ORCHESTRATOR_URL}/llm/submit",
                                 json={
@@ -1001,6 +1122,8 @@ def llm_worker():
                 finally:
                     db.close()
                 
+                logger.info(f"QA Trigger Check for {sid}: tot={tot}, done={done}")
+                
                 # Deterministic QA Trigger
                 if tot > 0 and done == tot:
                     # Sadece Dev görevleri tamamsa QA kuyruğa girsin (tek seferlik tetiklenme)
@@ -1015,6 +1138,7 @@ def llm_worker():
                         db.close()
                         
                     if not qa_exists:
+                        logger.info(f"Triggering QA (Security & Tester) for {sid}")
                         # Queue Security
                         requests.post(
                             f"{ORCHESTRATOR_URL}/llm/submit",
@@ -1037,6 +1161,8 @@ def llm_worker():
                             },
                             timeout=5,
                         )
+                    else:
+                        logger.info(f"QA already exists for {sid}, skipping trigger.")
 
             # Max Feedback Loop Logic
             if agent == "Tester" and "FAILED" in resp.upper():
