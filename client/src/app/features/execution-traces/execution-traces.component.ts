@@ -11,6 +11,7 @@ import { OrchestratorService } from '../../services/orchestrator.service';
 })
 export class ExecutionTracesComponent implements OnInit {
   traces: any[] = [];
+  expandedLogs: Set<number> = new Set();
 
   constructor(private orchestratorService: OrchestratorService) {}
 
@@ -25,5 +26,17 @@ export class ExecutionTracesComponent implements OnInit {
       },
       error: (err) => console.error("Failed to load global traces", err)
     });
+  }
+
+  toggleLog(index: number) {
+    if (this.expandedLogs.has(index)) {
+      this.expandedLogs.delete(index);
+    } else {
+      this.expandedLogs.add(index);
+    }
+  }
+
+  isExpanded(index: number): boolean {
+    return this.expandedLogs.has(index);
   }
 }

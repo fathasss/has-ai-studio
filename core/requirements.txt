@@ -10,3 +10,4 @@ psutil
 python-socketio>=5.0.0
 python-engineio>=4.0.0
 eventlet
+nvidia-ml-py

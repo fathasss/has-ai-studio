@@ -19,6 +19,10 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
   traces: any[] = [];
   tlSummary: string = "";
 
+  activeTab: string = 'Pipeline Detail';
+  agentTabs: string[] = ['Pipeline Detail', 'TeamLead', 'Frontend', 'Backend', 'Security', 'Tester'];
+  expandedTraces: Set<string> = new Set();
+
   private sub: Subscription;
 
   constructor(
@@ -29,6 +33,13 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
       // Eğer o an açık olan projeye ait bir güncelleme geldiyse detayları tekrar çek
       if (this.activeSprint === data.sprint_id && this.activeSprint !== null) {
         this.loadSprintDetail(this.activeSprint);
+        
+        // Auto-switch tab if the agent is actively processing
+        if (data.status === 'PROCESSING' || data.status === 'RUNNING') {
+          if (this.agentTabs.includes(data.agent)) {
+            this.activeTab = data.agent;
+          }
+        }
       }
     });
   }
@@ -54,7 +65,31 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
 
   selectSprint(sprintId: string) {
     this.activeSprint = sprintId;
+    this.activeTab = 'Pipeline Detail'; // Reset tab when changing sprints
     this.loadSprintDetail(sprintId);
+  }
+
+  selectTab(tab: string) {
+    this.activeTab = tab;
+  }
+
+  get filteredTraces() {
+    if (this.activeTab === 'Pipeline Detail') {
+      return this.traces;
+    }
+    return this.traces.filter(t => t.agent === this.activeTab);
+  }
+
+  toggleTrace(timestamp: string) {
+    if (this.expandedTraces.has(timestamp)) {
+      this.expandedTraces.delete(timestamp);
+    } else {
+      this.expandedTraces.add(timestamp);
+    }
+  }
+
+  isExpanded(timestamp: string): boolean {
+    return this.expandedTraces.has(timestamp);
   }
 
   loadSprintDetail(sid: string) {

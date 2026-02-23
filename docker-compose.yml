@@ -42,6 +42,13 @@ services:
         condition: service_healthy
     networks:
       - has_ai_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
 
   has-ai-web-cli:
     build:

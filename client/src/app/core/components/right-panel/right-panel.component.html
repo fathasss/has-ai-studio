@@ -4,17 +4,23 @@
     <div class="flex-1 space-y-4 overflow-y-auto pr-2">
       <div *ngFor="let agent of agents" class="flex flex-col gap-1 p-3 rounded-lg border border-white/5 bg-white/5 transition-all">
         <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="w-2.5 h-2.5 rounded-full shadow-lg" [ngClass]="{
-              'bg-gray-500 shadow-gray-500/50': agent.status === 'IDLE',
-              'bg-blue-400 shadow-blue-400/50': agent.status === 'PENDING',
-              'bg-yellow-400 shadow-yellow-400/50': agent.status === 'PROCESSING',
-              'bg-green-500 shadow-green-500/50': agent.status === 'COMPLETED',
-              'bg-red-500 shadow-red-500/50': agent.status === 'FAILED'
+          <div class="flex items-center gap-4">
+            <!-- Neon Indicator -->
+            <div class="w-2.5 h-2.5 rounded-full transition-all duration-500" [ngClass]="{
+              'bg-green-400 shadow-[0_0_10px_#4ade80,0_0_20px_#4ade80]': agent.status === 'WORKING',
+              'bg-yellow-400 shadow-[0_0_10px_#facc15,0_0_20px_#facc15]': agent.status === 'AVAIL',
+              'bg-red-500 shadow-[0_0_10px_#ef4444,0_0_20px_#ef4444]': agent.status === 'DOWN'
             }"></div>
-            <span class="font-medium text-sm">{{agent.name}}</span>
+            <span class="font-medium text-sm tracking-wide text-gray-200">{{agent.name}}</span>
           </div>
-          <span class="text-[0.65rem] tracking-wide text-gray-500 font-mono">{{agent.status}}</span>
+          <span class="text-[0.65rem] tracking-[0.1em] font-bold transition-all duration-300" 
+                [ngClass]="{
+                  'text-green-400': agent.status === 'WORKING',
+                  'text-yellow-400': agent.status === 'AVAIL',
+                  'text-red-500': agent.status === 'DOWN'
+                }">
+            {{agent.status}}
+          </span>
         </div>
       </div>
     </div>

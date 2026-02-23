@@ -1,10 +1,11 @@
 <div class="h-full flex flex-col justify-between py-6">
   <!-- Brand / Logo Area -->
-  <div class="px-6 flex items-center justify-center md:justify-start gap-3 mb-10">
-    <div class="w-9 h-9 flex items-center justify-center overflow-hidden drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
-      <img src="assets/has_ai_studio_logo.png" alt="HAS AI STUDIO" class="w-full h-full object-contain">
+  <div class="px-6 flex items-center justify-center md:justify-start gap-4 mb-10">
+    <div class="w-11 h-11 flex items-center justify-center bg-white/5 rounded-xl border border-white/10 p-2 shadow-lg backdrop-blur-md relative overflow-hidden group">
+      <div class="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+      <img src="assets/has_ai_studio_logo.png?v=fixed-bg" alt="HAS AI STUDIO" class="w-full h-full object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] relative z-10 transition-transform duration-300 group-hover:scale-105">
     </div>
-    <span class="hidden md:block font-bold text-lg tracking-wider">HAS AI STUDIO</span>
+    <span class="hidden md:block font-bold text-[1.1rem] tracking-[0.15em] bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 drop-shadow-sm">HAS AI STUDIO</span>
   </div>
 
   <!-- Navigation Links -->
@@ -69,6 +70,17 @@
         </div>
         <div class="h-1 bg-gray-800 rounded-full overflow-hidden">
           <div class="h-full bg-green-400 transition-all duration-300 ease-out" [style.width.%]="diskUsage"></div>
+        </div>
+      </div>
+
+      <!-- GPU -->
+      <div>
+        <div class="flex justify-between items-center mb-1 text-[0.65rem] uppercase tracking-widest font-bold">
+          <span class="text-gray-400">GPU</span>
+          <span class="text-gray-300">{{ gpuUsage }}%</span>
+        </div>
+        <div class="h-1 bg-gray-800 rounded-full overflow-hidden">
+          <div class="h-full bg-purple-500 transition-all duration-300 ease-out" [style.width.%]="gpuUsage"></div>
         </div>
       </div>
 

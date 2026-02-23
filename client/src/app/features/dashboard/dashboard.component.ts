@@ -76,8 +76,14 @@ export class DashboardComponent implements AfterViewChecked {
 
     this.orchestratorService.chatTeamLead(this.rawAgentHistory).subscribe({
       next: (res) => {
-        this.chatHistory.push({ role: 'TeamLead', content: res.response });
-        this.rawAgentHistory.push({ role: 'assistant', content: res.response });
+        const rawResponse = res.response;
+        // Metin içindeki JSON bloğunu sohbetten gizlemek için filtrele
+        const cleanResponse = rawResponse.replace(/```json[\s\S]*?```/i, '').trim();
+        
+        this.chatHistory.push({ role: 'TeamLead', content: cleanResponse || rawResponse });
+        // Ancak backend'e ve sonraki parse işlemine göndermek için raw metni tutuyoruz
+        this.rawAgentHistory.push({ role: 'assistant', content: rawResponse });
+        
         this.isTyping = false;
         this.hasPendingPlan = true;
       },
@@ -97,9 +103,9 @@ export class DashboardComponent implements AfterViewChecked {
     this.orchestratorService.previewSprint(this.rawAgentHistory).subscribe({
       next: (res) => {
         try {
-          const match = res.response.match(/\{[\s\S]*\}/);
-          if (!match) throw new Error("Could not parse JSON from TeamLead.");
-          this.parsedPlan = JSON.parse(match[0]);
+          const match = res.response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
+          if (!match) throw new Error("TeamLead'den uygun formatta JSON bloğu alınamadı.");
+          this.parsedPlan = JSON.parse(match[1].trim());
           this.isLoadingPlan = false;
         } catch (e: any) {
           this.planError = e.message;

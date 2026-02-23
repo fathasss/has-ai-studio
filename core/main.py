@@ -5,6 +5,8 @@ import uuid
 import logging
 import threading
 import json
+import asyncio
+import pynvml
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -760,10 +762,20 @@ async def metrics_loop():
             finally:
                 db.close()
             
+            try:
+                pynvml.nvmlInit()
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                gpu = util.gpu
+                pynvml.nvmlShutdown()
+            except Exception:
+                gpu = 0
+            
             payload = {
                 "cpu": cpu,
                 "ram": ram,
                 "disk": disk,
+                "gpu": gpu,
                 "agent_states": agent_states
             }
             await sio.emit("system_update", payload)
@@ -1005,15 +1017,18 @@ def llm_worker():
             time.sleep(5)
 
 
-if __name__ == "__main__":
+@app.on_event("startup")
+async def startup_event():
     if AGENT_ROLE in ["master", "both"]:
+        logger.info("Starting Master background tasks...")
         threading.Thread(target=watchdog_loop, daemon=True).start()
-        # Start our new asyncio task inside the running event loop for sio
-        import asyncio
-        loop = asyncio.get_event_loop()
-        loop.create_task(metrics_loop())
+        # Schedule metrics loop on the same event loop as FastAPI/SocketIO
+        asyncio.create_task(metrics_loop())
+    
     if AGENT_ROLE in ["worker", "both"]:
+        logger.info("Starting Worker background thread...")
         threading.Thread(target=llm_worker, daemon=True).start()
-    import uvicorn
 
+if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(sio_app, host="0.0.0.0", port=8000)
