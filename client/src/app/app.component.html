@@ -1,0 +1,20 @@
+<div class="flex h-screen w-full bg-[#050505] text-white font-['Outfit'] overflow-hidden">
+  
+  <!-- Left Sidebar Navigation -->
+  <app-sidebar class="w-20 md:w-64 flex-shrink-0 border-r border-white/5 bg-[#111111]"></app-sidebar>
+
+  <!-- Main Application Area -->
+  <main class="flex-1 flex flex-col relative overflow-hidden">
+    <!-- Header/Top Bar -->
+    <app-header class="h-16 border-b border-white/5 flex-shrink-0"></app-header>
+    
+    <!-- Dynamic Content Outlet -->
+    <div class="flex-1 overflow-y-auto p-6 scroll-smooth">
+      <router-outlet></router-outlet>
+    </div>
+  </main>
+
+  <!-- Right Panel for Agent Status -->
+  <app-right-panel class="w-64 flex-shrink-0 border-l border-white/5 bg-black/50 hidden lg:block"></app-right-panel>
+  
+</div>

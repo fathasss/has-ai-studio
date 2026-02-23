@@ -1,0 +1,21 @@
+<div class="h-full flex flex-col p-6">
+    <div class="text-xs text-gray-400 mb-6 uppercase tracking-wider font-semibold">Agent Deployment</div>
+    
+    <div class="flex-1 space-y-4 overflow-y-auto pr-2">
+      <div *ngFor="let agent of agents" class="flex flex-col gap-1 p-3 rounded-lg border border-white/5 bg-white/5 transition-all">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-2.5 h-2.5 rounded-full shadow-lg" [ngClass]="{
+              'bg-gray-500 shadow-gray-500/50': agent.status === 'IDLE',
+              'bg-blue-400 shadow-blue-400/50': agent.status === 'PENDING',
+              'bg-yellow-400 shadow-yellow-400/50': agent.status === 'PROCESSING',
+              'bg-green-500 shadow-green-500/50': agent.status === 'COMPLETED',
+              'bg-red-500 shadow-red-500/50': agent.status === 'FAILED'
+            }"></div>
+            <span class="font-medium text-sm">{{agent.name}}</span>
+          </div>
+          <span class="text-[0.65rem] tracking-wide text-gray-500 font-mono">{{agent.status}}</span>
+        </div>
+      </div>
+    </div>
+  </div>

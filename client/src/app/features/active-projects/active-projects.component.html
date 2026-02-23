@@ -1,0 +1,71 @@
+<div class="h-full flex flex-col relative w-full h-[calc(100vh-6rem)]">
+  
+  <div class="mb-6 flex justify-between items-end flex-shrink-0">
+    <div>
+      <h2 class="text-2xl font-bold text-white mb-1">Active Project Pipelines</h2>
+      <p class="text-gray-400 text-sm">Real-time job tracking and trace aggregation</p>
+    </div>
+    <button (click)="loadSprints()" class="px-4 py-2 border border-white/20 rounded-lg text-sm bg-black hover:bg-white/10 transition-colors">
+      Refresh All
+    </button>
+  </div>
+
+  <div class="flex flex-1 gap-6 overflow-hidden">
+    <!-- Sprint List -->
+    <div class="w-1/3 flex flex-col gap-3 overflow-y-auto pr-2">
+      <div *ngIf="sprints.length === 0" class="text-gray-500 italic p-4 text-center">No active projects yet.</div>
+      <div *ngFor="let s of sprints" 
+           (click)="selectSprint(s)"
+           class="p-4 rounded-xl border border-white/10 cursor-pointer transition-all"
+           [ngClass]="activeSprint === s ? 'bg-white/10 border-yellow-400' : 'bg-black/40 hover:bg-white/5'">
+        <h4 class="font-bold text-white mb-1 tracking-wide">{{ s }}</h4>
+        <p class="text-xs text-gray-400">Operational Pipeline</p>
+      </div>
+    </div>
+
+    <!-- Sprint Detail -->
+    <div class="flex-1 bg-black/40 border border-white/10 rounded-xl flex flex-col overflow-hidden">
+      <div *ngIf="!activeSprint" class="flex-1 flex items-center justify-center text-gray-500">
+        Select a project from the left to view details
+      </div>
+      
+      <ng-container *ngIf="activeSprint">
+        <!-- Detail Header -->
+        <div class="p-6 border-b border-white/10 bg-white/5 flex-shrink-0">
+          <h3 class="text-lg font-bold text-yellow-400 mb-0">Pipeline Detail: {{ activeSprint }}</h3>
+          
+          <div *ngIf="tlSummary" class="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-200">
+             <strong>Summary from TeamLead:</strong> {{tlSummary}}
+          </div>
+          
+          <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-6">
+            <div *ngFor="let role of ['TeamLead', 'Frontend', 'Backend', 'Security', 'Tester']" 
+                 class="bg-black/60 border border-white/10 p-3 rounded-lg flex flex-col items-center justify-center text-center">
+              <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">{{role}}</span>
+              <span class="text-[0.65rem] font-mono tracking-wide"
+                    [ngClass]="{
+                      'text-green-500': getJobStatus(role) === 'COMPLETED',
+                      'text-blue-400': getJobStatus(role) === 'PROCESSING',
+                      'text-gray-500': getJobStatus(role) !== 'COMPLETED' && getJobStatus(role) !== 'PROCESSING'
+                    }">
+                {{ getJobStatus(role) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scrollable Traces -->
+        <div class="flex-1 overflow-y-auto p-4 scroll-smooth bg-black/20">
+          <div *ngIf="traces.length === 0" class="text-center text-gray-500 py-10">No execution traces yet...</div>
+          <div *ngFor="let t of traces" class="border-b border-white/10 py-4 last:border-b-0">
+             <div class="flex items-center gap-3 mb-2">
+                <span class="font-bold text-blue-400 text-xs tracking-wider">[{{t.agent}}]</span>
+                <span class="text-xs text-gray-600">{{t.timestamp | date:'shortTime'}}</span>
+             </div>
+             <pre class="text-gray-300 text-sm whitespace-pre-wrap font-sans leading-relaxed">{{t.response}}</pre>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+  </div>
+</div>

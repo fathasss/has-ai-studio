@@ -1,0 +1,114 @@
+<div class="h-full flex flex-col relative">
+  <!-- Dashboard Header -->
+  <div class="mb-6 flex justify-between items-end flex-shrink-0">
+    <div>
+      <h2 class="text-2xl font-bold text-white mb-1">Target: {{ currentSprintId || 'Awaiting Task' }}</h2>
+      <p class="text-gray-400 text-sm">TeamLead Orchestration Logic: Phased Context Chaining</p>
+    </div>
+    <button (click)="resetEnvironment()" class="px-4 py-2 border border-white/20 rounded-lg text-sm bg-black hover:bg-white/10 transition-colors">
+      Clean State
+    </button>
+  </div>
+
+  <!-- Chat History -->
+  <div class="flex-1 overflow-y-auto bg-black/30 border border-white/10 rounded-xl p-4 mb-4 flex flex-col gap-4 scroll-smooth" #chatContainer>
+    <div *ngFor="let msg of chatHistory; let i = index" 
+         class="p-4 rounded-xl border max-w-[85%] leading-relaxed"
+         [ngClass]="{
+           'border-yellow-400/30 bg-yellow-400/5 text-yellow-100 self-start': msg.role === 'TeamLead',
+           'border-blue-500/30 bg-blue-500/5 text-blue-100 self-end': msg.role === 'PO'
+         }">
+      <div class="text-xs font-bold mb-1 tracking-wider"
+           [ngClass]="msg.role === 'TeamLead' ? 'text-yellow-400' : 'text-blue-400'">
+        {{msg.role}}
+      </div>
+      <div class="whitespace-pre-wrap text-[0.95rem]">{{msg.content}}</div>
+    </div>
+    
+    <div *ngIf="isTyping" class="p-4 rounded-xl border border-yellow-400/30 bg-yellow-400/5 text-yellow-100 self-start max-w-[85%] h-14 flex items-center">
+      <div class="flex gap-1.5">
+        <div class="w-2 h-2 rounded-full bg-yellow-400 animate-bounce"></div>
+        <div class="w-2 h-2 rounded-full bg-yellow-400 animate-bounce" style="animation-delay: 0.15s"></div>
+        <div class="w-2 h-2 rounded-full bg-yellow-400 animate-bounce" style="animation-delay: 0.3s"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending Plan Panel -->
+  <div *ngIf="hasPendingPlan" 
+       (click)="previewPlan()"
+       class="mb-4 bg-yellow-400/5 border border-yellow-400 p-4 rounded-xl cursor-pointer hover:bg-yellow-400/10 transition-colors flex justify-between items-center group flex-shrink-0">
+    <div>
+      <h4 class="text-yellow-400 font-semibold mb-1">Strategy Drafted</h4>
+      <p class="text-xs text-gray-400">The TeamLead has drafted the architecture. Click here to preview before Execution.</p>
+    </div>
+    <span class="text-yellow-400 group-hover:translate-x-1 transition-transform">→</span>
+  </div>
+
+  <!-- Input Area -->
+  <div class="flex gap-3 flex-shrink-0">
+    <input type="text" [(ngModel)]="prompt" (keydown.enter)="sendMessage()" [disabled]="isTyping"
+           placeholder="Draft a minimal FastAPI service with SQLite..." 
+           class="flex-1 bg-black border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400 transition-colors disabled:opacity-50">
+    <button (click)="sendMessage()" [disabled]="!prompt.trim() || isTyping"
+            class="bg-yellow-400 text-black font-bold px-6 py-3 rounded-xl hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+      Send Directive
+    </button>
+  </div>
+
+  <!-- PREVIEW MODAL -->
+  <div *ngIf="showPreviewModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-center items-center">
+    <div class="bg-[#111] border border-white/10 w-11/12 max-w-3xl rounded-2xl flex flex-col max-h-[85vh] shadow-2xl overflow-hidden transform transition-all">
+      <div class="p-5 border-b border-white/10 flex justify-between items-center bg-white/5">
+        <h3 class="text-yellow-400 font-bold text-lg">Implementation Plan Preview</h3>
+        <button (click)="closePreviewModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+      
+      <div class="p-6 overflow-y-auto flex-1">
+        <div *ngIf="isLoadingPlan" class="text-center text-gray-400 py-10">
+           <div class="w-8 h-8 rounded-full border-2 border-yellow-400 border-t-transparent animate-spin mx-auto mb-4"></div>
+           Generating architectural plan structure... Wait...
+        </div>
+        
+        <div *ngIf="planError" class="bg-red-500/10 border border-red-500 text-red-400 p-4 rounded-xl">
+           Failed to parse plan: {{planError}}
+        </div>
+        
+        <div *ngIf="parsedPlan && !isLoadingPlan">
+          <h4 class="text-white text-lg font-bold mb-1 flex items-center gap-2">
+            Project: <span class="text-yellow-400">{{parsedPlan.project_name || 'N/A'}}</span>
+          </h4>
+          <p class="text-gray-400 mb-6 text-sm">{{parsedPlan.summary_tr || 'No summary provided.'}}</p>
+          
+          <h5 class="text-xs text-gray-500 uppercase tracking-widest mb-3 font-semibold">Technology Stack</h5>
+          <div class="flex flex-wrap gap-2 mb-8">
+            <span *ngFor="let tech of parsedPlan.tech_stack" class="bg-white/5 border border-white/10 px-3 py-1 rounded-lg text-xs">{{tech}}</span>
+          </div>
+          
+          <h5 class="text-xs text-gray-500 uppercase tracking-widest mb-3 font-semibold">Execution Pipeline Tasks</h5>
+          <div class="space-y-3">
+             <div *ngFor="let t of parsedPlan.tasks" class="bg-white/5 border border-white/10 p-4 rounded-xl">
+                <span class="inline-block px-2 py-1 rounded text-[0.65rem] font-bold uppercase tracking-wider mb-2"
+                      [ngClass]="{
+                        'bg-blue-500/20 text-blue-400': t.role === 'Frontend',
+                        'bg-green-500/20 text-green-400': t.role === 'Backend',
+                        'bg-red-500/20 text-red-400': t.role === 'Tester',
+                        'bg-orange-500/20 text-orange-400': t.role === 'Security',
+                        'bg-gray-500/20 text-gray-300': !['Frontend', 'Backend', 'Tester', 'Security'].includes(t.role)
+                      }">{{t.role}}</span>
+                <p class="text-sm text-gray-200">{{t.task}}</p>
+             </div>
+             <div *ngIf="!parsedPlan.tasks || parsedPlan.tasks.length === 0" class="text-red-400">
+               No tasks defined in the plan.
+             </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="p-5 border-t border-white/10 bg-white/5 flex justify-end gap-3">
+        <button (click)="closePreviewModal()" class="px-5 py-2 rounded-xl border border-white/20 text-gray-300 hover:bg-white/10 transition-colors">Cancel</button>
+        <button (click)="approveSprint()" [disabled]="isLoadingPlan || planError || !parsedPlan" class="px-6 py-2 rounded-xl bg-yellow-400 text-black font-bold hover:bg-yellow-300 transition-colors disabled:opacity-50">Build Plan & Execute</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -587,8 +587,8 @@ def get_system_status(db: Session = Depends(get_db)):
         "Tester": "idle",
     }
     for job in active_jobs:
-        st = "thinking" if job.status == "PROCESSING" else "waiting"
-        if agent_states.get(job.agent_name) != "thinking":
+        st = "PROCESSING" if job.status == "PROCESSING" else "PENDING"
+        if agent_states.get(job.agent_name) != "PROCESSING":
             agent_states[job.agent_name] = st
     return {
         "queue_depth": pending,
@@ -725,6 +725,52 @@ def watchdog_loop():
         finally:
             db.close()
         time.sleep(10)
+
+def get_agent_states(db: Session):
+    active_jobs = (
+        db.query(LLMJobRecord)
+        .filter(LLMJobRecord.status.in_(["PROCESSING", "PENDING"]))
+        .all()
+    )
+    agent_states = {
+        "TeamLead": "IDLE",
+        "Frontend": "IDLE",
+        "Backend": "IDLE",
+        "Security": "IDLE",
+        "Tester": "IDLE",
+    }
+    for job in active_jobs:
+        st = "PROCESSING" if job.status == "PROCESSING" else "PENDING"
+        if agent_states.get(job.agent_name) != "PROCESSING":
+            agent_states[job.agent_name] = st
+    return agent_states
+
+async def metrics_loop():
+    import asyncio
+    logger.info("Metrics loop started.")
+    while True:
+        try:
+            cpu = psutil.cpu_percent(interval=None)
+            ram = psutil.virtual_memory().percent
+            disk = psutil.disk_usage('/').percent
+            
+            db = SessionLocal()
+            try:
+                agent_states = get_agent_states(db)
+            finally:
+                db.close()
+            
+            payload = {
+                "cpu": cpu,
+                "ram": ram,
+                "disk": disk,
+                "agent_states": agent_states
+            }
+            await sio.emit("system_update", payload)
+        except Exception as e:
+            logger.error(f"Metrics loop error: {e}")
+        
+        await asyncio.sleep(2)
 
 
 def llm_worker():
@@ -962,6 +1008,10 @@ def llm_worker():
 if __name__ == "__main__":
     if AGENT_ROLE in ["master", "both"]:
         threading.Thread(target=watchdog_loop, daemon=True).start()
+        # Start our new asyncio task inside the running event loop for sio
+        import asyncio
+        loop = asyncio.get_event_loop()
+        loop.create_task(metrics_loop())
     if AGENT_ROLE in ["worker", "both"]:
         threading.Thread(target=llm_worker, daemon=True).start()
     import uvicorn

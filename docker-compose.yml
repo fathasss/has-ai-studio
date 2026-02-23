@@ -46,12 +46,10 @@ services:
   has-ai-web-cli:
     build:
       context: .
-      dockerfile: ./docker/web-cli.Dockerfile
+      dockerfile: ./docker/client.Dockerfile
     container_name: has-ai-web-cli
     ports:
       - "4000:80"
-    volumes:
-      - ./web-cli:/usr/share/nginx/html
     depends_on:
       - has-ai-orchestrator
     networks:

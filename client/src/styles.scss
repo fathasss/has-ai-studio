@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #050505;
+  --card: #111111;
+  --accent: #facc15; /* Gold */
+  --accent-glow: rgba(250, 204, 21, 0.4);
+  --text: #ffffff;
+  --text-dim: #a1a1aa;
+  --border: rgba(255, 255, 255, 0.05);
+  --success: #22c55e;
+  --danger: #ef4444;
+  --info: #3b82f6;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  overflow: hidden;
+  height: 100vh;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }

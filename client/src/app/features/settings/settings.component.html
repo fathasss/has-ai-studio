@@ -1,0 +1,66 @@
+<div class="h-full flex flex-col relative w-full h-[calc(100vh-6rem)]">
+    
+    <div class="mb-6 flex-shrink-0">
+        <h2 class="text-2xl font-bold text-white mb-1">Factory Configuration</h2>
+        <p class="text-gray-400 text-sm">Model selection and orchestration parameters</p>
+    </div>
+    
+    <div class="flex-1 bg-black/40 border border-white/10 rounded-xl overflow-y-auto p-6 lg:p-10 scroll-smooth">
+        
+        <div class="max-w-2xl flex flex-col gap-6">
+            
+            <!-- LLM Provider -->
+            <div class="flex flex-col gap-2">
+                <label class="text-white font-medium">LLM Provider</label>
+                <select [(ngModel)]="config.LLM_PROVIDER" class="bg-black border border-white/20 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-400">
+                    <option value="ollama">Ollama (Local)</option>
+                    <option value="openai">OpenAI Compatible (Remote)</option>
+                </select>
+            </div>
+            
+            <!-- Ollama Server URL -->
+            <div class="flex flex-col gap-2">
+                <label class="text-white font-medium">Ollama Server URL</label>
+                <input type="text" [(ngModel)]="config.OLLAMA_URL" placeholder="http://ollama:11434" class="bg-black border border-white/20 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-400">
+            </div>
+            
+            <!-- Primary Agent Model -->
+            <div class="flex flex-col gap-2 border-t border-white/10 pt-6 mt-2">
+                <label class="text-white font-medium">Primary Agent Model</label>
+                <div class="flex gap-3">
+                    <select [(ngModel)]="config.AGENT_MODEL" class="flex-1 bg-black border border-white/20 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-400">
+                        <option value="" *ngIf="isLoadingModels">Loading models...</option>
+                        <option *ngFor="let m of models" [value]="m">{{m}}</option>
+                        <option value="" *ngIf="!isLoadingModels && models.length === 0">No models found or error</option>
+                    </select>
+                    <button (click)="loadOllamaModels()" class="px-5 border border-white/20 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white">
+                        &#x21bb; Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Pull New Model (Ollama) -->
+            <div class="flex flex-col gap-2 border border-white/20 border-dashed rounded-xl p-6 bg-white/5 mt-2">
+                <label class="text-blue-400 font-medium">Pull New Model (Ollama)</label>
+                <div class="flex gap-3 mt-2">
+                    <input type="text" [(ngModel)]="pullModelName" placeholder="e.g. phi3, qwen:0.5b" [disabled]="isPulling"
+                           class="flex-1 bg-black border border-white/20 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-blue-400 disabled:opacity-50">
+                    <button (click)="pullOllamaModel()" [disabled]="!pullModelName.trim() || isPulling" 
+                            class="px-6 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        {{isPulling ? 'Downloading...' : 'Download'}}
+                    </button>
+                </div>
+                <p class="text-xs mt-2 transition-colors" [ngClass]="pullMsgColor">{{pullMsg}}</p>
+            </div>
+            
+            <hr class="border-white/10 my-4">
+            
+            <!-- Save Button -->
+            <button (click)="saveConfig()" class="bg-yellow-400 text-black font-bold px-8 py-3 rounded-xl hover:bg-yellow-300 transition-colors self-start shadow-[0_0_15px_rgba(250,204,21,0.2)]">
+                Apply Configuration
+            </button>
+            <p *ngIf="saveSuccess" class="text-green-500 text-sm mt-2">Configuration Updated & Persisted.</p>
+        </div>
+        
+    </div>
+</div>
