@@ -7,13 +7,13 @@ Powered primarily by local AI models via **Ollama**, this system consists of a c
 ## 🚀 Key Features
 
 - **Angular Web CLI Dashboard**: A modern, sleek control center built with **Angular 18+** and **Tailwind CSS**.
-- **Real-Time Monitoring**:
-    - **System Metrics**: Live CPU, RAM, and Disk usage updates.
-    - **GPU Monitoring**: Dedicated **Neon GPU Utilization** tracking leveraging `pynvml` and NVIDIA Docker support.
-- **Role-Based AI Agents**: Specialized agents (`TeamLead`, `Frontend`, `Backend`, `Tester`, `Security`) with unique neon-styled status indicators (**WORKING**, **AVAIL**, **DOWN**).
-- **Expandable Trace Logs**: Smart log management that collapses long JSON outputs with a gradient fade, allowing for a cleaner UI while keeping detailed traces accessible via a single click.
+- **Universal Scaffolding Engine**: A completely framework-agnostic system. Supports setting up any tech stack (Django, .NET, Node, Rust, Flutter, etc.) purely through agent-generated, non-interactive CLI commands.
+- **Agent-Led Provisioning (ALP)**: The TeamLead agent possesses "Provisioner" authority. It intelligently detects missing SDKs or compilers, autonomously installs them (e.g., via `apt-get`), and verifies the environment before writing code.
+- **Persistent SDK Caching**: Heavy SDKs (Flutter, Java, Android SDK) installed by agents are cached in a dedicated Docker volume (`/opt/sdks`). The backend dynamically scans and appends these tools to the system `PATH` for subsequent zero-download project creations.
+- **Real-Time Monitoring**: Live CPU, RAM, Disk, and dedicated **Neon GPU Utilization** tracking leveraging `pynvml`.
+- **Role-Based AI Agents**: Specialized agents (`TeamLead`, `Frontend`, `Backend`, `Tester`, `Security`) with unique neon-styled status indicators.
+- **Expandable Trace Logs**: Smart log management that collapses long JSON outputs for a cleaner UI while keeping detailed traces accessible.
 - **Dynamic Orchestration**: Jobs are locked, processed, and tracked in an SQLite-backed queue (`data/traceability.db`).
-- **Pipeline Workflow Visualization**: A visual pipeline sequence at the bottom of the active projects view to track the execution steps in real-time.
 - **Containerized Architecture**: Fully orchestrated via Docker-Compose with integrated NVIDIA GPU runtime support.
 
 ---
