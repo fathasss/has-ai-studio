@@ -79,4 +79,16 @@ export class OrchestratorService {
   submitLlmJob(jobRequest: any): Observable<any> {
     return this.http.post(`${this.apiUrl}/llm/submit`, jobRequest);
   }
+
+  getChatHistory(sprintId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/chat/history/${sprintId}`);
+  }
+
+  saveChatMessage(sprintId: string, role: string, content: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/chat/history`, { sprint_id: sprintId, role, content });
+  }
+
+  getChatSessions(): Observable<{sessions: string[]}> {
+    return this.http.get<{sessions: string[]}>(`${this.apiUrl}/chat/sessions`);
+  }
 }

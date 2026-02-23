@@ -32,6 +32,9 @@ export class DashboardComponent implements AfterViewChecked {
   public isTyping: boolean = false;
   public hasPendingPlan: boolean = false;
   
+  public chatSessions: string[] = [];
+  public selectedSession: string | null = null;
+  
   // Modal State
   public showPreviewModal: boolean = false;
   public isLoadingPlan: boolean = false;
@@ -40,6 +43,31 @@ export class DashboardComponent implements AfterViewChecked {
 
   constructor(private orchestratorService: OrchestratorService, private router: Router) {
     this.generateSprintId();
+  }
+
+  ngOnInit() {
+    this.loadSessions();
+  }
+
+  loadSessions() {
+    this.orchestratorService.getChatSessions().subscribe(res => {
+      this.chatSessions = res.sessions || [];
+    });
+  }
+
+  loadHistory(sid: string) {
+    this.selectedSession = sid;
+    this.currentSprintId = sid;
+    this.orchestratorService.getChatHistory(sid).subscribe(msgs => {
+      this.chatHistory = msgs.length > 0 ? msgs : [
+        { role: 'TeamLead', content: `Loading history for project: ${sid}...` }
+      ];
+      // Sync rawAgentHistory for next LLM calls
+      this.rawAgentHistory = msgs.map(m => ({
+        role: m.role === 'TeamLead' ? 'assistant' : 'user',
+        content: m.content
+      }));
+    });
   }
 
   ngAfterViewChecked() {
@@ -54,7 +82,9 @@ export class DashboardComponent implements AfterViewChecked {
     this.chatHistory = [{ role: 'TeamLead', content: 'Environment Reset. Awaiting your project requirements, PO.' }];
     this.rawAgentHistory = [];
     this.hasPendingPlan = false;
+    this.selectedSession = null;
     this.generateSprintId();
+    this.loadSessions();
   }
 
   scrollToBottom(): void {
@@ -71,6 +101,10 @@ export class DashboardComponent implements AfterViewChecked {
     
     this.chatHistory.push({ role: 'PO', content: userText });
     this.rawAgentHistory.push({ role: 'user', content: userText });
+    
+    // Save User message
+    this.orchestratorService.saveChatMessage(this.currentSprintId, 'user', userText).subscribe();
+
     this.isTyping = true;
     this.hasPendingPlan = false;
 
@@ -80,10 +114,15 @@ export class DashboardComponent implements AfterViewChecked {
         // Metin içindeki JSON bloğunu sohbetten gizlemek için filtrele
         const cleanResponse = rawResponse.replace(/```json[\s\S]*?```/i, '').trim();
         
-        this.chatHistory.push({ role: 'TeamLead', content: cleanResponse || rawResponse });
-        // Ancak backend'e ve sonraki parse işlemine göndermek için raw metni tutuyoruz
+        const assistantContent = cleanResponse || rawResponse;
+        this.chatHistory.push({ role: 'TeamLead', content: assistantContent });
         this.rawAgentHistory.push({ role: 'assistant', content: rawResponse });
         
+        // Save Assistant message
+        this.orchestratorService.saveChatMessage(this.currentSprintId, 'TeamLead', rawResponse).subscribe(() => {
+          this.loadSessions(); // Update sessions list in case it's a new one
+        });
+
         this.isTyping = false;
         this.hasPendingPlan = true;
       },
@@ -126,6 +165,11 @@ export class DashboardComponent implements AfterViewChecked {
   approveSprint() {
     if (!this.parsedPlan) return;
     
+    // Generate a descriptive ID based on project name if available
+    if (this.parsedPlan.project_name) {
+      this.currentSprintId = this.slugify(this.parsedPlan.project_name);
+    }
+
     this.closePreviewModal();
     this.hasPendingPlan = false;
     
@@ -141,5 +185,17 @@ export class DashboardComponent implements AfterViewChecked {
       },
       error: (err) => console.error("Sprint execution failed", err)
     });
+  }
+
+  private slugify(text: string): string {
+    return text
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')           // Replace spaces with -
+      .replace(/[^\w\-]+/g, '')       // Remove all non-word chars
+      .replace(/\-\-+/g, '-')         // Replace multiple - with single -
+      .replace(/^-+/, '')             // Trim - from start of text
+      .replace(/-+$/, '');            // Trim - from end of text
   }
 }

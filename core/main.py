@@ -144,6 +144,15 @@ class WorkerHeartbeat(Base):
     last_seen = Column(DateTime, default=datetime.utcnow)
 
 
+class ChatMessageRecord(Base):
+    __tablename__ = "chat_history"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    sprint_id = Column(String, index=True)
+    role = Column(String) # user or assistant
+    content = Column(Text)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -255,6 +264,12 @@ class ExecuteRequest(BaseModel):
 class LLMJobCompletion(BaseModel):
     result: str
     metrics: dict
+
+
+class ChatMessageSchema(BaseModel):
+    sprint_id: str
+    role: str
+    content: str
 
 
 class JobQueue:
@@ -600,6 +615,47 @@ def get_system_status(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/system/ollama/status")
+async def get_ollama_status():
+    try:
+        res = requests.get(f"{OLLAMA_URL}/api/tags", timeout=3)
+        return {"status": "online" if res.status_code == 200 else "offline"}
+    except:
+        return {"status": "offline"}
+
+
+# --- CHAT HISTORY ENDPOINTS ---
+@app.get("/chat/history/{sprint_id}")
+def get_chat_history(sprint_id: str, db: Session = Depends(get_db)):
+    msgs = (
+        db.query(ChatMessageRecord)
+        .filter(ChatMessageRecord.sprint_id == sprint_id)
+        .order_by(ChatMessageRecord.timestamp.asc())
+        .all()
+    )
+    return [{"role": m.role, "content": m.content} for m in msgs]
+
+
+@app.post("/chat/history")
+def save_chat_message(msg: ChatMessageSchema, db: Session = Depends(get_db)):
+    record = ChatMessageRecord(
+        sprint_id=msg.sprint_id,
+        role=msg.role,
+        content=msg.content
+    )
+    db.add(record)
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.get("/chat/sessions")
+def list_chat_sessions(db: Session = Depends(get_db)):
+    sessions = (
+        db.query(ChatMessageRecord.sprint_id)
+        .distinct()
+        .all()
+    )
+    return {"sessions": [s[0] for s in sessions]}
 @app.get("/ollama/models")
 def get_ollama_models():
     try:
