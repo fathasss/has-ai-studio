@@ -241,14 +241,44 @@ def install_dependencies(project_dir: str):
 def execute_setup_commands(commands: List[str], project_dir: str):
     """Executes a list of setup commands in the project directory."""
     import subprocess
+    import os
     os.makedirs(project_dir, exist_ok=True)
+    
+    # UNIVERSAL DYNAMIC PATH MANAGEMENT
+    custom_env = os.environ.copy()
+    base_sdk_dir = "/opt/sdks"
+    
+    # Start with standard and custom base paths
+    paths_to_add = ["/usr/local/go/bin", base_sdk_dir]
+    
+    # Automatically scan /opt/sdks subdirectories for 'bin' folders
+    if os.path.exists(base_sdk_dir):
+        for item in os.listdir(base_sdk_dir):
+            full_path = os.path.join(base_sdk_dir, item)
+            if os.path.isdir(full_path):
+                # Add the folder itself and its /bin subfolder if they exist
+                paths_to_add.append(full_path)
+                bin_path = os.path.join(full_path, "bin")
+                if os.path.exists(bin_path):
+                    paths_to_add.append(bin_path)
+
+    current_path = custom_env.get("PATH", "")
+    added_count = 0
+    for p in paths_to_add:
+        if os.path.exists(p) and p not in current_path:
+            current_path = f"{p}:{current_path}"
+            added_count += 1
+            
+    if added_count > 0:
+        custom_env["PATH"] = current_path
+        logger.info(f"Dynamically added {added_count} SDK paths. Current PATH context ready.")
+
     for cmd in commands:
         if not cmd: continue
         logger.info(f"Executing setup command in {project_dir}: {cmd}")
         try:
-            # Removed framework-specific hardcoded flag injections (npm/dotnet)
-            # Full authority is now delegated to the TeamLead agent.
-            subprocess.run(cmd, shell=True, cwd=project_dir, capture_output=True, timeout=600, check=True)
+            # Full authority delegated to TeamLead with dynamic environment
+            subprocess.run(cmd, shell=True, cwd=project_dir, capture_output=True, timeout=1200, check=True, env=custom_env)
             logger.info(f"Command success: {cmd}")
         except subprocess.CalledProcessError as e:
             err_msg = e.stderr.decode() if e.stderr else str(e)

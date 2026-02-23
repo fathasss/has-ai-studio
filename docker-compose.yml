@@ -75,6 +75,7 @@ services:
     volumes:
       - ./apps:/app/apps
       - ./prompts:/app/prompts
+      - has_ai_sdks:/opt/sdks
     depends_on:
       - has-ai-orchestrator
     networks:
@@ -85,6 +86,7 @@ services:
 volumes:
   ollama_data:
   orchestrator_data:
+  has_ai_sdks:
 
 
 networks:
