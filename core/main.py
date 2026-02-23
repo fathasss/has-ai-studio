@@ -598,6 +598,37 @@ def get_system_status(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/ollama/models")
+def get_ollama_models():
+    try:
+        res = requests.get(f"{OLLAMA_URL}/api/tags", timeout=10)
+        res.raise_for_status()
+        data = res.json()
+        models = [m.get("name") for m in data.get("models", [])]
+        return {"models": models}
+    except Exception as e:
+        logger.error(f"Failed to fetch ollama models: {e}")
+        return {"models": [], "error": str(e)}
+
+class PullModelRequest(BaseModel):
+    model: str
+
+@app.post("/ollama/pull")
+async def pull_ollama_model(req: PullModelRequest):
+    try:
+        # stream=False kullanarak bloklayıcı istek atıyoruz
+        res = requests.post(
+            f"{OLLAMA_URL}/api/pull", 
+            json={"name": req.model, "stream": False},
+            timeout=1200 # Büyük modeller için uzun timeout
+        )
+        res.raise_for_status()
+        return {"status": "success", "message": f"Model {req.model} successfully pulled."}
+    except Exception as e:
+        logger.error(f"Failed to pull ollama model {req.model}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/traces/{sprint_id}")
 def get_traces_by_sprint(sprint_id: str, db: Session = Depends(get_db)):
     traces = (

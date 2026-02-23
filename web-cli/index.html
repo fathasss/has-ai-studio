@@ -297,19 +297,37 @@
         </header>
         <div class="settings-form">
            <div class="form-group">
-                <label>Primary Agent Model</label>
-                <input type="text" id="cfg_model" placeholder="llama3.1:latest" />
-           </div>
-           <div class="form-group">
-                <label>Ollama Server URL</label>
-                <input type="text" id="cfg_ollama" placeholder="http://ollama:11434" />
-           </div>
-           <div class="form-group">
                 <label>LLM Provider</label>
                 <select id="cfg_provider">
                     <option value="ollama">Ollama (Local)</option>
                     <option value="openai">OpenAI Compatible (Remote)</option>
                 </select>
+           </div>
+           
+           <div class="form-group">
+                <label>Ollama Server URL</label>
+                <input type="text" id="cfg_ollama" placeholder="http://ollama:11434" />
+           </div>
+           
+           <div class="form-group">
+                <label>Primary Agent Model</label>
+                <div style="display: flex; gap: 12px;">
+                    <select id="cfg_model" style="flex:1;">
+                        <option value="">Loading models...</option>
+                    </select>
+                    <button class="btn btn-outline" style="height: auto; padding: 0 16px;" onclick="loadOllamaModels()">
+                        &#x21bb; Refresh
+                    </button>
+                </div>
+           </div>
+           
+           <div class="form-group" style="border: 1px dashed var(--border); padding: 16px; border-radius: 12px; background: rgba(255,255,255,0.01);">
+                <label style="color: var(--info);">Pull New Model (Ollama)</label>
+                <div style="display: flex; gap: 12px; margin-top: 8px;">
+                    <input type="text" id="cfg_pull_model_name" placeholder="e.g. phi3, qwen:0.5b" style="flex:1;" />
+                    <button class="btn" id="btn_pull_model" style="height: auto; padding: 0 20px;" onclick="pullOllamaModel()">Download</button>
+                </div>
+                <p id="pull_msg" style="font-size: 0.75rem; color: var(--text-dim); margin-top: 8px;"></p>
            </div>
            <button class="btn" style="width: 200px;" onclick="saveConfig()">Apply Configuration</button>
         </div>
@@ -438,9 +456,73 @@
       async function loadSettings() {
           const res = await fetch(`${API_URL}/config`);
           const cfg = await res.json();
-          document.getElementById('cfg_model').value = cfg.AGENT_MODEL;
+          await loadOllamaModels(cfg.AGENT_MODEL); // Çekildikten sonra seçilmesini garantiye al
           document.getElementById('cfg_ollama').value = cfg.OLLAMA_URL;
           document.getElementById('cfg_provider').value = cfg.LLM_PROVIDER;
+      }
+
+      async function loadOllamaModels(selectedModel = null) {
+          try {
+              const res = await fetch(`${API_URL}/ollama/models`);
+              const data = await res.json();
+              const select = document.getElementById('cfg_model');
+              
+              if (!data.models || data.models.length === 0) {
+                  select.innerHTML = `<option value="">No models found or error</option>`;
+                  return;
+              }
+              
+              const currentVal = selectedModel || select.value;
+              select.innerHTML = data.models.map(m => `<option value="${m}">${m}</option>`).join('');
+              
+              if (currentVal && data.models.includes(currentVal)) {
+                  select.value = currentVal;
+              } else if (data.models.length > 0) {
+                  // Seçili model yoksa default ilk model
+                  select.value = data.models[0];
+              }
+          } catch (e) {
+              console.error("Failed to load models list", e);
+          }
+      }
+
+      async function pullOllamaModel() {
+          const modelName = document.getElementById('cfg_pull_model_name').value.trim();
+          if (!modelName) return;
+
+          const btn = document.getElementById('btn_pull_model');
+          const msg = document.getElementById('pull_msg');
+
+          btn.disabled = true;
+          btn.innerText = "Downloading...";
+          msg.innerText = `Pulling ${modelName}, this may take several minutes depending on model size and internet speed...`;
+          msg.style.color = "var(--info)";
+
+          try {
+              const res = await fetch(`${API_URL}/ollama/pull`, {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({ model: modelName })
+              });
+              
+              const data = await res.json();
+              
+              if (!res.ok) throw new Error(data.detail || data.error || "Download failed");
+              
+              msg.innerText = `Success: ${data.message || 'Model downloaded!'}`;
+              msg.style.color = "var(--success)";
+              document.getElementById('cfg_pull_model_name').value = "";
+              
+              // Modelleri yenile ve yeniyi seç
+              await loadOllamaModels(modelName);
+              
+          } catch(e) {
+              msg.innerText = `Error: ${e.message}`;
+              msg.style.color = "var(--danger)";
+          } finally {
+              btn.disabled = false;
+              btn.innerText = "Download";
+          }
       }
 
       async function saveConfig() {
