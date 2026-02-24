@@ -49,7 +49,7 @@ def load_config():
     if not os.path.exists(CONFIG_PATH):
         os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
         with open(CONFIG_PATH, "w") as f:
-            json.dump(DEFAULT_CONFIG, f)
+            json.dump(DEFAULT_CONFIG, f, ensure_ascii=False)
         return DEFAULT_CONFIG
     try:
         with open(CONFIG_PATH, "r") as f:
@@ -60,7 +60,7 @@ def load_config():
 
 def save_config(config):
     with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f)
+        json.dump(config, f, ensure_ascii=False)
 
 def load_prompt(filename: str, key: str, fallback: str) -> str:
     path = os.path.join(os.path.dirname(__file__), "..", "prompts", filename)
@@ -414,7 +414,7 @@ class JobQueue:
                     agent_name=job.agent_name,
                     priority=job.priority,
                     prompt=job.prompt,
-                    params=json.dumps(job.params or {}),
+                    params=json.dumps(job.params or {}, ensure_ascii=False),
                     status="PENDING",
                 )
             )
@@ -458,6 +458,7 @@ def map_role(role: str) -> str:
     if "backend" in r: return "Backend"
     if "tester" in r or "qa" in r or "test" in r: return "Tester"
     if "security" in r or "auth" in r: return "Security"
+    if "devops" in r or "setup" in r or "infrastructure" in r: return "DevOps"
     return "TeamLead" # Fallback
 
 # --- API ---
@@ -575,7 +576,7 @@ async def execute_sprint(req: ExecuteRequest):
                 execution_node="orchestrator",
                 priority=1,
                 prompt="Generated from UI Preview",
-                response=f"```json\n{json.dumps(req.plan, indent=2)}\n```",
+                response=f"```json\n{json.dumps(req.plan, indent=2, ensure_ascii=False)}\n```",
                 status="SUCCESS"
             )
         )
@@ -593,9 +594,9 @@ async def execute_sprint(req: ExecuteRequest):
         for t in req.plan["tasks"]:
             role_input = t.get("role", "")
             role = map_role(role_input)
-            if role in ["Frontend", "Backend", "Tester", "Security"]:
+            if role in ["Frontend", "Backend", "Tester", "Security", "DevOps"]:
                 try:
-                    priority = 3 if role in ["Tester", "Security"] else 2
+                    priority = 3 if role in ["Tester", "Security", "DevOps"] else 2
                     await internal_submit_job(
                         role,
                         req.sprint_id,
@@ -807,6 +808,7 @@ def get_system_status(db: Session = Depends(get_db)):
         "Backend": "idle",
         "Security": "idle",
         "Tester": "idle",
+        "DevOps": "idle",
     }
     for job in active_jobs:
         st = "PROCESSING" if job.status == "PROCESSING" else "PENDING"
@@ -1059,6 +1061,7 @@ def get_agent_states(db: Session):
         "Backend": "IDLE",
         "Security": "IDLE",
         "Tester": "IDLE",
+        "DevOps": "IDLE",
     }
     for job in active_jobs:
         st = "PROCESSING" if job.status == "PROCESSING" else "PENDING"
@@ -1184,6 +1187,8 @@ def llm_worker():
                 sys = load_prompt("security.json", "SM_security_worker", sys)
             elif agent == "Tester":
                 sys = load_prompt("tester.json", "TT_tester_worker", sys)
+            elif agent == "DevOps":
+                sys = load_prompt("devops.json", "DV_devops_worker", sys)
 
             start = time.time()
             ollama = requests.post(
@@ -1248,7 +1253,7 @@ def llm_worker():
                     logger.info(f"Processing {len(plan['tasks'])} tasks from TeamLead plan for {sid}")
                     for t in plan["tasks"]:
                         role = t.get("role")
-                        if role in ["Frontend", "Backend", "Tester", "Security"]:
+                        if role in ["Frontend", "Backend", "Tester", "Security", "DevOps"]:
                             requests.post(
                                 f"{ORCHESTRATOR_URL}/llm/submit",
                                 json={

@@ -27,7 +27,10 @@ export class OrchestratorService {
     currentSprintId: string,
     chatHistory: any[],
     rawAgentHistory: any[],
-    selectedSession: string | null
+    selectedSession: string | null,
+    isTyping: boolean,
+    hasPendingPlan: boolean,
+    draftPrompt: string
   } | null = null;
 
   constructor(private http: HttpClient) { }

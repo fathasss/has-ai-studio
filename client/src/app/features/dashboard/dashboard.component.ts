@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild } from '@angular/core';
+import { Component, ElementRef, ViewChild, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -18,7 +18,7 @@ interface ChatMessage {
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss']
 })
-export class DashboardComponent {
+export class DashboardComponent implements OnInit, OnDestroy {
   @ViewChild('chatContainer') private chatContainer!: ElementRef;
   @ViewChild('promptInput') private promptInput!: ElementRef;
   
@@ -66,6 +66,9 @@ export class DashboardComponent {
       this.chatHistory = saved.chatHistory;
       this.rawAgentHistory = saved.rawAgentHistory;
       this.selectedSession = saved.selectedSession;
+      this.isTyping = saved.isTyping;
+      this.hasPendingPlan = saved.hasPendingPlan;
+      this.prompt = saved.draftPrompt;
     } else {
       this.generateSprintId();
       this.syncState();
@@ -77,7 +80,10 @@ export class DashboardComponent {
       currentSprintId: this.currentSprintId,
       chatHistory: this.chatHistory,
       rawAgentHistory: this.rawAgentHistory,
-      selectedSession: this.selectedSession
+      selectedSession: this.selectedSession,
+      isTyping: this.isTyping,
+      hasPendingPlan: this.hasPendingPlan,
+      draftPrompt: this.prompt
     };
   }
 
@@ -352,5 +358,9 @@ export class DashboardComponent {
     }
     
     this.scrollToBottom();
+  }
+
+  ngOnDestroy() {
+    this.syncState();
   }
 }

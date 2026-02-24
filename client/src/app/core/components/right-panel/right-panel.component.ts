@@ -21,7 +21,8 @@ export class RightPanelComponent implements OnInit, OnDestroy {
     { name: 'Frontend', status: 'DOWN' },
     { name: 'Backend', status: 'DOWN' },
     { name: 'Tester', status: 'DOWN' },
-    { name: 'Security', status: 'DOWN' }
+    { name: 'Security', status: 'DOWN' },
+    { name: 'DevOps', status: 'DOWN' }
   ];
 
   private subJob: Subscription | undefined;

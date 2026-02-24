@@ -20,7 +20,7 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
   tlSummary: string = "";
 
   activeTab: string = 'Pipeline Detail';
-  agentTabs: string[] = ['Pipeline Detail', 'TeamLead', 'Frontend', 'Backend', 'Security', 'Tester'];
+  agentTabs: string[] = ['Pipeline Detail', 'TeamLead', 'DevOps', 'Frontend', 'Backend', 'Security', 'Tester'];
   expandedTraces: Set<string> = new Set();
 
   private sub: Subscription;

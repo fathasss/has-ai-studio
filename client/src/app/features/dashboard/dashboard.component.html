@@ -140,7 +140,8 @@
                             'bg-green-500/20 text-green-400': t.role === 'Backend',
                             'bg-red-500/20 text-red-400': t.role === 'Tester',
                             'bg-orange-500/20 text-orange-400': t.role === 'Security',
-                            'bg-gray-500/20 text-gray-300': !['Frontend', 'Backend', 'Tester', 'Security'].includes(t.role)
+                            'bg-indigo-500/20 text-indigo-400': t.role === 'DevOps',
+                            'bg-gray-500/20 text-gray-300': !['Frontend', 'Backend', 'Tester', 'Security', 'DevOps'].includes(t.role)
                           }">{{t.role}}</span>
                     <span class="text-[0.6rem] text-gray-500 font-mono">{{t.phase}}</span>
                   </div>
