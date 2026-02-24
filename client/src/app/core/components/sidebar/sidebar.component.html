@@ -21,12 +21,22 @@
     <a routerLink="/active-projects" routerLinkActive="bg-white/10 text-white font-medium" 
        class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all text-sm mb-1">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-      <span class="hidden md:block">Active Projects</span>
+      <span class="hidden md:block">Active Tasks</span>
+    </a>
+    <a routerLink="/projects" routerLinkActive="bg-white/10 text-white font-medium" 
+       class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all text-sm mb-1">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="hidden md:block">Projects</span>
     </a>
     <a routerLink="/execution-traces" routerLinkActive="bg-white/10 text-white font-medium" 
        class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all text-sm mb-1">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
       <span class="hidden md:block">Logs & Traces</span>
+    </a>
+    <a routerLink="/exceptions" routerLinkActive="bg-white/10 text-red-500 font-medium" 
+       class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm mb-1">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span class="hidden md:block">Exception Handle</span>
     </a>
     
     <div class="pt-6 pb-2 px-4 text-xs font-bold text-gray-600 uppercase tracking-widest hidden md:block">System</div>

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
-import { Subject } from 'rxjs';
+import { Subject, Observable } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -37,6 +37,13 @@ export class SocketService {
 
     this.socket.on('system_update', (data: any) => {
       this.systemUpdate$.next(data);
+    });
+  }
+
+  onEvent(eventName: string): Observable<any> {
+    return new Observable<any>(observer => {
+      this.socket.on(eventName, (data: any) => observer.next(data));
+      return () => this.socket.off(eventName);
     });
   }
 

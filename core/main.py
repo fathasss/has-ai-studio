@@ -153,6 +153,16 @@ class ChatMessageRecord(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
 
 
+
+class ProjectException(Base):
+    __tablename__ = "project_exceptions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    sprint_id = Column(String, index=True)
+    source = Column(String)
+    command = Column(String, nullable=True)
+    error_message = Column(Text)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -174,7 +184,28 @@ def get_db():
 
 
 # --- UTILS ---
-def extract_files(text: str, project_dir: str):
+
+def log_project_exception(sprint_id: str, source: str, command: str, error_message: str):
+    db = SessionLocal()
+    try:
+        db.add(ProjectException(
+            sprint_id=sprint_id,
+            source=source,
+            command=command,
+            error_message=error_message
+        ))
+        db.commit()
+        # Broadcast the exception to UI via socketio
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(sio.emit("project_exception", {"sprint_id": sprint_id, "source": source}))
+    except Exception as e:
+        logger.error(f"Failed to log project exception: {e}")
+    finally:
+        db.close()
+
+def extract_files(text: str, project_dir: str, sprint_id: str = None):
     """Parses LLM output for file content and writes to disk."""
     os.makedirs(project_dir, exist_ok=True)
     created_files = []
@@ -212,10 +243,10 @@ def extract_files(text: str, project_dir: str):
     
     # Auto-install dependencies if manifests were created
     if created_files:
-        install_dependencies(project_dir)
+        install_dependencies(project_dir, sprint_id)
     return created_files
 
-def install_dependencies(project_dir: str):
+def install_dependencies(project_dir: str, sprint_id: str = None):
     """Checks for package managers and installs dependencies if present."""
     import subprocess
     # Node.js
@@ -227,6 +258,7 @@ def install_dependencies(project_dir: str):
             logger.info(f"npm install completed for {project_dir}")
         except Exception as e:
             logger.error(f"npm install failed for {project_dir}: {e}")
+            if sprint_id: log_project_exception(sprint_id, "install_dependencies", "npm install", str(e))
 
     # Python
     if os.path.exists(os.path.join(project_dir, "requirements.txt")):
@@ -236,9 +268,10 @@ def install_dependencies(project_dir: str):
             logger.info(f"pip install completed for {project_dir}")
         except Exception as e:
             logger.error(f"pip install failed for {project_dir}: {e}")
+            if sprint_id: log_project_exception(sprint_id, "install_dependencies", "pip install", str(e))
 
 
-def execute_setup_commands(commands: List[str], project_dir: str):
+def execute_setup_commands(commands: List[str], project_dir: str, sprint_id: str = None):
     """Executes a list of setup commands in the project directory."""
     import subprocess
     import os
@@ -283,8 +316,10 @@ def execute_setup_commands(commands: List[str], project_dir: str):
         except subprocess.CalledProcessError as e:
             err_msg = e.stderr.decode() if e.stderr else str(e)
             logger.error(f"Command failed: {cmd}. Error: {err_msg}")
+            if sprint_id: log_project_exception(sprint_id, "execute_setup_commands", cmd, err_msg)
         except Exception as e:
             logger.error(f"Command execution error: {cmd}. Error: {e}")
+            if sprint_id: log_project_exception(sprint_id, "execute_setup_commands", cmd, str(e))
 
 def safe_json_loads(text: str):
     if not text:
@@ -547,6 +582,55 @@ async def execute_sprint(req: ExecuteRequest):
     await sio.emit("job_update", {"job_id": "system", "status": "COMPLETED", "sprint_id": req.sprint_id})
     return {"status": "ok", "queued": queued_jobs}
 
+@app.get("/projects")
+def list_projects():
+    """Lists all projects in the apps directory."""
+    apps_dir = "apps"
+    if not os.path.exists(apps_dir):
+        return {"projects": []}
+    
+    projects = []
+    for d in os.listdir(apps_dir):
+        if os.path.isdir(os.path.join(apps_dir, d)):
+            projects.append(d)
+    return {"projects": projects}
+
+@app.get("/projects/{pname}/files")
+def list_files(pname: str):
+    """Recursively lists all files in a project."""
+    project_dir = os.path.join("apps", pname)
+    if not os.path.exists(project_dir):
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    file_tree = []
+    for root, dirs, files in os.walk(project_dir):
+        for name in files:
+            full_path = os.path.join(root, name)
+            rel_path = os.path.relpath(full_path, project_dir)
+            file_tree.append(rel_path.replace("\\", "/"))
+            
+    return {"files": sorted(file_tree)}
+
+@app.get("/projects/{pname}/file")
+def get_file_content(pname: str, path: str):
+    """Returns the content of a specific file in a project."""
+    # Security check: prevent directory traversal
+    pname = pname.replace("..", "").replace("/", "").replace("\\", "")
+    safe_path = path.replace("\\", "/").lstrip("/")
+    if ".." in safe_path:
+        raise HTTPException(status_code=400, detail="Invalid path")
+        
+    full_path = os.path.join("apps", pname, safe_path)
+    if not os.path.exists(full_path) or not os.path.isfile(full_path):
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    try:
+        with open(full_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return {"content": content, "path": safe_path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/jobs/pull")
 async def pull_job(worker_id: str, hostname: str):
     db = SessionLocal()
@@ -716,6 +800,29 @@ async def get_ollama_status():
     except:
         return {"status": "offline"}
 
+
+
+@app.get("/exceptions")
+def get_all_exceptions(db: Session = Depends(get_db)):
+    exceptions = (
+        db.query(ProjectException)
+        .order_by(ProjectException.timestamp.desc())
+        .limit(100)
+        .all()
+    )
+    return {
+        "exceptions": [
+            {
+                "id": e.id,
+                "sprint_id": e.sprint_id,
+                "source": e.source,
+                "command": e.command,
+                "error_message": e.error_message,
+                "timestamp": e.timestamp.isoformat()
+            }
+            for e in exceptions
+        ]
+    }
 
 # --- CHAT HISTORY ENDPOINTS ---
 @app.get("/chat/history/{sprint_id}")
@@ -1084,12 +1191,12 @@ def llm_worker():
                         if "setup_commands" in plan and isinstance(plan["setup_commands"], list):
                             # Only run if directory is relatively empty (avoid re-running on every file edit)
                             if not os.path.exists(target_dir) or len(os.listdir(target_dir)) <= 1:
-                                execute_setup_commands(plan["setup_commands"], target_dir)
+                                execute_setup_commands(plan["setup_commands"], target_dir, sprint_id=sid)
             finally:
                 db.close()
                 
             if agent != "TeamLead":
-                extract_files(resp, target_dir)
+                extract_files(resp, target_dir, sprint_id=sid)
             requests.post(
                 f"{ORCHESTRATOR_URL}/jobs/complete/{jid}?worker_id={worker_id}",
                 json={
@@ -1197,6 +1304,7 @@ def llm_worker():
             # Max Feedback Loop Logic & README Generation
             if agent == "Tester":
                 if "FAILED" in resp.upper():
+                    log_project_exception(sid, "Tester", "QA Verification", resp)
                     db = SessionLocal()
                     try:
                         failed_count = (

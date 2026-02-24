@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild, AfterViewChecked } from '@angular/core';
+import { Component, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -16,7 +16,7 @@ interface ChatMessage {
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss']
 })
-export class DashboardComponent implements AfterViewChecked {
+export class DashboardComponent {
   @ViewChild('chatContainer') private chatContainer!: ElementRef;
   
   public currentSprintIdLabel: string = "";
@@ -90,11 +90,8 @@ export class DashboardComponent implements AfterViewChecked {
         content: m.content
       }));
       this.syncState();
+      setTimeout(() => this.scrollToBottom(), 50);
     });
-  }
-
-  ngAfterViewChecked() {
-    this.scrollToBottom();
   }
 
   generateSprintId() {
@@ -126,6 +123,7 @@ export class DashboardComponent implements AfterViewChecked {
     this.chatHistory.push({ role: 'PO', content: userText });
     this.rawAgentHistory.push({ role: 'user', content: userText });
     this.syncState();
+    setTimeout(() => this.scrollToBottom(), 50);
     
     // Save User message
     this.orchestratorService.saveChatMessage(this.currentSprintId, 'user', userText).subscribe();
@@ -143,6 +141,7 @@ export class DashboardComponent implements AfterViewChecked {
         this.chatHistory.push({ role: 'TeamLead', content: assistantContent });
         this.rawAgentHistory.push({ role: 'assistant', content: rawResponse });
         this.syncState();
+        setTimeout(() => this.scrollToBottom(), 50);
         
         // Save Assistant message
         this.orchestratorService.saveChatMessage(this.currentSprintId, 'TeamLead', rawResponse).subscribe(() => {

@@ -103,4 +103,22 @@ export class OrchestratorService {
   getChatSessions(): Observable<{sessions: {id: string, name: string}[]}> {
     return this.http.get<{sessions: {id: string, name: string}[]}>(`${this.apiUrl}/chat/sessions`);
   }
+
+  getProjects(): Observable<{projects: string[]}> {
+    return this.http.get<{projects: string[]}>(`${this.apiUrl}/projects`);
+  }
+
+  getProjectFiles(projectName: string): Observable<{files: string[]}> {
+    return this.http.get<{files: string[]}>(`${this.apiUrl}/projects/${projectName}/files`);
+  }
+
+  getFileContent(projectName: string, filePath: string): Observable<{content: string, path: string}> {
+    return this.http.get<{content: string, path: string}>(`${this.apiUrl}/projects/${projectName}/file`, {
+      params: { path: filePath }
+    });
+  }
+
+  getExceptions(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/exceptions`);
+  }
 }
