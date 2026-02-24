@@ -13,6 +13,7 @@ from typing import List, Optional
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 import requests
+import httpx
 from sqlalchemy import (
     Column,
     String,
@@ -429,6 +430,36 @@ class JobQueue:
 
 project_queue = JobQueue()
 
+async def internal_submit_job(agent_name: str, sprint_id: str, priority: int, prompt: str, params: dict = None):
+    # Normalize role for submission
+    agent_name = map_role(agent_name)
+    job = LLMJobRequest(
+        agent_name=agent_name,
+        sprint_id=sprint_id,
+        priority=priority,
+        prompt=prompt,
+        params=params or {}
+    )
+    job_id = project_queue.submit(job)
+    await sio.emit(
+        "job_update",
+        {
+            "job_id": job_id,
+            "agent": agent_name,
+            "status": "PENDING",
+            "sprint_id": sprint_id,
+        },
+    )
+    return job_id
+
+def map_role(role: str) -> str:
+    r = role.lower()
+    if "frontend" in r: return "Frontend"
+    if "backend" in r: return "Backend"
+    if "tester" in r or "qa" in r or "test" in r: return "Tester"
+    if "security" in r or "auth" in r: return "Security"
+    return "TeamLead" # Fallback
+
 # --- API ---
 app = FastAPI(title="HAS-AI-TEAM")
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
@@ -466,15 +497,12 @@ def health():
 @app.post("/llm/submit")
 async def submit_llm_job(job: LLMJobRequest):
     try:
-        job_id = project_queue.submit(job)
-        await sio.emit(
-            "job_update",
-            {
-                "job_id": job_id,
-                "agent": job.agent_name,
-                "status": "PENDING",
-                "sprint_id": job.sprint_id,
-            },
+        job_id = await internal_submit_job(
+            job.agent_name,
+            job.sprint_id,
+            job.priority,
+            job.prompt,
+            job.params
         )
         return {"job_id": job_id, "status": "QUEUED"}
     except Exception as e:
@@ -487,17 +515,18 @@ async def chat_teamlead(req: ChatRequest):
     sys_prompt = {"role": "system", "content": sys_content}
     messages = [sys_prompt] + req.history
     try:
-        res = requests.post(
-            f"{OLLAMA_URL}/api/chat",
-            json={
-                "model": TEAMLEAD_MODEL,
-                "messages": messages,
-                "stream": False,
-                "options": req.params
-            },
-            timeout=120
-        ).json()
-        return {"response": res.get("message", {}).get("content", "")}
+        async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
+            res = await client.post(
+                f"{OLLAMA_URL}/api/chat",
+                json={
+                    "model": TEAMLEAD_MODEL,
+                    "messages": messages,
+                    "stream": False,
+                    "options": req.params
+                }
+            )
+            res_data = res.json()
+            return {"response": res_data.get("message", {}).get("content", "")}
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -514,17 +543,18 @@ async def chat_preview(req: ChatRequest):
     messages = [sys_prompt] + req.history + [format_instruction]
     
     try:
-        res = requests.post(
-            f"{OLLAMA_URL}/api/chat",
-            json={
-                "model": TEAMLEAD_MODEL,
-                "messages": messages,
-                "stream": False,
-                "options": req.params
-            },
-            timeout=180
-        ).json()
-        return {"response": res.get("message", {}).get("content", "")}
+        async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
+            res = await client.post(
+                f"{OLLAMA_URL}/api/chat",
+                json={
+                    "model": TEAMLEAD_MODEL,
+                    "messages": messages,
+                    "stream": False,
+                    "options": req.params
+                }
+            )
+            res_data = res.json()
+            return {"response": res_data.get("message", {}).get("content", "")}
     except Exception as e:
         logger.error(f"Preview error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -561,19 +591,17 @@ async def execute_sprint(req: ExecuteRequest):
     queued_jobs = []
     if req.plan and "tasks" in req.plan:
         for t in req.plan["tasks"]:
-            role = t.get("role")
+            role_input = t.get("role", "")
+            role = map_role(role_input)
             if role in ["Frontend", "Backend", "Tester", "Security"]:
                 try:
                     priority = 3 if role in ["Tester", "Security"] else 2
-                    res = requests.post(
-                        f"{ORCHESTRATOR_URL}/llm/submit",
-                        json={
-                            "agent_name": role,
-                            "sprint_id": req.sprint_id,
-                            "priority": priority,
-                            "prompt": t.get("task", ""),
-                        },
-                        timeout=5,
+                    await internal_submit_job(
+                        role,
+                        req.sprint_id,
+                        priority,
+                        t.get("task", ""),
+                        {}
                     )
                     queued_jobs.append(role)
                 except Exception as e:
@@ -892,13 +920,14 @@ def migrate_chat_history(req: MigrateHistoryRequest, db: Session = Depends(get_d
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 @app.get("/ollama/models")
-def get_ollama_models():
+async def get_ollama_models():
     try:
-        res = requests.get(f"{OLLAMA_URL}/api/tags", timeout=10)
-        res.raise_for_status()
-        data = res.json()
-        models = [m.get("name") for m in data.get("models", [])]
-        return {"models": models}
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(f"{OLLAMA_URL}/api/tags")
+            res.raise_for_status()
+            data = res.json()
+            models = [m.get("name") for m in data.get("models", [])]
+            return {"models": models}
     except Exception as e:
         logger.error(f"Failed to fetch ollama models: {e}")
         return {"models": [], "error": str(e)}
@@ -909,14 +938,13 @@ class PullModelRequest(BaseModel):
 @app.post("/ollama/pull")
 async def pull_ollama_model(req: PullModelRequest):
     try:
-        # stream=False kullanarak bloklayıcı istek atıyoruz
-        res = requests.post(
-            f"{OLLAMA_URL}/api/pull", 
-            json={"name": req.model, "stream": False},
-            timeout=1200 # Büyük modeller için uzun timeout
-        )
-        res.raise_for_status()
-        return {"status": "success", "message": f"Model {req.model} successfully pulled."}
+        async with httpx.AsyncClient(timeout=1200) as client:
+            res = await client.post(
+                f"{OLLAMA_URL}/api/pull", 
+                json={"name": req.model, "stream": False}
+            )
+            res.raise_for_status()
+            return {"status": "success", "message": f"Model {req.model} successfully pulled."}
     except Exception as e:
         logger.error(f"Failed to pull ollama model {req.model}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1261,8 +1289,8 @@ def llm_worker():
                 
                 logger.info(f"QA Trigger Check for {sid}: tot={tot}, done={done}")
                 
-                # Deterministic QA Trigger
-                if tot > 0 and done == tot:
+                # Deterministic QA Trigger (Adding 1 because the current agent's job isn't marked COMPLETED yet)
+                if tot > 0 and (done + 1) >= tot:
                     # Allow QA to trigger if no QA jobs are currently running (to close the loop)
                     db = SessionLocal()
                     try:

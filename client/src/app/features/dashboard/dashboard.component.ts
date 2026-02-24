@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { OrchestratorService } from '../../services/orchestrator.service';
+import { marked } from 'marked';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 interface ChatMessage {
   role: 'TeamLead' | 'PO';
@@ -18,6 +20,7 @@ interface ChatMessage {
 })
 export class DashboardComponent {
   @ViewChild('chatContainer') private chatContainer!: ElementRef;
+  @ViewChild('promptInput') private promptInput!: ElementRef;
   
   public currentSprintIdLabel: string = "";
   public currentSprintId: string = "";
@@ -40,8 +43,15 @@ export class DashboardComponent {
   public isLoadingPlan: boolean = false;
   public parsedPlan: any = null;
   public planError: string = '';
+  public renderedPlanMd: SafeHtml = '';
+  public refreshingPlan: boolean = false;
+  public executionStatus: string = '';
 
-  constructor(private orchestratorService: OrchestratorService, private router: Router) {
+  constructor(
+    private orchestratorService: OrchestratorService, 
+    private router: Router,
+    private sanitizer: DomSanitizer
+  ) {
   }
 
   ngOnInit() {
@@ -120,6 +130,12 @@ export class DashboardComponent {
     const userText = this.prompt.trim();
     this.prompt = '';
     
+    // Snaps back to original height immediately
+    if (this.promptInput) {
+      const textarea = this.promptInput.nativeElement;
+      textarea.style.height = '48px';
+    }
+    
     this.chatHistory.push({ role: 'PO', content: userText });
     this.rawAgentHistory.push({ role: 'user', content: userText });
     this.syncState();
@@ -129,7 +145,7 @@ export class DashboardComponent {
     this.orchestratorService.saveChatMessage(this.currentSprintId, 'user', userText).subscribe();
 
     this.isTyping = true;
-    this.hasPendingPlan = false;
+    // this.hasPendingPlan = false; // REMOVED: Keep the state so refinements can happen silently
 
     this.orchestratorService.chatTeamLead(this.rawAgentHistory).subscribe({
       next: (res) => {
@@ -149,7 +165,17 @@ export class DashboardComponent {
         });
 
         this.isTyping = false;
-        this.hasPendingPlan = true;
+        
+        // If we already have a plan, or if the user is in the "planning" phase, refresh it
+        const contentLower = assistantContent.toLowerCase();
+        const triggerKeywords = ['plan', 'architecture', 'mimari', 'tasarım', 'structure', 'blueprint', 'şema', 'hazırl', 'oluştur', 'hazır', 'analiz', 'preview'];
+        const hasTriggerWord = triggerKeywords.some(word => contentLower.includes(word));
+        const hasStructuralMarker = assistantContent.includes('##') || assistantContent.includes('###');
+
+        if (this.hasPendingPlan || hasTriggerWord || hasStructuralMarker) {
+          this.hasPendingPlan = true;
+          this.refreshPlan(true); 
+        }
       },
       error: (err) => {
         this.chatHistory.push({ role: 'TeamLead', content: '[Connection Error] Could not reach orchestrator.' });
@@ -160,31 +186,92 @@ export class DashboardComponent {
 
   previewPlan() {
     this.showPreviewModal = true;
-    this.isLoadingPlan = true;
+    this.refreshPlan(false);
+  }
+
+  refreshPlan(isSilent: boolean = false) {
+    if (!isSilent) {
+      this.isLoadingPlan = true;
+    } else {
+      this.refreshingPlan = true;
+    }
+    
     this.planError = '';
-    this.parsedPlan = null;
     
     this.orchestratorService.previewSprint(this.rawAgentHistory).subscribe({
       next: (res) => {
         try {
+          // Önce JSON bloğunu bul
           const match = res.response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
           if (!match) throw new Error("TeamLead'den uygun formatta JSON bloğu alınamadı.");
+          
           this.parsedPlan = JSON.parse(match[1].trim());
+          
+          // Eğer JSON içinde MD planı varsa onu kullan, yoksa JSON dışındaki metni MD olarak al
+          let mdContent = this.parsedPlan.implementation_plan_md || '';
+          if (!mdContent) {
+            mdContent = res.response.replace(/```json[\s\S]*?```/i, '').trim();
+          }
+
+          if (mdContent) {
+            const htmlValue = marked.parse(mdContent) as string;
+            this.renderedPlanMd = this.sanitizer.bypassSecurityTrustHtml(htmlValue);
+          }
+
           this.isLoadingPlan = false;
+          this.refreshingPlan = false;
         } catch (e: any) {
-          this.planError = e.message;
+          console.error("Plan parsing error:", e);
+          if (!isSilent) this.planError = e.message;
           this.isLoadingPlan = false;
+          this.refreshingPlan = false;
         }
       },
       error: (err) => {
-        this.planError = err.message || "Failed to load preview";
+        if (!isSilent) this.planError = err.message || "Failed to load preview";
         this.isLoadingPlan = false;
+        this.refreshingPlan = false;
       }
     });
   }
 
   closePreviewModal() {
     this.showPreviewModal = false;
+  }
+
+  buildAndExecuteDirectly() {
+    if (this.isLoadingPlan) return;
+    
+    this.isLoadingPlan = true;
+    this.planError = '';
+    this.executionStatus = 'Preparing plan...';
+    
+    this.orchestratorService.previewSprint(this.rawAgentHistory).subscribe({
+      next: (res) => {
+        try {
+          const match = res.response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
+          if (!match) throw new Error("JSON not found in TeamLead response. Try again or check the requirements.");
+          
+          this.parsedPlan = JSON.parse(match[1].trim());
+          
+          // Execute immediately
+          this.approveSprint();
+        } catch (e: any) {
+          console.error("Plan parsing error:", e);
+          this.planError = e.message;
+          this.isLoadingPlan = false;
+          this.executionStatus = '';
+          this.showPreviewModal = true; 
+        }
+      },
+      error: (err) => {
+        console.error("Preview call failed:", err);
+        this.planError = err.message || "Failed to reach TeamLead. Check your connection.";
+        this.isLoadingPlan = false;
+        this.executionStatus = '';
+        this.showPreviewModal = true;
+      }
+    });
   }
 
   approveSprint() {
@@ -195,27 +282,45 @@ export class DashboardComponent {
       this.currentSprintId = this.slugify(this.parsedPlan.project_name);
     }
 
+    this.executionStatus = 'Migrating session...';
     this.orchestratorService.migrateChatHistory(oldId, this.currentSprintId).subscribe({
       next: () => {
         this.closePreviewModal();
         this.hasPendingPlan = false;
         
+        this.executionStatus = 'Starting workforce...';
         this.orchestratorService.executeSprint(this.currentSprintId, this.parsedPlan, this.rawAgentHistory).subscribe({
           next: () => {
+            this.isLoadingPlan = false;
+            this.executionStatus = '';
             this.router.navigate(['/active-projects']);
           },
-          error: (err) => console.error("Sprint execution failed", err)
+          error: (err) => {
+            console.error("Sprint execution failed", err);
+            this.planError = "Execution failed: " + (err.message || "Unknown error");
+            this.isLoadingPlan = false;
+            this.executionStatus = '';
+            this.showPreviewModal = true;
+          }
         });
         
         this.syncState();
       },
-      error: (err) => console.error("Migration failed", err)
+      error: (err) => {
+        console.error("Migration failed", err);
+        this.planError = "Migration failed: " + (err.message || "Unknown error");
+        this.isLoadingPlan = false;
+        this.executionStatus = '';
+        this.showPreviewModal = true;
+      }
     });
   }
 
   private slugify(text: string): string {
     return text
       .toString()
+      .normalize('NFD')                   // Handle accented characters (Turkish ş, ı, etc.)
+      .replace(/[\u0300-\u036f]/g, '')    // Strip markers
       .toLowerCase()
       .trim()
       .replace(/\s+/g, '-')           // Replace spaces with -
@@ -223,5 +328,29 @@ export class DashboardComponent {
       .replace(/\-\-+/g, '-')         // Replace multiple - with single -
       .replace(/^-+/, '')             // Trim - from start of text
       .replace(/-+$/, '');            // Trim - from end of text
+  }
+
+  onKeyDown(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.sendMessage();
+    }
+  }
+
+  adjustTextareaHeight() {
+    if (!this.promptInput) return;
+    const textarea = this.promptInput.nativeElement;
+    
+    // Aggressive reset and measure
+    textarea.style.height = '48px'; 
+    const newHeight = textarea.scrollHeight;
+    
+    if (newHeight > 48) {
+      textarea.style.height = newHeight + 'px';
+    } else {
+      textarea.style.height = '48px';
+    }
+    
+    this.scrollToBottom();
   }
 }
