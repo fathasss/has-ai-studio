@@ -1,128 +1,74 @@
 .markdown-body {
-    color: #d1d5db;
-    line-height: 1.6;
-    font-size: 0.95rem;
+  font-family: inherit;
+  line-height: 1.6;
+  color: inherit;
 
-    h1,
-    h2,
-    h3,
-    h4 {
-        color: #facc15;
-        /* yellow-400 */
-        margin-top: 1.5rem;
-        margin-bottom: 0.75rem;
-        font-weight: 700;
+  ::ng-deep {
+    p { margin-bottom: 1rem; }
+    
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+      font-weight: 600;
+      line-height: 1.25;
+      color: #fff;
     }
 
-    h1 {
-        font-size: 1.5rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        padding-bottom: 0.5rem;
+    h1 { font-size: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.3em; }
+    h2 { font-size: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.3em; }
+    h3 { font-size: 1.1rem; }
+
+    ul, ol {
+      padding-left: 2rem;
+      margin-bottom: 1rem;
+      list-style: disc;
     }
 
-    h2 {
-        font-size: 1.25rem;
-    }
-
-    h3 {
-        font-size: 1.1rem;
-    }
-
-    p {
-        margin-bottom: 1rem;
-    }
-
-    ul,
-    ol {
-        margin-bottom: 1rem;
-        padding-left: 1.5rem;
-        list-style-type: disc;
-    }
-
-    li {
-        margin-bottom: 0.25rem;
-    }
+    li { margin-bottom: 0.25rem; }
 
     code {
-        background: rgba(255, 255, 255, 0.05);
-        padding: 0.2rem 0.4rem;
-        border-radius: 0.25rem;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 0.85em;
+      padding: 0.2em 0.4em;
+      margin: 0;
+      font-size: 85%;
+      background-color: rgba(255,255,255,0.1);
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
     }
 
     pre {
-        background: #000;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 1rem;
-        border-radius: 0.75rem;
-        overflow-x: auto;
-        margin-bottom: 1rem;
+      padding: 1rem;
+      overflow: auto;
+      font-size: 85%;
+      line-height: 1.45;
+      background-color: #0d1117;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      border: 1px solid rgba(255,255,255,0.1);
 
-        code {
-            background: transparent;
-            padding: 0;
-        }
+      code {
+        background-color: transparent;
+        padding: 0;
+        font-size: 100%;
+        color: #e6edf3;
+      }
     }
 
     blockquote {
-        border-left: 4px solid #facc15;
-        padding-left: 1rem;
-        margin-left: 0;
-        font-style: italic;
-        color: #9ca3af;
+      padding: 0 1rem;
+      color: #8b949e;
+      border-left: 0.25rem solid #30363d;
+      margin-bottom: 1rem;
     }
 
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 1rem;
+    strong { font-weight: 600; color: #fff; }
+    em { font-style: italic; }
 
-        th,
-        td {
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 0.5rem;
-            text-align: left;
-        }
-
-        th {
-            background: rgba(255, 255, 255, 0.05);
-        }
+    hr {
+      height: 0.25rem;
+      padding: 0;
+      margin: 2rem 0;
+      background-color: #30363d;
+      border: 0;
     }
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-textarea {
-    line-height: 1.5;
-    height: 48px;
-    min-height: 48px;
-    max-height: 400px;
-    box-sizing: border-box;
-    overflow-y: auto;
-    transition: border-color 0.2s;
-
-    &::-webkit-scrollbar {
-        width: 4px;
-    }
-
-    &::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 4px;
-    }
+  }
 }

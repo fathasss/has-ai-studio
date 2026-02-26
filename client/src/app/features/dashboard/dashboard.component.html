@@ -49,7 +49,7 @@
              [ngClass]="msg.role === 'TeamLead' ? 'text-yellow-400' : 'text-blue-400'">
           {{msg.role}}
         </div>
-        <div class="whitespace-pre-wrap text-[0.95rem]">{{msg.content}}</div>
+        <div class="whitespace-pre-wrap text-[0.95rem] markdown-body" [innerHTML]="renderMarkdown(msg.content)"></div>
       </div>
       
       <div *ngIf="isTyping" class="p-4 rounded-xl border border-yellow-400/30 bg-yellow-400/5 text-yellow-100 self-start max-w-[85%] h-14 flex items-center">
@@ -122,9 +122,23 @@
            Failed to parse plan: {{planError}}
         </div>
         
-        <div *ngIf="renderedPlanMd && !isLoadingPlan" class="prose prose-invert max-w-none">
-          <!-- Rendered Markdown Plan -->
-          <div [innerHTML]="renderedPlanMd" class="markdown-body"></div>
+        <div *ngIf="renderedPlanMd && !isLoadingPlan">
+          <!-- TeamLead latest message in modal -->
+          <div *ngIf="latestTeamLeadMessage" class="mb-8 pb-8 border-b border-white/10">
+            <h5 class="text-xs text-yellow-500 uppercase tracking-widest mb-4 font-semibold flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
+              Orchestration Guidance
+            </h5>
+            <div class="bg-yellow-400/5 border border-yellow-400/20 p-5 rounded-xl text-yellow-100/90 text-[0.9rem] leading-relaxed markdown-body" [innerHTML]="latestTeamLeadMessage"></div>
+          </div>
+
+          <div class="prose prose-invert max-w-none">
+            <h5 class="text-xs text-blue-500 uppercase tracking-widest mb-4 font-semibold flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+              Core implementation Strategy
+            </h5>
+            <!-- Rendered Markdown Plan -->
+            <div [innerHTML]="renderedPlanMd" class="markdown-body"></div>
 
           <div class="mt-8 pt-8 border-t border-white/10">
             <h5 class="text-xs text-gray-500 uppercase tracking-widest mb-4 font-semibold flex items-center gap-2">

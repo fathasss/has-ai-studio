@@ -19,8 +19,8 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
   traces: any[] = [];
   tlSummary: string = "";
 
-  activeTab: string = 'Pipeline Detail';
-  agentTabs: string[] = ['Pipeline Detail', 'TeamLead', 'DevOps', 'Frontend', 'Backend', 'Security', 'Tester'];
+  activeTab: string = 'TeamLead';
+  agentTabs: string[] = ['TeamLead', 'DevOps', 'Frontend', 'Backend', 'Security', 'Tester'];
   expandedTraces: Set<string> = new Set();
 
   private sub: Subscription;
@@ -65,7 +65,7 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
 
   selectSprint(sprintId: string) {
     this.activeSprint = sprintId;
-    this.activeTab = 'Pipeline Detail'; // Reset tab when changing sprints
+    this.activeTab = 'TeamLead'; // Reset tab when changing sprints
     this.loadSprintDetail(sprintId);
   }
 

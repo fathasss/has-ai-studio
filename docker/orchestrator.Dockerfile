@@ -20,4 +20,5 @@ COPY ./core /app/core
 EXPOSE 8000
 
 # Start with reload for dev, can be adjusted for prod
-CMD ["python", "core/main.py"]
+# Start as a module to support relative imports
+CMD ["python", "-m", "core.main"]

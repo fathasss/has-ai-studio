@@ -28,4 +28,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application logic (we will use the same core logic for worker communication)
 COPY ./core /app/core
 
-CMD ["python", "core/main.py"]
+CMD ["python", "-m", "core.main"]

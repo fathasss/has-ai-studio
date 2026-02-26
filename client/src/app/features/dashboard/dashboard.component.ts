@@ -46,6 +46,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   public renderedPlanMd: SafeHtml = '';
   public refreshingPlan: boolean = false;
   public executionStatus: string = '';
+  public latestTeamLeadMessage: SafeHtml | null = null;
 
   constructor(
     private orchestratorService: OrchestratorService, 
@@ -100,6 +101,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.chatHistory = msgs.length > 0 ? msgs : [
         { role: 'TeamLead', content: `Loading history for project: ${sid}...` }
       ];
+      
+      // Modal için son mesajı yakala
+      const lastTL = [...msgs].reverse().find(m => m.role === 'TeamLead');
+      if (lastTL) {
+        this.latestTeamLeadMessage = this.renderMarkdown(lastTL.content);
+      } else {
+        this.latestTeamLeadMessage = null;
+      }
+
       // Sync rawAgentHistory for next LLM calls
       this.rawAgentHistory = msgs.map(m => ({
         role: m.role === 'TeamLead' ? 'assistant' : 'user',
@@ -160,6 +170,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         const cleanResponse = rawResponse.replace(/```json[\s\S]*?```/i, '').trim();
         
         const assistantContent = cleanResponse || rawResponse;
+        
+        // Modal için son mesajı sakla
+        this.latestTeamLeadMessage = this.renderMarkdown(assistantContent);
+
         this.chatHistory.push({ role: 'TeamLead', content: assistantContent });
         this.rawAgentHistory.push({ role: 'assistant', content: rawResponse });
         this.syncState();
@@ -207,11 +221,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.orchestratorService.previewSprint(this.rawAgentHistory).subscribe({
       next: (res) => {
         try {
-          // Önce JSON bloğunu bul
-          const match = res.response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
-          if (!match) throw new Error("TeamLead'den uygun formatta JSON bloğu alınamadı.");
+          const jsonStr = this.extractJson(res.response);
+          if (!jsonStr) throw new Error("TeamLead'den uygun formatta JSON bloğu alınamadı.");
           
-          this.parsedPlan = JSON.parse(match[1].trim());
+          this.parsedPlan = JSON.parse(jsonStr);
           
           // Eğer JSON içinde MD planı varsa onu kullan, yoksa JSON dışındaki metni MD olarak al
           let mdContent = this.parsedPlan.implementation_plan_md || '';
@@ -255,10 +268,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.orchestratorService.previewSprint(this.rawAgentHistory).subscribe({
       next: (res) => {
         try {
-          const match = res.response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
-          if (!match) throw new Error("JSON not found in TeamLead response. Try again or check the requirements.");
+          const jsonStr = this.extractJson(res.response);
+          if (!jsonStr) throw new Error("JSON not found in TeamLead response. Try again or check the requirements.");
           
-          this.parsedPlan = JSON.parse(match[1].trim());
+          this.parsedPlan = JSON.parse(jsonStr);
           
           // Execute immediately
           this.approveSprint();
@@ -334,6 +347,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .replace(/\-\-+/g, '-')         // Replace multiple - with single -
       .replace(/^-+/, '')             // Trim - from start of text
       .replace(/-+$/, '');            // Trim - from end of text
+  }
+
+  public renderMarkdown(text: string): SafeHtml {
+    if (!text) return '';
+    try {
+      const html = marked.parse(text) as string;
+      return this.sanitizer.bypassSecurityTrustHtml(html);
+    } catch(e) {
+      return text;
+    }
+  }
+
+  private extractJson(text: string): string | null {
+    if (!text) return null;
+    const startIdx = text.indexOf('{');
+    const endIdx = text.lastIndexOf('}');
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      let candidate = text.substring(startIdx, endIdx + 1);
+      // Basic cleanup for common LLM artifacts
+      candidate = candidate.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+      return candidate;
+    }
+    return null;
   }
 
   onKeyDown(event: KeyboardEvent) {

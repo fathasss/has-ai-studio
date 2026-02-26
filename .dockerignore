@@ -1,0 +1,13 @@
+.git
+.gitignore
+node_modules
+client/node_modules
+apps/*
+workspace/*
+data/*
+*.db
+*.log
+__pycache__
+.pytest_cache
+.vscode
+.idea

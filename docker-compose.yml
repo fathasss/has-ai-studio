@@ -71,6 +71,7 @@ services:
       - ORCHESTRATOR_URL=http://has-ai-orchestrator:8000
       - AGENT_ROLE=worker
     volumes:
+      - ./core:/app/core
       - ./apps:/app/apps
       - ./prompts:/app/prompts
       - has_ai_sdks:/opt/sdks
