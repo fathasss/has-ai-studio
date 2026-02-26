@@ -22,6 +22,7 @@ from ..models import (
 from ..utils import (
     safe_json_loads, log_project_exception, extract_files
 )
+from ..prompts import load_prompt
 
 worker_id = str(uuid.uuid4())
 
@@ -124,12 +125,23 @@ def llm_worker():
             model = TEAMLEAD_MODEL if agent == "TeamLead" else AGENT_MODEL
             logger.info(f"[{jid}] {agent} starting on {model} for {sid}")
 
+            # Load Role-specific System Prompt
+            system_prompt = ""
+            if agent == "DevOps": system_prompt = load_prompt("devops.json", "DV_devops_worker", "")
+            elif agent == "Frontend": system_prompt = load_prompt("frontend.json", "FE_frontend_worker", "")
+            elif agent == "Backend": system_prompt = load_prompt("backend.json", "BE_backend_worker", "")
+            elif agent == "Tester": system_prompt = load_prompt("tester.json", "TT_tester_worker", "")
+            elif agent == "Security": system_prompt = load_prompt("security.json", "SM_security_worker", "")
+            elif agent == "TeamLead": system_prompt = load_prompt("teamlead.json", "TM_teamlead_worker", "")
+            
+            combined_prompt = f"{system_prompt}\n\nTASK:\n{prompt}" if system_prompt else prompt
+
             start_t = time.time()
             try:
                 with httpx.Client(timeout=LLM_TIMEOUT) as client:
                     llm_resp = client.post(
                         f"{OLLAMA_URL}/api/generate",
-                        json={"model": model, "prompt": prompt, "stream": False}
+                        json={"model": model, "prompt": combined_prompt, "stream": False}
                     )
                     llm_data = llm_resp.json()
                     resp_text = llm_data.get("response", "")
