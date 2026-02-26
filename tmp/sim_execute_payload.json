@@ -1,0 +1,37 @@
+{
+  "sprint_id": "SIM_SPRINT_123",
+  "plan": {
+    "tasks": [
+      {
+        "role": "DevOps",
+        "phase": "Setup",
+        "task": "Initialise project skeleton in current directory."
+      },
+      {
+        "role": "Backend",
+        "phase": "Logic",
+        "task": "[TARGET FILE]: src/api/task.py\n[LOGIC]: Implement a FastAPI POST endpoint that validates task title, description, and due date via regex. Save to the database using the shared DB session. Handle 400 and 500 error cases.\n[DEPENDENCIES]: fastapi, sqlalchemy, database.py"
+      },
+      {
+        "role": "Frontend",
+        "phase": "UI",
+        "task": "[TARGET FILE]: src/ui/task_list.vue\n[LOGIC]: Display a list of tasks with title, description, and due date. Include add task button that triggers the POST endpoint.\n[DEPENDENCIES]: vue.js, vuetify"
+      },
+      {
+        "role": "Database",
+        "phase": "Schema",
+        "task": "[TARGET FILE]: src/db/schema.sql\n[LOGIC]: Create database schema with tables for tasks and users. Define relationships between them.\n[DEPENDENCIES]: sqlite3"
+      },
+      {
+        "role": "Security",
+        "phase": "Audit",
+        "task": "Security audit and hardening."
+      },
+      {
+        "role": "Tester",
+        "phase": "Validation",
+        "task": "Functional verification and bug fixing."
+      }
+    ]
+  }
+}

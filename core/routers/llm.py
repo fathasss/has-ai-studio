@@ -6,19 +6,19 @@ import json
 from ..database import get_db
 from ..models import LLMJobRecord, LLMTrace, GlobalLock
 from ..schemas import LLMJobRequest, LLMJobCompletion, LLMTraceSchema
-from ..config import logger
+from .. import config
 from ..app_instance import sio
 from ..services.job_service import job_queue_service
 
-router = APIRouter(prefix="/llm", tags=["LLM"])
+router = APIRouter(tags=["LLM"])
 
-@router.post("/submit")
+@router.post("/llm/submit")
 async def submit_job(req: LLMJobRequest):
     job_id = job_queue_service.submit(req)
     await sio.emit("job_update", {"job_id": job_id, "status": "PENDING", "sprint_id": req.sprint_id})
     return {"job_id": job_id}
 
-@router.post("/lock/acquire")
+@router.post("/llm/lock/acquire")
 async def acquire_lock(worker_id: str, db: Session = Depends(get_db)):
     # Logic extracted from main.py for atomic lock acquisition
     job = db.query(LLMJobRecord).filter(LLMJobRecord.status == "PENDING").order_by(LLMJobRecord.priority.asc(), LLMJobRecord.created_at.asc()).first()
@@ -37,13 +37,13 @@ async def acquire_lock(worker_id: str, db: Session = Depends(get_db)):
     await sio.emit("job_update", {"job_id": job.id, "status": "PROCESSING", "sprint_id": job.sprint_id})
     return {"job_id": job.id, "agent_name": job.agent_name, "prompt": job.prompt, "sprint_id": job.sprint_id, "priority": job.priority}
 
-@router.post("/lock/release")
+@router.post("/llm/lock/release")
 async def release_lock(worker_id: str, db: Session = Depends(get_db)):
     db.query(GlobalLock).filter(GlobalLock.worker_id == worker_id).delete()
     db.commit()
     return {"status": "ok"}
 
-@router.post("/trace")
+@router.post("/llm/trace")
 async def log_trace(trace: LLMTraceSchema, db: Session = Depends(get_db)):
     from ..models import LLMTrace
     from ..app_instance import sio

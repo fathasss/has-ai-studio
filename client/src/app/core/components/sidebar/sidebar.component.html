@@ -1,13 +1,15 @@
 <div class="h-full flex flex-col justify-between py-6">
   <!-- Brand / Logo Area -->
-  <div class="px-6 flex items-center justify-center md:justify-start gap-4 mb-10">
-    <div class="w-14 h-14 shrink-0 flex items-center justify-center bg-white/5 rounded-xl border border-white/10 p-2 shadow-lg backdrop-blur-md relative overflow-hidden group">
-      <div class="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-      <img src="assets/has_ai_studio_logo.png?v=fixed-bg" alt="HAS AI STUDIO" class="w-full h-full object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] relative z-10 transition-transform duration-300 group-hover:scale-105">
+  <div class="px-6 flex items-center justify-center md:justify-start gap-3 mb-12 group cursor-pointer" routerLink="/dashboard">
+    <div class="w-12 h-12 shrink-0 flex items-center justify-center relative transition-all duration-500">
+      <!-- Glow background effect -->
+      <div class="absolute inset-0 bg-yellow-400/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+      <img src="assets/has_ai_studio_logo.png?v=fixed-bg" alt="HAS AI STUDIO" 
+           class="w-full h-full object-contain relative z-10 transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]">
     </div>
     <div class="hidden md:flex flex-col">
-      <span class="font-bold text-[1.1rem] tracking-[0.15em] text-yellow-400 [text-shadow:0_0_10px_rgba(250,204,21,0.8),0_0_20px_rgba(250,204,21,0.4)] leading-tight">HAS AI</span>
-      <span class="font-bold text-[1.1rem] tracking-[0.15em] text-yellow-400 [text-shadow:0_0_10px_rgba(250,204,21,0.8),0_0_20px_rgba(250,204,21,0.4)] leading-tight">STUDIO.</span>
+      <span class="font-black text-[1.1rem] tracking-[0.2em] text-white group-hover:text-yellow-400 transition-colors duration-500 uppercase leading-none">HAS AI</span>
+      <span class="font-bold text-[0.65rem] tracking-[0.4em] text-gray-600 uppercase mt-1.5 group-hover:text-gray-400 transition-colors duration-500">Studio</span>
     </div>
   </div>
 
@@ -28,6 +30,11 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       <span class="hidden md:block">Projects</span>
     </a>
+    <a routerLink="/reports" routerLinkActive="bg-white/10 text-white font-medium" 
+       class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all text-sm mb-1">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      <span class="hidden md:block">Team Reports</span>
+    </a>
     <a routerLink="/execution-traces" routerLinkActive="bg-white/10 text-white font-medium" 
        class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all text-sm mb-1">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
@@ -36,7 +43,7 @@
     <a routerLink="/exceptions" routerLinkActive="bg-white/10 text-red-500 font-medium" 
        class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm mb-1">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      <span class="hidden md:block">Exception Handle</span>
+      <span class="hidden md:block">Errors</span>
     </a>
     
     <div class="pt-6 pb-2 px-4 text-xs font-bold text-gray-600 uppercase tracking-widest hidden md:block">System</div>
@@ -51,8 +58,20 @@
   <!-- System Status -->
   <div class="px-6 mt-auto hidden md:block">
     <div class="text-xs text-gray-400 mb-2 uppercase tracking-wider">System Status</div>
-    <div class="bg-black/30 rounded-lg p-3 border border-white/5 space-y-3">
+    <div class="bg-black/30 rounded-lg p-3 border border-white/5 space-y-4">
       
+      <!-- Session Uptime and Throughput Row -->
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <div class="bg-white/5 rounded-md p-2 border border-white/5">
+          <div class="text-[0.55rem] uppercase tracking-tighter text-gray-500 font-bold mb-1">Uptime</div>
+          <div class="text-[0.8rem] font-mono text-blue-400 font-black">{{ uptimeString }}</div>
+        </div>
+        <div class="bg-white/5 rounded-md p-2 border border-white/5">
+          <div class="text-[0.55rem] uppercase tracking-tighter text-gray-500 font-bold mb-1">Tokens/m</div>
+          <div class="text-[0.8rem] font-mono text-yellow-400 font-black">{{ tokensMin }}</div>
+        </div>
+      </div>
+
       <!-- CPU -->
       <div>
         <div class="flex justify-between items-center mb-1 text-[0.65rem] uppercase tracking-widest font-bold">

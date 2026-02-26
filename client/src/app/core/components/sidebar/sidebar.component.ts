@@ -16,6 +16,8 @@ export class SidebarComponent implements OnInit, OnDestroy {
   public cpuUsage: number = 0;
   public diskUsage: number = 0;
   public gpuUsage: number = 0;
+  public uptimeString: string = '00:00:00';
+  public tokensMin: number = 0;
   private sub: Subscription | null = null;
 
   constructor(private socketService: SocketService) {}
@@ -28,10 +30,22 @@ export class SidebarComponent implements OnInit, OnDestroy {
            this.cpuUsage = Math.round(res.cpu) || 0;
            this.diskUsage = Math.round(res.disk) || 0;
            this.gpuUsage = Math.round(res.gpu) || 0;
+           this.tokensMin = res.tokens_min || 0;
+           
+           if (res.uptime !== undefined) {
+             this.uptimeString = this.formatUptime(res.uptime);
+           }
          }
       },
       error: (err) => console.error("Error receiving system status", err)
     });
+  }
+
+  private formatUptime(totalSec: number): string {
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = Math.floor(totalSec % 60);
+    return [h, m, s].map(v => v < 10 ? '0' + v : v).join(':');
   }
 
   ngOnDestroy(): void {

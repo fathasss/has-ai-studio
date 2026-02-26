@@ -1,66 +1,133 @@
-<div class="h-full flex flex-col relative w-full h-[calc(100vh-6rem)]">
+<div class="h-full w-full overflow-hidden bg-zinc-950 text-gray-200 p-8 space-y-8 animate-in fade-in duration-700">
     
-    <div class="mb-6 flex-shrink-0">
-        <h2 class="text-2xl font-bold text-white mb-1">Factory Configuration</h2>
-        <p class="text-gray-400 text-sm">Model selection and orchestration parameters</p>
-    </div>
-    
-    <div class="flex-1 bg-black/40 border border-white/10 rounded-xl overflow-y-auto p-6 lg:p-10 scroll-smooth">
-        
-        <div class="max-w-2xl flex flex-col gap-6">
-            
-            <!-- LLM Provider -->
-            <div class="flex flex-col gap-2">
-                <label class="text-white font-medium">LLM Provider</label>
-                <select [(ngModel)]="config.LLM_PROVIDER" class="bg-black border border-white/20 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-400">
-                    <option value="ollama">Ollama (Local)</option>
-                    <option value="openai">OpenAI Compatible (Remote)</option>
-                </select>
-            </div>
-            
-            <!-- Ollama Server URL -->
-            <div class="flex flex-col gap-2">
-                <label class="text-white font-medium">Ollama Server URL</label>
-                <input type="text" [(ngModel)]="config.OLLAMA_URL" placeholder="http://ollama:11434" class="bg-black border border-white/20 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-400">
-            </div>
-            
-            <!-- Primary Agent Model -->
-            <div class="flex flex-col gap-2 border-t border-white/10 pt-6 mt-2">
-                <label class="text-white font-medium">Primary Agent Model</label>
-                <div class="flex gap-3">
-                    <select [(ngModel)]="config.AGENT_MODEL" class="flex-1 bg-black border border-white/20 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-400">
-                        <option value="" *ngIf="isLoadingModels">Loading models...</option>
-                        <option *ngFor="let m of models" [value]="m">{{m}}</option>
-                        <option value="" *ngIf="!isLoadingModels && models.length === 0">No models found or error</option>
-                    </select>
-                    <button (click)="loadOllamaModels()" class="px-5 border border-white/20 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white">
-                        &#x21bb; Refresh
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Pull New Model (Ollama) -->
-            <div class="flex flex-col gap-2 border border-white/20 border-dashed rounded-xl p-6 bg-white/5 mt-2">
-                <label class="text-blue-400 font-medium">Pull New Model (Ollama)</label>
-                <div class="flex gap-3 mt-2">
-                    <input type="text" [(ngModel)]="pullModelName" placeholder="e.g. phi3, qwen:0.5b" [disabled]="isPulling"
-                           class="flex-1 bg-black border border-white/20 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-blue-400 disabled:opacity-50">
-                    <button (click)="pullOllamaModel()" [disabled]="!pullModelName.trim() || isPulling" 
-                            class="px-6 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        {{isPulling ? 'Downloading...' : 'Download'}}
-                    </button>
-                </div>
-                <p class="text-xs mt-2 transition-colors" [ngClass]="pullMsgColor">{{pullMsg}}</p>
-            </div>
-            
-            <hr class="border-white/10 my-4">
-            
-            <!-- Save Button -->
-            <button (click)="saveConfig()" class="bg-yellow-400 text-black font-bold px-8 py-3 rounded-xl hover:bg-yellow-300 transition-colors self-start shadow-[0_0_15px_rgba(250,204,21,0.2)]">
-                Apply Configuration
-            </button>
-            <p *ngIf="saveSuccess" class="text-green-500 text-sm mt-2">Configuration Updated & Persisted.</p>
+    <!-- Top Header & Action Bar -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto mb-10 items-end">
+        <div>
+            <h1 class="text-3xl font-black text-white tracking-tighter uppercase flex items-center gap-3">
+                <span class="w-2 h-8 bg-yellow-500 rounded-full shadow-[0_0_15px_rgba(234,179,8,0.4)]"></span>
+                System Settings
+            </h1>
+            <p class="text-gray-500 text-xs font-mono mt-1 uppercase tracking-widest">Orchestration & Model Configuration v2.5</p>
         </div>
         
+        <div class="flex items-center gap-4 justify-end">
+            <div *ngIf="saveSuccess" class="bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-bold px-4 py-2 rounded-full animate-in slide-in-from-right-8 duration-500 backdrop-blur-md uppercase tracking-widest">
+                Matrix Synchronized
+            </div>
+            <button (click)="saveConfig()" class="group flex items-center gap-3 bg-yellow-500 text-black font-black uppercase tracking-tighter px-8 py-3.5 rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:bg-yellow-400 hover:scale-105 active:scale-95 transition-all text-sm">
+                Apply Configuration
+                <svg class="group-hover:translate-x-1 transition-transform" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+        </div>
     </div>
+
+    <!-- Main Content Grid -->
+    <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 overflow-y-auto custom-scrollbar pb-20 pr-4">
+        
+        <!-- LLM Connection Card -->
+        <div class="bg-black/40 border border-white/10 rounded-2xl p-8 backdrop-blur-xl hover:border-white/20 transition-all duration-500 group shadow-2xl relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-12 bg-white/5 rounded-bl-[5rem] -mr-16 -mt-16 group-hover:scale-110 transition-transform duration-700"></div>
+            
+            <div class="flex items-center gap-4 mb-8">
+                <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div>
+                    <h3 class="text-white font-bold text-lg tracking-tight">Access Tunnel</h3>
+                    <p class="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Connectivity Parameters</p>
+                </div>
+            </div>
+
+            <div class="space-y-6 relative">
+                <div class="flex flex-col gap-2">
+                    <label class="text-[10px] text-gray-400 font-black uppercase tracking-widest ml-1">Provider Protocol</label>
+                    <select [(ngModel)]="config.LLM_PROVIDER" class="bg-black/60 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-blue-500/50 transition-all text-sm font-medium appearance-none cursor-pointer">
+                        <option value="ollama">Ollama Managed (Edge)</option>
+                        <option value="openai">OpenAI Relay (Cloud)</option>
+                    </select>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                    <label class="text-[10px] text-gray-400 font-black uppercase tracking-widest ml-1">Orchestration Gateway</label>
+                    <div class="relative">
+                        <input type="text" [(ngModel)]="config.OLLAMA_URL" placeholder="http://ollama:11434" 
+                               class="w-full bg-black/60 border border-white/10 text-white rounded-xl px-10 py-3.5 focus:outline-none focus:border-blue-500/50 transition-all text-sm font-mono placeholder:text-gray-700">
+                        <svg class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Intelligence Core Card -->
+        <div class="bg-black/40 border border-white/10 rounded-2xl p-8 backdrop-blur-xl hover:border-white/20 transition-all duration-500 group shadow-2xl relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-12 bg-white/5 rounded-bl-[5rem] -mr-16 -mt-16 group-hover:scale-110 transition-transform duration-700"></div>
+            
+            <div class="flex items-center gap-4 mb-8">
+                <div class="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                </div>
+                <div>
+                    <h3 class="text-white font-bold text-lg tracking-tight">Intelligence Core</h3>
+                    <p class="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Model Delegation</p>
+                </div>
+            </div>
+
+            <div class="space-y-6 relative">
+                <div class="flex flex-col gap-2">
+                    <label class="text-[10px] text-gray-400 font-black uppercase tracking-widest ml-1">Primary Neural Model</label>
+                    <div class="flex gap-2">
+                        <select [(ngModel)]="config.AGENT_MODEL" 
+                                class="flex-1 bg-black/60 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-purple-500/50 transition-all text-sm font-bold appearance-none cursor-pointer">
+                            <option value="" *ngIf="isLoadingModels">Discovering nodes...</option>
+                            <option *ngFor="let m of models" [value]="m">{{m}}</option>
+                            <option value="" *ngIf="!isLoadingModels && models.length === 0">No compatible cores found</option>
+                        </select>
+                        <button (click)="loadOllamaModels()" class="w-12 h-[52px] flex items-center justify-center bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all group/btn">
+                            <svg class="w-4 h-4 text-gray-400 group-hover/btn:rotate-180 transition-transform duration-700" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.21-8.58"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-purple-500/5 border border-purple-500/10 rounded-xl">
+                    <p class="text-[10px] leading-relaxed text-purple-400/80 font-medium italic">All background agents will utilize this model for code synthesis and architectural reasoning.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Acquisition Module Card (Full Width) -->
+        <div class="lg:col-span-2 bg-black/40 border border-white/10 rounded-2xl p-8 backdrop-blur-xl hover:border-white/20 transition-all duration-500 group shadow-2xl relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-24 bg-blue-500/5 rounded-bl-[10rem] -mr-32 -mt-32 group-hover:scale-110 transition-transform duration-700"></div>
+            
+            <div class="flex items-center gap-4 mb-8">
+                <div class="w-12 h-12 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </div>
+                <div>
+                    <h3 class="text-white font-bold text-lg tracking-tight">Acquisition Module</h3>
+                    <p class="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Model Ingestion</p>
+                </div>
+            </div>
+
+            <div class="max-w-3xl space-y-4">
+                <label class="text-[10px] text-gray-400 font-black uppercase tracking-widest ml-1">Satellite Ingestion (Ollama Library)</label>
+                <div class="flex gap-4">
+                    <input type="text" [(ngModel)]="pullModelName" placeholder="e.g. deepseek-coder, llama3:8b, phi3:latest" [disabled]="isPulling"
+                           class="flex-1 bg-black/60 border border-white/10 text-white rounded-xl px-4 py-4 focus:outline-none focus:border-yellow-500/50 transition-all text-sm font-mono placeholder:text-gray-700 disabled:opacity-30">
+                    <button (click)="pullOllamaModel()" [disabled]="!pullModelName.trim() || isPulling" 
+                            class="px-10 rounded-xl bg-yellow-500 text-black font-black uppercase italic tracking-tighter hover:bg-yellow-400 transition-all shadow-[0_0_15px_rgba(234,179,8,0.2)] disabled:opacity-30 disabled:cursor-not-allowed group/pull overflow-hidden relative">
+                        <span class="relative z-10">{{isPulling ? 'Synchronizing...' : 'Initialize Pull'}}</span>
+                        <div *ngIf="isPulling" class="absolute inset-0 bg-white/20 animate-pulse"></div>
+                    </button>
+                </div>
+                
+                <div class="flex flex-col gap-2">
+                    <p class="text-[11px] font-bold tracking-tight transition-colors flex items-center gap-2" [ngClass]="pullMsgColor">
+                        <span *ngIf="isPulling" class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
+                        <span *ngIf="pullMsg">{{pullMsg}}</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>

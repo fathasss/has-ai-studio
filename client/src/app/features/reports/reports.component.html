@@ -1,0 +1,102 @@
+<div class="flex h-full w-full gap-6 overflow-hidden bg-zinc-950 text-gray-200">
+  
+  <!-- Left Side: Explorer Card -->
+  <div class="w-80 flex-shrink-0 flex flex-col bg-black/40 border border-white/10 rounded-xl overflow-hidden backdrop-blur-xl">
+    <div class="p-6 border-b border-white/10 bg-white/5 flex items-center justify-between">
+      <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Report Explorer</h3>
+      <div class="text-[10px] text-blue-400 font-mono bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20">V2.0</div>
+    </div>
+    
+    <div class="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+      <!-- Session (Folder) Level -->
+      <div *ngFor="let sid of sessions" class="space-y-1">
+        <div (click)="toggleSession(sid)"
+             [ngClass]="{
+               'bg-white/5 border-white/10': isExpanded(sid),
+               'border-transparent hover:bg-white/5': !isExpanded(sid)
+             }"
+             class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all duration-200 group">
+          <div class="transition-transform duration-200" [style.transform]="isExpanded(sid) ? 'rotate(90deg)' : 'rotate(0deg)'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500 group-hover:text-blue-400"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </div>
+          <div class="w-7 h-7 rounded bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-400"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-[10px] text-gray-500 font-mono truncate">{{ sid.substring(0, 8) }}...</div>
+            <div class="text-xs font-bold text-gray-300 truncate">Project Session</div>
+          </div>
+        </div>
+
+        <!-- Report (File) Level -->
+        <div *ngIf="isExpanded(sid)" class="ml-4 pl-4 border-l border-white/5 space-y-1 py-1 animate-in slide-in-from-left-2 duration-200">
+          <div *ngFor="let report of reportsBySession[sid]"
+               (click)="selectReport(sid, report)"
+               [ngClass]="{
+                 'bg-yellow-400/20 border-yellow-400/50 shadow-[0_0_15px_rgba(250,204,21,0.1)]': reportId === sid + '/' + report,
+                 'border-transparent hover:bg-white/5': reportId !== sid + '/' + report
+               }"
+               class="flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all duration-200 group">
+            <div class="w-6 h-6 rounded bg-yellow-400/5 flex items-center justify-center border border-yellow-400/10">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-yellow-400/60"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[11px] font-medium text-gray-400 group-hover:text-gray-200 truncate">{{ formatAgentName(report) }}</div>
+              <div class="text-[9px] text-gray-600 font-mono">{{ formatDate(report).split(' ')[0] }}</div>
+            </div>
+          </div>
+          <div *ngIf="!reportsBySession[sid] || reportsBySession[sid].length === 0" class="p-2 text-[10px] text-gray-600 italic">No reports found</div>
+        </div>
+      </div>
+
+      <div *ngIf="sessions.length === 0" class="p-4 text-xs text-gray-500 italic text-center">
+        No report history established.
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Side: Content Area Card -->
+  <div class="flex-1 flex flex-col bg-black/40 border border-white/10 rounded-xl overflow-hidden shadow-2xl">
+    <!-- Header -->
+    <div class="h-20 flex items-center justify-between px-8 border-b border-white/10 bg-white/5 backdrop-blur-sm" *ngIf="activeReport">
+        <div class="flex flex-col">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-bold text-blue-400 uppercase tracking-tighter">{{ activeSession }}</span>
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+          </div>
+          <h2 class="text-white font-bold text-xl tracking-tight">{{ formatAgentName(activeReport) }} Audit Report</h2>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="text-right flex flex-col">
+                <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Synchronized</span>
+                <span class="text-xs text-gray-300 font-mono">{{ formatDate(activeReport) }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scrollable Content -->
+    <div class="flex-1 overflow-x-auto overflow-y-auto p-12 custom-scrollbar relative bg-[linear-gradient(to_bottom_right,rgba(255,255,255,0.02),transparent)]">
+      <div *ngIf="isLoading" class="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-50">
+        <div class="flex flex-col items-center gap-4">
+          <div class="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+          <span class="text-sm font-bold text-blue-400 tracking-widest uppercase">Deciphering...</span>
+        </div>
+      </div>
+      
+      <!-- Markdown Body -->
+      <div *ngIf="reportContent" 
+           class="markdown-body max-w-full p-12 rounded-3xl bg-black/60 border border-white/5 shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-700 mx-auto" 
+           [innerHTML]="reportContent">
+      </div>
+      
+      <!-- Empty State -->
+      <div *ngIf="!activeReport && !isLoading" class="h-full flex flex-col items-center justify-center text-center">
+        <div class="w-32 h-32 rounded-[2.5rem] bg-gradient-to-br from-white/10 to-transparent border border-white/10 flex items-center justify-center mb-10 shadow-2xl -rotate-6 hover:rotate-0 transition-all duration-700 group">
+           <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600 group-hover:text-blue-400/50 transition-colors"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h2"></path><path d="M8 17h2"></path><path d="M14 13h2"></path><path d="M14 17h2"></path></svg>
+        </div>
+        <h3 class="text-3xl font-black text-white/20 tracking-tighter uppercase italic">Offline Terminal</h3>
+        <p class="text-gray-600 max-w-xs mt-4 text-sm font-medium leading-relaxed">Expand a project session and select an audit log to initialize the secure data bridge.</p>
+      </div>
+    </div>
+  </div>
+</div>

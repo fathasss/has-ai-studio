@@ -7,12 +7,12 @@ import uuid
 from ..database import get_db, SessionLocal
 from ..models import LLMJobRecord, LLMTrace, WorkerHeartbeat
 from ..schemas import LLMJobCompletion, LLMJobRequest
-from ..config import logger, TEAMLEAD_MODEL, AGENT_MODEL
+from .. import config
 from ..app_instance import sio
 
-router = APIRouter(prefix="/jobs", tags=["Jobs"])
+router = APIRouter(tags=["Jobs"])
 
-@router.post("/heartbeat")
+@router.post("/jobs/heartbeat")
 def worker_heartbeat(worker_id: str, hostname: str, db: Session = Depends(get_db)):
     hb = db.query(WorkerHeartbeat).filter(WorkerHeartbeat.worker_id == worker_id).first()
     if not hb:
@@ -22,12 +22,9 @@ def worker_heartbeat(worker_id: str, hostname: str, db: Session = Depends(get_db
     db.commit()
     return {"status": "ok"}
 
-@router.post("/pull")
+@router.post("/jobs/pull")
 async def pull_job(worker_id: str, hostname: str, db: Session = Depends(get_db)):
     # Use immediate transaction for atomic pull if possible (SQLite style)
-    # Note: depends_on db session might not be BEGIN IMMEDIATE. 
-    # Let's use internal SessionLocal for the transaction block if needed.
-    
     job = (
         db.query(LLMJobRecord)
         .filter(LLMJobRecord.status == "PENDING")
@@ -42,7 +39,7 @@ async def pull_job(worker_id: str, hostname: str, db: Session = Depends(get_db))
         
         await sio.emit("job_update", {"job_id": job.id, "status": "PROCESSING", "sprint_id": job.sprint_id})
         
-        target_model = TEAMLEAD_MODEL if job.agent_name == "TeamLead" else AGENT_MODEL
+        target_model = config.TEAMLEAD_MODEL if job.agent_name == "TeamLead" else config.AGENT_MODEL
         return {
             "id": job.id,
             "agent_name": job.agent_name,
@@ -54,7 +51,7 @@ async def pull_job(worker_id: str, hostname: str, db: Session = Depends(get_db))
         }
     return None
 
-@router.post("/complete/{job_id}")
+@router.post("/jobs/complete/{job_id}")
 async def complete_job(job_id: str, data: LLMJobCompletion, worker_id: str, db: Session = Depends(get_db)):
     job = db.query(LLMJobRecord).filter(LLMJobRecord.id == job_id).first()
     if not job:
@@ -82,3 +79,8 @@ async def complete_job(job_id: str, data: LLMJobCompletion, worker_id: str, db: 
     
     await sio.emit("job_update", {"job_id": job_id, "status": "COMPLETED", "sprint_id": job.sprint_id})
     return {"status": "ok"}
+
+@router.get("/jobs/{sprint_id}")
+async def get_sprint_jobs(sprint_id: str, db: Session = Depends(get_db)):
+    jobs = db.query(LLMJobRecord).filter(LLMJobRecord.sprint_id == sprint_id).all()
+    return jobs

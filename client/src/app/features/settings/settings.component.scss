@@ -1,0 +1,85 @@
+.custom-scrollbar {
+    &::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+    }
+}
+
+:host {
+    display: block;
+    height: 100%;
+}
+
+// Custom Select Reset for modern look
+select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1.2rem;
+    padding-right: 3rem !important;
+
+    option {
+        background-color: #09090b;
+        color: #fff;
+        padding: 1rem;
+    }
+}
+
+// Input Focus Effects
+input,
+select {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+
+    &:focus {
+        box-shadow: 0 0 20px -5px rgba(59, 130, 246, 0.2);
+    }
+}
+
+// Animation utilities
+.animate-in {
+    animation-duration: 0.5s;
+    animation-fill-mode: both;
+}
+
+.fade-in {
+    animation-name: fadeIn;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.slide-in-from-right-8 {
+    animation-name: slideInRight;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(2rem);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}

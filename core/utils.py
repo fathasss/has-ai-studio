@@ -67,9 +67,9 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None):
     os.makedirs(project_dir, exist_ok=True)
     files_created = []
     
-    # Primary Pattern: ### FILE: filename format (resilient to whitespace/newlines)
-    pattern = r"### FILE:\s*([^ \n\r\*`]+)(.*?)(?=### FILE:|$)"
-    matches = list(re.finditer(pattern, text, re.DOTALL))
+    # Primary Pattern: ### FILE: or [TARGET FILE]: format
+    pattern = r"(?:### FILE:|\[TARGET FILE\]:)\s*([^ \n\r\*`]+)(.*?)(?=(?:### FILE:|\[TARGET FILE\]:)|$)"
+    matches = list(re.finditer(pattern, text, re.DOTALL | re.IGNORECASE))
     
     if not matches:
         # Fallback 1: checking for markdown blocks with // filename or # filename annotation

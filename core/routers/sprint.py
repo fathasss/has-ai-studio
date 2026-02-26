@@ -3,13 +3,12 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import LLMJobRecord, LLMTrace
 from ..schemas import ExecuteRequest
-from ..config import logger
+from .. import config
 from ..services.job_service import internal_submit_job
-from ..prompts import load_prompt
 
-router = APIRouter(prefix="/sprint", tags=["Sprint"])
+router = APIRouter(tags=["Sprint"])
 
-@router.post("/execute")
+@router.post("/sprint/execute")
 async def execute_sprint(req: ExecuteRequest, db: Session = Depends(get_db)):
     sid = req.sprint_id
     plan = req.plan

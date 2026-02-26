@@ -22,6 +22,8 @@ export interface FileNode {
 export class ProjectsComponent implements OnInit {
   projects: string[] = [];
   searchQuery: string = '';
+  expandedProjects: Set<string> = new Set();
+  projectTrees: { [key: string]: FileNode[] } = {};
   selectedProject: string | null = null;
   files: string[] = [];
   fileTree: FileNode[] = [];
@@ -50,6 +52,10 @@ export class ProjectsComponent implements OnInit {
       next: (res) => {
         this.projects = res.projects;
         this.loading = false;
+        // Optionally auto-expand first project if available
+        if (this.projects.length > 0 && this.expandedProjects.size === 0) {
+          this.toggleProject(this.projects[0]);
+        }
       },
       error: (err) => {
         console.error('Error loading projects', err);
@@ -58,16 +64,26 @@ export class ProjectsComponent implements OnInit {
     });
   }
 
-  selectProject(projectName: string): void {
-    this.selectedProject = projectName;
-    this.files = [];
-    this.selectedFile = null;
-    this.fileContent = null;
+  toggleProject(projectName: string): void {
+    if (this.expandedProjects.has(projectName)) {
+      this.expandedProjects.delete(projectName);
+    } else {
+      this.expandedProjects.add(projectName);
+      if (!this.projectTrees[projectName]) {
+        this.loadProjectFiles(projectName);
+      }
+    }
+  }
+
+  isProjectExpanded(projectName: string): boolean {
+    return this.expandedProjects.has(projectName);
+  }
+
+  loadProjectFiles(projectName: string): void {
     this.loading = true;
     this.orchestratorService.getProjectFiles(projectName).subscribe({
       next: (res) => {
-        this.files = res.files;
-        this.fileTree = this.buildFileTree(res.files);
+        this.projectTrees[projectName] = this.buildFileTree(res.files);
         this.loading = false;
       },
       error: (err) => {
@@ -77,32 +93,31 @@ export class ProjectsComponent implements OnInit {
     });
   }
 
-  selectFile(path: string): void {
-    this.selectedFile = path;
-    this.fileContent = null;
-    this.loading = true;
-    if (this.selectedProject) {
-      this.orchestratorService.getFileContent(this.selectedProject, path).subscribe({
-        next: (res) => {
-          this.fileContent = res.content;
-          this.highlightedContent = this.highlightCode(res.content, path);
-          this.loading = false;
-        },
-        error: (err) => {
-          console.error('Error loading file content', err);
-          this.loading = false;
-        }
-      });
-    }
-  }
-
-  toggleNode(node: FileNode, event: Event): void {
+  toggleNode(node: FileNode, projectName: string, event: Event): void {
     event.stopPropagation();
     if (node.isDirectory) {
       node.expanded = !node.expanded;
     } else {
-      this.selectFile(node.path);
+      this.selectFile(projectName, node.path);
     }
+  }
+
+  selectFile(projectName: string, path: string): void {
+    this.selectedProject = projectName;
+    this.selectedFile = path;
+    this.fileContent = null;
+    this.loading = true;
+    this.orchestratorService.getFileContent(projectName, path).subscribe({
+      next: (res) => {
+        this.fileContent = res.content;
+        this.highlightedContent = this.highlightCode(res.content, path);
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error('Error loading file content', err);
+        this.loading = false;
+      }
+    });
   }
 
   buildFileTree(flatFiles: string[]): FileNode[] {

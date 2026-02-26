@@ -5,7 +5,7 @@ import asyncio
 import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
-from ..config import logger, AGENT_MODEL, TEAMLEAD_MODEL, OLLAMA_URL, LLM_TIMEOUT
+from .. import config
 from ..database import SessionLocal
 from ..models import LLMJobRecord, LLMTrace, GlobalLock, WorkerHeartbeat
 from ..utils import map_role, safe_json_loads, extract_files, install_dependencies, execute_setup_commands
@@ -31,7 +31,7 @@ class JobQueueService:
             return job_id
         except Exception as e:
             db.rollback()
-            logger.error(f"Submit error: {e}")
+            config.logger.error(f"Submit error: {e}")
             raise e
         finally:
             db.close()

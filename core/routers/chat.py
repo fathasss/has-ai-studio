@@ -5,16 +5,40 @@ import json
 from ..database import get_db
 from ..models import ChatMessageRecord
 from ..schemas import ChatRequest, ChatMessageSchema
-from ..config import logger, TEAMLEAD_MODEL, OLLAMA_URL, LLM_TIMEOUT
-from ..utils import safe_json_loads
+from .. import config
+from ..utils import safe_json_loads, map_role
 from ..prompts import load_prompt
 from ..app_instance import sio
 
-router = APIRouter(prefix="/chat", tags=["Chat"])
+router = APIRouter(tags=["Chat"])
 
-@router.post("/preview")
+@router.post("/chat/teamlead")
+async def chat_teamlead(req: ChatRequest):
+    prompt_tpl = load_prompt("teamlead", "TM_teamlead_chat", "You are a TeamLead...")
+    
+    # Simple history formatting
+    history_str = ""
+    for m in req.history:
+        history_str += f"{m['role']}: {m['content']}\n"
+    
+    full_prompt = f"{prompt_tpl}\n\nCONTEXT:\n{history_str}\n\nAnswer the user directly."
+    
+    try:
+        async with httpx.AsyncClient(timeout=config.LLM_TIMEOUT) as client:
+            resp = await client.post(
+                f"{config.OLLAMA_URL}/api/generate",
+                json={"model": config.TEAMLEAD_MODEL, "prompt": full_prompt, "stream": False}
+            )
+            data = resp.json()
+            raw_response = data.get("response", "")
+            return {"response": raw_response}
+    except Exception as e:
+        config.logger.error(f"Chat teamlead error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/chat/preview")
 async def chat_preview(req: ChatRequest):
-    prompt_tpl = load_prompt("teamlead.json", "TM_teamlead_preview", "You are a TeamLead...")
+    prompt_tpl = load_prompt("teamlead", "TM_teamlead_preview", "You are a TeamLead...")
     
     # Simple history formatting
     history_str = ""
@@ -24,14 +48,14 @@ async def chat_preview(req: ChatRequest):
     full_prompt = f"{prompt_tpl}\n\nCONTEXT:\n{history_str}\n\nOutput instructions provided by TeamLead prompt."
     
     try:
-        async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=config.LLM_TIMEOUT) as client:
             resp = await client.post(
-                f"{OLLAMA_URL}/api/generate",
-                json={"model": TEAMLEAD_MODEL, "prompt": full_prompt, "stream": False}
+                f"{config.OLLAMA_URL}/api/generate",
+                json={"model": config.TEAMLEAD_MODEL, "prompt": full_prompt, "stream": False}
             )
             data = resp.json()
             raw_response = data.get("response", "")
-            logger.info(f"LLM Preview Response: {raw_response[:500]}...")
+            config.logger.info(f"LLM Preview Response: {raw_response[:500]}...")
             
             # Injection logic (Security/Tester) if missing in JSON
             try:
@@ -52,21 +76,36 @@ async def chat_preview(req: ChatRequest):
                     json_str = json.dumps(plan, indent=2, ensure_ascii=False)
                     raw_response = re.sub(r"```json[\s\S]*?```", f"```json\n{json_str}\n```", raw_response, count=1, flags=re.IGNORECASE)
             except Exception as e:
-                logger.warning(f"Preview correction failed: {e}")
+                config.logger.warning(f"Preview correction failed: {e}")
             
             return {"response": raw_response}
     except Exception as e:
-        logger.error(f"Chat preview error: {e}")
+        config.logger.error(f"Chat preview error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/history/{sprint_id}")
+@router.get("/chat/history/{sprint_id}")
 async def get_chat_history(sprint_id: str, db: Session = Depends(get_db)):
     msgs = db.query(ChatMessageRecord).filter(ChatMessageRecord.sprint_id == sprint_id).order_by(ChatMessageRecord.timestamp).all()
     return [{"role": m.role, "content": m.content} for m in msgs]
 
-@router.post("/save")
+@router.post("/chat/history")
 async def save_chat_message(msg: ChatMessageSchema, db: Session = Depends(get_db)):
     db.add(ChatMessageRecord(sprint_id=msg.sprint_id, role=msg.role, content=msg.content))
     db.commit()
     await sio.emit("new_chat_message", {"sprint_id": msg.sprint_id, "role": msg.role, "content": msg.content})
     return {"status": "ok"}
+
+@router.post("/chat/history/migrate")
+async def migrate_chat(req: dict, db: Session = Depends(get_db)):
+    old_id = req.get("old_id")
+    new_id = req.get("new_id")
+    if not old_id or not new_id: raise HTTPException(status_code=400)
+    db.query(ChatMessageRecord).filter(ChatMessageRecord.sprint_id == old_id).update({"sprint_id": new_id})
+    db.commit()
+    return {"status": "ok"}
+
+@router.get("/chat/sessions")
+async def get_chat_sessions(db: Session = Depends(get_db)):
+    from sqlalchemy import func
+    sessions = db.query(ChatMessageRecord.sprint_id).group_by(ChatMessageRecord.sprint_id).all()
+    return {"sessions": [{"id": s[0], "name": s[0]} for s in sessions]}

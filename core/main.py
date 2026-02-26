@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .app_instance import f_app, sio_app, sio
 from .database import engine, Base
 from .config import logger, AGENT_ROLE
-from .routers import chat, llm, sprint, system, jobs
+from .routers import chat, llm, sprint, system, jobs, config, ollama
 from .services import worker_service
 
 # Include Routers
@@ -14,6 +14,19 @@ f_app.include_router(llm.router)
 f_app.include_router(sprint.router)
 f_app.include_router(system.router)
 f_app.include_router(jobs.router)
+f_app.include_router(config.router)
+f_app.include_router(ollama.router)
+
+@f_app.get("/metrics")
+def get_metrics():
+    # Placeholder for performance metrics expected by frontend
+    return {
+        "performance": {
+            "total_tokens": 0,
+            "token_rate_per_min": 0,
+            "uptime_sec": 0
+        }
+    }
 
 # CORS configuration
 f_app.add_middleware(

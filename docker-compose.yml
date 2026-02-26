@@ -34,6 +34,7 @@ services:
       - ./core:/app/core
       - ./apps:/app/apps
       - ./prompts:/app/prompts
+      - ./workspace:/app/workspace
       - orchestrator_data:/app/data
     depends_on:
       has-ai-ollama:
@@ -74,6 +75,7 @@ services:
       - ./core:/app/core
       - ./apps:/app/apps
       - ./prompts:/app/prompts
+      - ./workspace:/app/workspace
       - has_ai_sdks:/opt/sdks
     depends_on:
       - has-ai-orchestrator

@@ -11,10 +11,7 @@ import psutil
 import pynvml
 from datetime import datetime, timedelta
 from sqlalchemy import func
-from ..config import (
-    logger, AGENT_MODEL, TEAMLEAD_MODEL, OLLAMA_URL, 
-    LLM_TIMEOUT, ORCHESTRATOR_URL, AGENT_ROLE
-)
+from .. import config
 from ..database import SessionLocal
 from ..models import (
     LLMJobRecord, LLMTrace, GlobalLock, WorkerHeartbeat
@@ -25,6 +22,7 @@ from ..utils import (
 from ..prompts import load_prompt
 
 worker_id = str(uuid.uuid4())
+START_TIME = time.time()
 
 async def metrics_loop(sio):
     while True:
@@ -41,9 +39,11 @@ async def metrics_loop(sio):
         cpu_val = psutil.cpu_percent()
         ram_val = psutil.virtual_memory().percent
         disk_val = psutil.disk_usage('/').percent
+        uptime_sec = int(time.time() - START_TIME)
 
-        # Agent States Logic
+        # Agent States & Token Rate Logic
         agent_states = {}
+        tokens_min = 0
         db = SessionLocal()
         try:
             # Check for active workers in last 60s
@@ -51,18 +51,22 @@ async def metrics_loop(sio):
             active_workers = db.query(WorkerHeartbeat).filter(WorkerHeartbeat.last_seen > timeout).count()
             
             if active_workers > 0:
-                # Default all to AVAIL if there are workers
                 roles = ["TeamLead", "Frontend", "Backend", "Tester", "Security", "DevOps"]
                 for r in roles:
                     agent_states[r] = "AVAIL"
                 
-                # Check for PROCESSING jobs
                 active_jobs = db.query(LLMJobRecord).filter(LLMJobRecord.status == "PROCESSING").all()
                 for job in active_jobs:
                     if job.agent_name in agent_states:
                         agent_states[job.agent_name] = "WORKING"
+
+            # Calculate Tokens/min (approximated by character count / 4 for recently completed traces)
+            recent_traces = db.query(LLMTrace).filter(LLMTrace.timestamp > timeout).all()
+            total_chars = sum(len(t.response or "") + len(t.prompt or "") for t in recent_traces)
+            tokens_min = int(total_chars / 4)
+
         except Exception as e:
-            logger.error(f"Metrics agent state error: {e}")
+            config.logger.error(f"Metrics collection error: {e}")
         finally:
             db.close()
 
@@ -71,9 +75,13 @@ async def metrics_loop(sio):
             "ram": ram_val,
             "gpu": gpu_val,
             "disk": disk_val,
+            "uptime": uptime_sec,
+            "tokens_min": tokens_min,
             "agent_states": agent_states,
             "timestamp": datetime.now().isoformat()
         }
+        # Debug log for metrics
+        config.logger.info(f"System Update Emitted: Uptime={uptime_sec}s, Tokens/min={tokens_min}")
         await sio.emit("system_update", metrics)
         await asyncio.sleep(2)
 
@@ -91,26 +99,65 @@ def watchdog_loop():
                 db.delete(l)
             db.commit()
         except Exception as e:
-            logger.error(f"Watchdog err: {e}")
+            config.logger.error(f"Watchdog err: {e}")
         finally:
             db.close()
         time.sleep(30)
+        
+def generate_agent_report(agent, sid, jid, prompt, resp, duration):
+    """Generates a technical Markdown report in the workspace directory."""
+    if not sid: return
+    
+    workspace_dir = os.path.join("workspace", sid)
+    os.makedirs(workspace_dir, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_filename = f"{agent}-report_{timestamp}.md"
+    report_path = os.path.join(workspace_dir, report_filename)
+    
+    report_content = f"""# Agent Activity Report
+- **Sprint ID**: {sid}
+- **Job ID**: {jid}
+- **Agent**: {agent}
+- **Timestamp**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+- **Duration**: {duration:.2f}ms
+
+## Task Description
+{prompt}
+
+## Results Summary
+The agent {agent} has completed the assigned task. Technical details and code generation are summarized below.
+
+### Technical Response Snippet
+```markdown
+{resp[:1000]}...
+```
+
+---
+*Report generated automatically by HAS AI Software Studio.*
+"""
+    try:
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(report_content)
+        config.logger.info(f"Report generated: {report_path}")
+    except Exception as e:
+        config.logger.error(f"Failed to generate report for {agent}: {e}")
 
 def llm_worker():
     import socket
     hostname = socket.gethostname()
-    logger.info(f"Worker {worker_id} started on {hostname}")
+    config.logger.info(f"Worker {worker_id} started on {hostname}")
     
     while True:
         try:
             # Heartbeat via API instead of direct DB
             try:
-                requests.post(f"{ORCHESTRATOR_URL}/jobs/heartbeat?worker_id={worker_id}&hostname={hostname}", timeout=5)
+                requests.post(f"{config.ORCHESTRATOR_URL}/jobs/heartbeat?worker_id={worker_id}&hostname={hostname}", timeout=5)
             except Exception as e:
-                logger.error(f"Heartbeat API error: {e}")
+                config.logger.error(f"Heartbeat API error: {e}")
 
             # Acquire Job
-            resp = requests.post(f"{ORCHESTRATOR_URL}/llm/lock/acquire?worker_id={worker_id}", timeout=5)
+            resp = requests.post(f"{config.ORCHESTRATOR_URL}/llm/lock/acquire?worker_id={worker_id}", timeout=5)
             if resp.status_code != 200:
                 time.sleep(5)
                 continue
@@ -122,25 +169,25 @@ def llm_worker():
             sid = job_data["sprint_id"]
             target_dir = f"apps/{sid}" if sid else "workspace"
             
-            model = TEAMLEAD_MODEL if agent == "TeamLead" else AGENT_MODEL
-            logger.info(f"[{jid}] {agent} starting on {model} for {sid}")
+            model = config.TEAMLEAD_MODEL if agent == "TeamLead" else config.AGENT_MODEL
+            config.logger.info(f"[{jid}] {agent} starting on {model} for {sid}")
 
             # Load Role-specific System Prompt
             system_prompt = ""
-            if agent == "DevOps": system_prompt = load_prompt("devops.json", "DV_devops_worker", "")
-            elif agent == "Frontend": system_prompt = load_prompt("frontend.json", "FE_frontend_worker", "")
-            elif agent == "Backend": system_prompt = load_prompt("backend.json", "BE_backend_worker", "")
-            elif agent == "Tester": system_prompt = load_prompt("tester.json", "TT_tester_worker", "")
-            elif agent == "Security": system_prompt = load_prompt("security.json", "SM_security_worker", "")
-            elif agent == "TeamLead": system_prompt = load_prompt("teamlead.json", "TM_teamlead_worker", "")
+            if agent == "DevOps": system_prompt = load_prompt("devops", "DV_devops_worker", "")
+            elif agent == "Frontend": system_prompt = load_prompt("frontend", "FE_frontend_worker", "")
+            elif agent == "Backend": system_prompt = load_prompt("backend", "BE_backend_worker", "")
+            elif agent == "Tester": system_prompt = load_prompt("tester", "TT_tester_worker", "")
+            elif agent == "Security": system_prompt = load_prompt("security", "SM_security_worker", "")
+            elif agent == "TeamLead": system_prompt = load_prompt("teamlead", "TM_teamlead_worker", "")
             
             combined_prompt = f"{system_prompt}\n\nTASK:\n{prompt}" if system_prompt else prompt
 
             start_t = time.time()
             try:
-                with httpx.Client(timeout=LLM_TIMEOUT) as client:
+                with httpx.Client(timeout=config.LLM_TIMEOUT) as client:
                     llm_resp = client.post(
-                        f"{OLLAMA_URL}/api/generate",
+                        f"{config.OLLAMA_URL}/api/generate",
                         json={"model": model, "prompt": combined_prompt, "stream": False}
                     )
                     llm_data = llm_resp.json()
@@ -152,7 +199,7 @@ def llm_worker():
             
             # Save Trace & Complete Job
             requests.post(
-                f"{ORCHESTRATOR_URL}/llm/trace",
+                f"{config.ORCHESTRATOR_URL}/llm/trace",
                 json={
                     "id": str(uuid.uuid4()),
                     "job_id": jid,
@@ -170,18 +217,21 @@ def llm_worker():
             )
             
             requests.post(
-                f"{ORCHESTRATOR_URL}/llm/lock/release?worker_id={worker_id}", timeout=5
+                f"{config.ORCHESTRATOR_URL}/llm/lock/release?worker_id={worker_id}", timeout=5
             )
 
             # Post-Process: Files
             if agent in ["DevOps", "Frontend", "Backend", "Tester"]:
                 extract_files(resp_text, target_dir, sid)
 
+            # Generate Activity Report
+            generate_agent_report(agent, sid, jid, prompt, resp_text, duration)
+
             # Recursive Trigger Logic
             handle_recursive_triggers(agent, resp_text, sid, target_dir)
 
         except Exception as e:
-            logger.error(f"Worker Loop Error: {e}")
+            config.logger.error(f"Worker Loop Error: {e}")
             time.sleep(5)
 
 def handle_recursive_triggers(agent, resp, sid, target_dir):
@@ -192,7 +242,7 @@ def handle_recursive_triggers(agent, resp, sid, target_dir):
                 role = t.get("role")
                 if role in ["Frontend", "Backend", "Tester", "Security", "DevOps"]:
                     requests.post(
-                        f"{ORCHESTRATOR_URL}/llm/submit",
+                        f"{config.ORCHESTRATOR_URL}/llm/submit",
                         json={
                             "agent_name": role,
                             "sprint_id": sid,
@@ -223,12 +273,12 @@ def handle_recursive_triggers(agent, resp, sid, target_dir):
                 ).count()
                 
                 if active_qa == 0:
-                    logger.info(f"Triggering QA for {sid}")
-                    requests.post(f"{ORCHESTRATOR_URL}/llm/submit", json={
+                    config.logger.info(f"Triggering QA for {sid}")
+                    requests.post(f"{config.ORCHESTRATOR_URL}/llm/submit", json={
                         "agent_name": "Security", "sprint_id": sid, "priority": 3,
                         "prompt": f"Please review the code generated for project in {target_dir} and output security_audit.md."
                     }, timeout=5)
-                    requests.post(f"{ORCHESTRATOR_URL}/llm/submit", json={
+                    requests.post(f"{config.ORCHESTRATOR_URL}/llm/submit", json={
                         "agent_name": "Tester", "sprint_id": sid, "priority": 4,
                         "prompt": f"Please thoroughly review and test the code generated in {target_dir}. Write unit tests to tests/test_main.py. If any issues or errors are found, you MUST append '### RESULT: FAILED' at the very end of your response."
                     }, timeout=5)
@@ -246,14 +296,14 @@ def handle_recursive_triggers(agent, resp, sid, target_dir):
                     LLMTrace.response.like("%FAILED%")
                 ).count()
                 if failed_count <= 3:
-                     requests.post(f"{ORCHESTRATOR_URL}/llm/submit", json={
+                     requests.post(f"{config.ORCHESTRATOR_URL}/llm/submit", json={
                          "agent_name": "TeamLead", "sprint_id": sid, "priority": 1,
                          "prompt": f"BUGS DETECTED BY TESTER. Max Feedback Cycle: {failed_count}/3. \nReview report and output a new JSON plan for FIXES.\n\nREPORT:\n{resp}"
                      }, timeout=5)
             finally:
                 db.close()
         else:
-            requests.post(f"{ORCHESTRATOR_URL}/llm/submit", json={
+            requests.post(f"{config.ORCHESTRATOR_URL}/llm/submit", json={
                 "agent_name": "TeamLead", "sprint_id": sid, "priority": 5,
                 "prompt": f"Project in {target_dir} passed QA. Generate completion message and README.md."
             }, timeout=5)

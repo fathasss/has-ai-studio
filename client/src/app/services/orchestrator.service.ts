@@ -124,4 +124,18 @@ export class OrchestratorService {
   getExceptions(): Observable<any> {
     return this.http.get(`${this.apiUrl}/exceptions`);
   }
+
+  getReportSessions(): Observable<{sessions: string[]}> {
+    return this.http.get<{sessions: string[]}>(`${this.apiUrl}/reports/sessions`);
+  }
+
+  getReportsForSession(sid: string): Observable<{files: string[]}> {
+    return this.http.get<{files: string[]}>(`${this.apiUrl}/reports/${sid}/files`);
+  }
+
+  getReportContent(sid: string, filename: string): Observable<{content: string, filename: string}> {
+    return this.http.get<{content: string, filename: string}>(`${this.apiUrl}/reports/${sid}/content`, {
+      params: { filename }
+    });
+  }
 }

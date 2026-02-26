@@ -30,6 +30,15 @@ def load_config():
 def save_config(config):
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, ensure_ascii=False)
+    refresh_runtime_config(config)
+
+def refresh_runtime_config(config):
+    global OLLAMA_URL, AGENT_MODEL, TEAMLEAD_MODEL, runtime_config
+    runtime_config = config
+    OLLAMA_URL = config.get("OLLAMA_URL", OLLAMA_URL)
+    AGENT_MODEL = config.get("AGENT_MODEL", AGENT_MODEL)
+    TEAMLEAD_MODEL = config.get("TEAMLEAD_MODEL", AGENT_MODEL)
+    logger.info(f"Runtime configuration refreshed: AGENT={AGENT_MODEL}, TeamLead={TEAMLEAD_MODEL}, URL={OLLAMA_URL}")
 
 runtime_config = load_config()
 
