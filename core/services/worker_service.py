@@ -78,11 +78,33 @@ async def metrics_loop(sio):
             finally:
                 db.close()
 
+            # Network metrics
+            try:
+                net_io = psutil.net_io_counters()
+                if not hasattr(metrics_loop, "last_net_io"):
+                    metrics_loop.last_net_io = net_io
+                    metrics_loop.last_net_time = time.time()
+                
+                now = time.time()
+                dt = now - metrics_loop.last_net_time
+                if dt <= 0: dt = 0.001
+                
+                sent_speed = (net_io.bytes_sent - metrics_loop.last_net_io.bytes_sent) / dt
+                recv_speed = (net_io.bytes_recv - metrics_loop.last_net_io.bytes_recv) / dt
+                
+                metrics_loop.last_net_io = net_io
+                metrics_loop.last_net_time = now
+            except Exception as e:
+                config.logger.error(f"Network metrics error: {e}")
+                sent_speed, recv_speed = 0, 0
+
             metrics = {
                 "cpu": cpu_val,
                 "ram": ram_val,
                 "gpu": gpu_val,
                 "disk": disk_val,
+                "net_sent": sent_speed,
+                "net_recv": recv_speed,
                 "uptime": uptime_sec,
                 "tokens_min": tokens_min,
                 "agent_states": agent_states,

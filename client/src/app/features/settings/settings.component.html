@@ -114,17 +114,23 @@
                     <input type="text" [(ngModel)]="pullModelName" placeholder="e.g. deepseek-coder, llama3:8b, phi3:latest" [disabled]="isPulling"
                            class="flex-1 bg-black/60 border border-white/10 text-white rounded-xl px-4 py-4 focus:outline-none focus:border-yellow-500/50 transition-all text-sm font-mono placeholder:text-gray-700 disabled:opacity-30">
                     <button (click)="pullOllamaModel()" [disabled]="!pullModelName.trim() || isPulling" 
-                            class="px-10 rounded-xl bg-yellow-500 text-black font-black uppercase italic tracking-tighter hover:bg-yellow-400 transition-all shadow-[0_0_15px_rgba(234,179,8,0.2)] disabled:opacity-30 disabled:cursor-not-allowed group/pull overflow-hidden relative">
+                            class="px-10 rounded-xl bg-yellow-500 text-black font-black uppercase tracking-tighter hover:bg-yellow-400 transition-all shadow-[0_0_15px_rgba(234,179,8,0.2)] disabled:opacity-30 disabled:cursor-not-allowed group/pull overflow-hidden relative">
                         <span class="relative z-10">{{isPulling ? 'Synchronizing...' : 'Initialize Pull'}}</span>
                         <div *ngIf="isPulling" class="absolute inset-0 bg-white/20 animate-pulse"></div>
                     </button>
                 </div>
                 
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-3">
                     <p class="text-[11px] font-bold tracking-tight transition-colors flex items-center gap-2" [ngClass]="pullMsgColor">
                         <span *ngIf="isPulling" class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
                         <span *ngIf="pullMsg">{{pullMsg}}</span>
                     </p>
+                    
+                    <!-- Progress Bar Container -->
+                    <div *ngIf="isPulling" class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                        <div class="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 transition-all duration-300 shadow-[0_0_10px_rgba(234,179,8,0.3)]"
+                             [style.width.%]="pullProgress"></div>
+                    </div>
                 </div>
             </div>
         </div>

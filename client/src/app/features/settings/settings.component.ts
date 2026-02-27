@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OrchestratorService, DefaultConfig } from '../../services/orchestrator.service';
+import { SocketService } from '../../services/socket.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-settings',
@@ -24,13 +26,38 @@ export class SettingsComponent implements OnInit {
   isPulling: boolean = false;
   pullMsg: string = '';
   pullMsgColor: string = 'text-gray-400';
+  pullProgress: number = 0;
+  private pullSub: Subscription | null = null;
 
   saveSuccess: boolean = false;
 
-  constructor(private orchestratorService: OrchestratorService) {}
+  constructor(
+    private orchestratorService: OrchestratorService,
+    private socketService: SocketService
+  ) {}
 
   ngOnInit(): void {
     this.loadSettings();
+    
+    // Sync initial state from service (for persistence when navigating back)
+    this.isPulling = this.socketService.pullState.isPulling;
+    this.pullProgress = this.socketService.pullState.progress;
+    this.pullMsg = this.socketService.pullState.message;
+    this.pullMsgColor = this.socketService.pullState.statusColor;
+
+    this.pullSub = this.socketService.modelPullProgress$.subscribe({
+      next: (data) => {
+        // Just sync local state with the central service state
+        this.isPulling = this.socketService.pullState.isPulling;
+        this.pullProgress = this.socketService.pullState.progress;
+        this.pullMsg = this.socketService.pullState.message;
+        this.pullMsgColor = this.socketService.pullState.statusColor;
+
+        if (data.status === 'success') {
+          this.loadOllamaModels(data.model);
+        }
+      }
+    });
   }
 
   loadSettings() {
@@ -70,24 +97,31 @@ export class SettingsComponent implements OnInit {
     const modelToPull = this.pullModelName.trim();
     if (!modelToPull || this.isPulling) return;
 
-    this.isPulling = true;
-    this.pullMsgColor = 'text-blue-400';
-    this.pullMsg = `Pulling ${modelToPull}, this may take several minutes depending on model size and internet speed...`;
+    this.socketService.setPulling(modelToPull);
+    // Refresh local flags from service
+    this.isPulling = this.socketService.pullState.isPulling;
+    this.pullProgress = this.socketService.pullState.progress;
+    this.pullMsg = this.socketService.pullState.message;
+    this.pullMsgColor = this.socketService.pullState.statusColor;
 
     this.orchestratorService.pullOllamaModel(modelToPull).subscribe({
       next: (res) => {
-        this.pullMsgColor = 'text-green-500';
-        this.pullMsg = `Success: ${res.message || 'Model downloaded!'}`;
-        this.pullModelName = '';
-        this.isPulling = false;
-        this.loadOllamaModels(modelToPull);
+        // Signal sent to backend
       },
       error: (err) => {
         this.pullMsgColor = 'text-red-500';
         this.pullMsg = `Error: ${err.error?.detail || err.error?.error || err.message}`;
         this.isPulling = false;
+        // Also update service state so other components know it failed
+        this.socketService.pullState.isPulling = false;
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    if (this.pullSub) {
+      this.pullSub.unsubscribe();
+    }
   }
 
   saveConfig() {
