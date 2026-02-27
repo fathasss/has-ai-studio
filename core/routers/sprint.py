@@ -56,6 +56,9 @@ async def execute_sprint(req: ExecuteRequest, db: Session = Depends(get_db)):
         queued_jobs.append(role)
         
     from ..app_instance import sio
+    # Emit early update so frontend knows a new project/sprint started
+    await sio.emit("job_update", {"job_id": "system", "status": "STARTED", "sprint_id": sid})
+    
     await sio.emit("job_update", {"job_id": "system", "status": "COMPLETED", "sprint_id": sid})
     
     return {"status": "ok", "queued": queued_jobs}
@@ -63,4 +66,4 @@ async def execute_sprint(req: ExecuteRequest, db: Session = Depends(get_db)):
 @router.get("/traces/{sprint_id}")
 async def get_sprint_traces(sprint_id: str, db: Session = Depends(get_db)):
     traces = db.query(LLMTrace).filter(LLMTrace.sprint_id == sprint_id).order_by(LLMTrace.timestamp.asc()).all()
-    return traces
+    return {"status": "ok", "traces": traces}

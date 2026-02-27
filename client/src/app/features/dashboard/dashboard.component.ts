@@ -361,15 +361,89 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private extractJson(text: string): string | null {
     if (!text) return null;
-    const startIdx = text.indexOf('{');
-    const endIdx = text.lastIndexOf('}');
-    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-      let candidate = text.substring(startIdx, endIdx + 1);
-      // Basic cleanup for common LLM artifacts
-      candidate = candidate.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
-      return candidate;
+    
+    // First, try to find a JSON block between markdown fences
+    const mdMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    let rawCandidate = mdMatch ? mdMatch[1].trim() : '';
+    
+    if (!rawCandidate) {
+        // Fallback: Find the first '{' and its matching '}'
+        const startIdx = text.indexOf('{');
+        if (startIdx === -1) return null;
+        
+        let braceCount = 0;
+        let inString = false;
+        let escaped = false;
+        let foundEnd = false;
+        
+        for (let i = startIdx; i < text.length; i++) {
+            const char = text[i];
+            if (inString) {
+                if (escaped) escaped = false;
+                else if (char === '\\') escaped = true;
+                else if (char === '"') inString = false;
+            } else {
+                if (char === '"') inString = true;
+                else if (char === '{') braceCount++;
+                else if (char === '}') {
+                    braceCount--;
+                    if (braceCount === 0) {
+                        rawCandidate = text.substring(startIdx, i + 1);
+                        foundEnd = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!foundEnd) return null;
     }
-    return null;
+    
+    // Hardening: Robust character-by-character cleaning of JSON strings
+    let cleaned = '';
+    let inString = false;
+    let escaped = false;
+    
+    for (let i = 0; i < rawCandidate.length; i++) {
+        const char = rawCandidate[i];
+        
+        if (inString) {
+            if (escaped) {
+                cleaned += char;
+                escaped = false;
+            } else if (char === '\\') {
+                const next = rawCandidate[i+1];
+                if (next && '\"\\\/bfnrtu'.includes(next)) {
+                    cleaned += char;
+                    escaped = true;
+                } else {
+                    cleaned += '\\\\';
+                }
+            } else if (char === '\"') {
+                inString = false;
+                cleaned += char;
+            } else {
+                const code = char.charCodeAt(0);
+                if (code < 32) {
+                    if (char === '\n') cleaned += '\\n';
+                    else if (char === '\r') cleaned += '\\r';
+                    else if (char === '\t') cleaned += '\\t';
+                    else cleaned += '\\u' + code.toString(16).padStart(4, '0');
+                } else {
+                    cleaned += char;
+                }
+            }
+        } else {
+            if (char === '\"') {
+                inString = true;
+                cleaned += char;
+            } else {
+                cleaned += char;
+            }
+        }
+    }
+    
+    cleaned = cleaned.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+    return cleaned;
   }
 
   onKeyDown(event: KeyboardEvent) {

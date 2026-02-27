@@ -23,10 +23,23 @@ def get_system_status(db: Session = Depends(get_db)):
 
 @router.get("/projects")
 @router.get("/sprints")
-def list_projects():
+def list_projects(db: Session = Depends(get_db)):
     apps_dir = "apps"
-    if not os.path.exists(apps_dir): return {"projects": [], "sprints": []}
-    projs = [d for d in os.listdir(apps_dir) if os.path.isdir(os.path.join(apps_dir, d))]
+    fs_projs = []
+    if os.path.exists(apps_dir):
+        fs_projs = [d for d in os.listdir(apps_dir) if os.path.isdir(os.path.join(apps_dir, d))]
+    
+    # Also get sprint IDs from database to include projects in setup/pending state
+    db_sprints = db.query(LLMTrace.sprint_id).filter(LLMTrace.sprint_id != None).distinct().all()
+    db_jobs = db.query(LLMJobRecord.sprint_id).filter(LLMJobRecord.sprint_id != None).distinct().all()
+    
+    all_sprints = set(fs_projs)
+    for s in db_sprints:
+        if s[0]: all_sprints.add(s[0])
+    for s in db_jobs:
+        if s[0]: all_sprints.add(s[0])
+        
+    projs = sorted(list(all_sprints), reverse=True)
     return {"projects": projs, "sprints": projs}
 
 @router.get("/projects/{pname}/files")

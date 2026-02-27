@@ -19,21 +19,68 @@ def safe_json_loads(text: str):
         return None
     text = text.strip()
     
+    def clean_json_str(s):
+        if not s: return ""
+        # Remove markdown fences if present within the block
+        s = re.sub(r"^```(?:json)?\n", "", s, flags=re.IGNORECASE)
+        s = re.sub(r"\n```$", "", s)
+        
+        cleaned = ""
+        in_string = False
+        escaped = False
+        
+        i = 0
+        while i < len(s):
+            char = s[i]
+            if in_string:
+                if escaped:
+                    cleaned += char
+                    escaped = False
+                elif char == '\\':
+                    # Peek ahead
+                    if i + 1 < len(s) and s[i+1] in '"\\/bfnrtu':
+                        cleaned += char
+                        escaped = True
+                    else:
+                        # Unescaped backslash
+                        cleaned += '\\\\'
+                elif char == '"':
+                    in_string = False
+                    cleaned += char
+                else:
+                    # Check for illegal control characters (0-31)
+                    code = ord(char)
+                    if code < 32:
+                        if char == '\n': cleaned += '\\n'
+                        elif char == '\r': cleaned += '\\r'
+                        elif char == '\t': cleaned += '\\t'
+                        else: cleaned += f'\\u{code:04x}'
+                    else:
+                        cleaned += char
+            else:
+                if char == '"':
+                    in_string = True
+                cleaned += char
+            i += 1
+
+        # Remove trailing commas in objects and arrays
+        cleaned = re.sub(r',\s*\}', '}', cleaned)
+        cleaned = re.sub(r',\s*\]', ']', cleaned)
+        return cleaned.strip()
+
+    # Try direct parse first
     try:
         return json.loads(text)
     except:
         pass
         
-    def clean_json_str(s):
-        s = re.sub(r',\s*\}', '}', s)
-        s = re.sub(r',\s*\]', ']', s)
-        return s
-
+    # Extract from markdown blocks
     json_blocks = re.findall(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
     candidates = []
     for block in json_blocks:
         try:
-            parsed = json.loads(clean_json_str(block.strip()))
+            cleaned = clean_json_str(block.strip())
+            parsed = json.loads(cleaned)
             if isinstance(parsed, dict) and "tasks" in parsed:
                 return parsed
             candidates.append(parsed)
@@ -43,6 +90,7 @@ def safe_json_loads(text: str):
     if candidates:
         return candidates[0]
 
+    # Try extracting the largest {} block
     start_idx = text.find('{')
     end_idx = text.rfind('}')
     if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
@@ -52,6 +100,7 @@ def safe_json_loads(text: str):
         except:
             pass
             
+    # Fallback to field extraction if all else fails
     fallback = {}
     pmatch = re.search(r'"project_name"\s*:\s*"([^"]+)"', text, re.IGNORECASE)
     if pmatch:

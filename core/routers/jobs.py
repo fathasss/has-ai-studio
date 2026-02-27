@@ -37,7 +37,13 @@ async def pull_job(worker_id: str, hostname: str, db: Session = Depends(get_db))
         job.locked_at = datetime.utcnow()
         db.commit()
         
-        await sio.emit("job_update", {"job_id": job.id, "status": "PROCESSING", "sprint_id": job.sprint_id})
+        await sio.emit("job_update", {
+            "job_id": job.id, 
+            "status": "PROCESSING", 
+            "sprint_id": job.sprint_id,
+            "agent": job.agent_name,
+            "agent_name": job.agent_name
+        })
         
         target_model = config.TEAMLEAD_MODEL if job.agent_name == "TeamLead" else config.AGENT_MODEL
         return {
@@ -77,10 +83,16 @@ async def complete_job(job_id: str, data: LLMJobCompletion, worker_id: str, db: 
     db.add(new_trace)
     db.commit()
     
-    await sio.emit("job_update", {"job_id": job_id, "status": "COMPLETED", "sprint_id": job.sprint_id})
+    await sio.emit("job_update", {
+        "job_id": job_id, 
+        "status": "COMPLETED", 
+        "sprint_id": job.sprint_id,
+        "agent": job.agent_name,
+        "agent_name": job.agent_name
+    })
     return {"status": "ok"}
 
 @router.get("/jobs/{sprint_id}")
 async def get_sprint_jobs(sprint_id: str, db: Session = Depends(get_db)):
     jobs = db.query(LLMJobRecord).filter(LLMJobRecord.sprint_id == sprint_id).all()
-    return jobs
+    return {"status": "ok", "jobs": jobs}

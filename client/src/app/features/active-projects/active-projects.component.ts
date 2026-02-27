@@ -30,14 +30,20 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
     private socketService: SocketService
   ) {
     this.sub = this.socketService.jobUpdate$.subscribe((data: any) => {
-      // Eğer o an açık olan projeye ait bir güncelleme geldiyse detayları tekrar çek
+      // Refresh list if it's a new project or status is 'STARTED'
+      if (!this.sprints.includes(data.sprint_id) || data.status === 'STARTED') {
+        this.loadSprints();
+      }
+
+      // If update for current project, reload details
       if (this.activeSprint === data.sprint_id && this.activeSprint !== null) {
         this.loadSprintDetail(this.activeSprint);
         
         // Auto-switch tab if the agent is actively processing
+        const agent = data.agent || data.agent_name;
         if (data.status === 'PROCESSING' || data.status === 'RUNNING') {
-          if (this.agentTabs.includes(data.agent)) {
-            this.activeTab = data.agent;
+          if (this.agentTabs.includes(agent)) {
+            this.activeTab = agent;
           }
         }
       }
@@ -74,10 +80,26 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
   }
 
   get filteredTraces() {
-    if (this.activeTab === 'Pipeline Detail') {
-      return this.traces;
+    let list = this.traces || [];
+    if (this.activeTab !== 'Pipeline Detail') {
+      list = list.filter(t => (t.agent === this.activeTab || t.agent_name === this.activeTab));
     }
-    return this.traces.filter(t => t.agent === this.activeTab);
+
+    // Inject active jobs as "virtual traces" so user sees what agent is doing
+    const activeJobs = this.jobs.filter(j => 
+      j.status === 'PROCESSING' && 
+      (this.activeTab === 'Pipeline Detail' || j.agent_name === this.activeTab)
+    );
+
+    const virtualTraces = activeJobs.map(j => ({
+      agent: j.agent_name,
+      timestamp: j.locked_at || new Date().toISOString(),
+      response: `[IN PROGRESS] Working on task:\n${j.prompt}`,
+      isVirtual: true
+    }));
+
+    // Merge and show newest first
+    return [...virtualTraces, ...list].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
   toggleTrace(timestamp: string) {

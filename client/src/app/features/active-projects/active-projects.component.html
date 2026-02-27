@@ -80,9 +80,10 @@
                         [ngClass]="{
                           'bg-purple-900/50 text-purple-300': t.agent === 'TeamLead', 
                           'bg-indigo-900/50 text-indigo-300': t.agent === 'DevOps',
-                          'bg-blue-900/50 text-blue-300': !['TeamLead', 'DevOps'].includes(t.agent)
+                          'bg-blue-900/50 text-blue-300': !['TeamLead', 'DevOps'].includes(t.agent),
+                          'animate-pulse border border-blue-400': t.isVirtual
                         }">
-                    [{{t.agent}}]
+                    [{{t.agent}}] {{ t.isVirtual ? 'WORKING...' : '' }}
                   </span>
                   <span class="text-xs text-gray-600">{{t.timestamp | date:'shortTime'}}</span>
                 </div>
