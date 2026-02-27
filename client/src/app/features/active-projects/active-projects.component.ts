@@ -23,22 +23,42 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
   agentTabs: string[] = ['TeamLead', 'DevOps', 'Frontend', 'Backend', 'Security', 'Tester'];
   expandedTraces: Set<string> = new Set();
 
-  private sub: Subscription;
+  private sub: Subscription | null = null;
+  private sysSub: Subscription | null = null;
 
   constructor(
     private orchestratorService: OrchestratorService,
     private socketService: SocketService
-  ) {
+  ) {}
+
+  ngOnInit(): void {
+    this.loadSprints();
+
+    // Listen for job-specific updates (processing, completion)
     this.sub = this.socketService.jobUpdate$.subscribe((data: any) => {
       // Refresh list if it's a new project or status is 'STARTED'
       if (!this.sprints.includes(data.sprint_id) || data.status === 'STARTED') {
         this.loadSprints();
       }
 
-      // If update for current project, reload details
+      // If update for current project, update local state immediately
       if (this.activeSprint === data.sprint_id && this.activeSprint !== null) {
-        this.loadSprintDetail(this.activeSprint);
+        const existingJob = this.jobs.find(j => j.id === data.job_id || (j.agent_name === (data.agent_name || data.agent) && j.status === 'PENDING'));
         
+        if (existingJob) {
+          existingJob.status = data.status === 'PROCESSING' ? 'WORKING' : data.status;
+          if (data.status === 'COMPLETED') existingJob.status = 'COMPLETED';
+        } else {
+          // If it's a new job, push it to local array
+          this.jobs.push({
+            id: data.job_id,
+            agent_name: data.agent_name || data.agent,
+            agent: data.agent_name || data.agent,
+            status: data.status === 'PROCESSING' ? 'WORKING' : data.status,
+            sprint_id: data.sprint_id
+          });
+        }
+
         // Auto-switch tab if the agent is actively processing
         const agent = data.agent || data.agent_name;
         if (data.status === 'PROCESSING' || data.status === 'RUNNING') {
@@ -46,12 +66,19 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
             this.activeTab = agent;
           }
         }
+
+        // Trigger a full refresh as a backup to get all metadata (traces, prompts etc)
+        this.loadSprintDetail(this.activeSprint);
       }
     });
-  }
 
-  ngOnInit(): void {
-    this.loadSprints();
+    // Listen for global system updates (agent availability from metrics loop)
+    this.sysSub = this.socketService.systemUpdate$.subscribe((data: any) => {
+      if (data && data.agent_states) {
+        // We can use this as a backup if jobs are uninitialized
+        // But the jobUpdate is more authoritative for the active sprint
+      }
+    });
   }
 
   loadSprints() {
@@ -143,18 +170,20 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
   }
 
   getJobStatus(role: string): string {
-    const job = this.jobs.find(j => j.agent === role);
-    if (job) return job.status;
+    const job = this.jobs.find(j => j.agent === role || j.agent_name === role);
+    if (job) {
+      if (job.status === 'PROCESSING') return 'WORKING';
+      return job.status;
+    }
     
     // Fallback uninitialized states
     if (['Security', 'Tester'].includes(role)) return 'STANDBY';
     if (['Frontend', 'Backend'].includes(role)) return 'AWAITING PLAN';
-    return 'UNINITIALIZED';
+    return 'IDLE';
   }
 
   ngOnDestroy(): void {
-    if (this.sub) {
-      this.sub.unsubscribe();
-    }
+    if (this.sub) this.sub.unsubscribe();
+    if (this.sysSub) this.sysSub.unsubscribe();
   }
 }

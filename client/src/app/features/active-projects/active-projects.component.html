@@ -49,15 +49,28 @@
           <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 pb-2">
             <button *ngFor="let tab of agentTabs" 
                     (click)="selectTab(tab)"
-                    class="w-full px-2 py-2 rounded-lg text-sm transition-all whitespace-nowrap border flex flex-col items-center justify-center gap-1 group"
-                    [ngClass]="activeTab === tab ? 'bg-white/10 border-yellow-400/50 text-white' : 'bg-black/60 border-white/10 text-gray-400 hover:bg-white/5'">
-              <span class="font-bold tracking-wide">{{ tab }}</span>
-              <!-- Status Indicator -->
-              <span class="text-[0.65rem] font-mono tracking-wider opacity-80"
+                    class="w-full px-2 py-2 rounded-lg text-sm transition-all whitespace-nowrap border flex flex-col items-center justify-center gap-1 group relative overflow-hidden"
                     [ngClass]="{
-                      'text-green-500': getJobStatus(tab) === 'COMPLETED',
-                      'text-blue-400': getJobStatus(tab) === 'PROCESSING',
-                      'text-gray-500': getJobStatus(tab) !== 'COMPLETED' && getJobStatus(tab) !== 'PROCESSING'
+                      'bg-white/10 border-yellow-400/50 text-white': activeTab === tab,
+                      'bg-black/60 border-white/10 text-gray-400 hover:bg-white/5': activeTab !== tab,
+                      'border-green-400 shadow-[0_0_15px_rgba(74,222,128,0.5)] bg-green-400/5 ring-1 ring-green-400/50': getJobStatus(tab) === 'WORKING'
+                    }">
+              
+              <!-- Processing Pulse -->
+              <div *ngIf="getJobStatus(tab) === 'WORKING'" class="absolute top-1 right-1">
+                <span class="flex h-2 w-2">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+              </div>
+
+              <span class="font-bold tracking-wide transition-colors" [ngClass]="getJobStatus(tab) === 'WORKING' ? 'text-green-400' : ''">{{ tab }}</span>
+              <!-- Status Indicator -->
+              <span class="text-[0.6rem] font-black tracking-widest uppercase transition-colors"
+                    [ngClass]="{
+                      'text-green-400 drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]': getJobStatus(tab) === 'WORKING',
+                      'text-blue-400': getJobStatus(tab) === 'COMPLETED',
+                      'text-gray-600': getJobStatus(tab) !== 'WORKING' && getJobStatus(tab) !== 'COMPLETED'
                     }">
                 {{ getJobStatus(tab) }}
               </span>
@@ -111,17 +124,17 @@
                 <div class="w-6 h-6 rounded-full flex items-center justify-center border transition-all"
                      [ngClass]="{
                        'bg-green-500/20 border-green-500/50 text-green-400': getJobStatus(step) === 'COMPLETED',
-                       'bg-blue-500/20 border-blue-500/50 text-blue-400 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.5)]': getJobStatus(step) === 'PROCESSING',
-                       'bg-white/5 border-white/20 text-gray-500': getJobStatus(step) !== 'COMPLETED' && getJobStatus(step) !== 'PROCESSING'
+                       'bg-green-500 border-green-400 text-black animate-pulse shadow-[0_0_15px_rgba(74,222,128,0.8)]': getJobStatus(step) === 'WORKING',
+                       'bg-white/5 border-white/20 text-gray-500': getJobStatus(step) !== 'COMPLETED' && getJobStatus(step) !== 'WORKING'
                      }">
                   <span *ngIf="getJobStatus(step) === 'COMPLETED'">✓</span>
-                  <span *ngIf="getJobStatus(step) !== 'COMPLETED'" class="text-[0.6rem]">{{ step.charAt(0) }}</span>
+                  <span *ngIf="getJobStatus(step) !== 'COMPLETED'" class="text-[0.6rem] font-bold">{{ step.charAt(0) }}</span>
                 </div>
                 <span class="font-medium whitespace-nowrap"
                       [ngClass]="{
                         'text-green-400': getJobStatus(step) === 'COMPLETED',
-                        'text-blue-400 font-bold': getJobStatus(step) === 'PROCESSING',
-                        'text-gray-500': getJobStatus(step) !== 'COMPLETED' && getJobStatus(step) !== 'PROCESSING'
+                        'text-green-400 font-bold drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]': getJobStatus(step) === 'WORKING',
+                        'text-gray-500': getJobStatus(step) !== 'COMPLETED' && getJobStatus(step) !== 'WORKING'
                       }">
                   {{ step }}
                 </span>

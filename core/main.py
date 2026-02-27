@@ -1,9 +1,14 @@
 import os
 import threading
 import asyncio
+import time
+from datetime import datetime, timedelta
+from fastapi import Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 from .app_instance import f_app, sio_app, sio
-from .database import engine, Base
+from .database import engine, Base, SessionLocal
+from .models import LLMTrace
 from .config import logger, AGENT_ROLE
 from .routers import chat, llm, sprint, system, jobs, config, ollama
 from .services import worker_service
@@ -18,13 +23,21 @@ f_app.include_router(config.router)
 f_app.include_router(ollama.router)
 
 @f_app.get("/metrics")
-def get_metrics():
-    # Placeholder for performance metrics expected by frontend
+def get_metrics(db: Session = Depends(SessionLocal)):
+    # Simple real-time metrics fetch for non-websocket clients
+    timeout = datetime.utcnow() - timedelta(minutes=10)
+    recent_traces = db.query(LLMTrace).filter(LLMTrace.timestamp > timeout).all()
+    total_chars = sum(len(t.response or "") + len(t.prompt or "") for t in recent_traces)
+    tokens_min = int((total_chars / 4) / 10)
+    
+    # Approx uptime
+    uptime_sec = int(time.time() - worker_service.START_TIME)
+    
     return {
         "performance": {
-            "total_tokens": 0,
-            "token_rate_per_min": 0,
-            "uptime_sec": 0
+            "total_tokens": int(total_chars / 4),
+            "token_rate_per_min": tokens_min,
+            "uptime_sec": uptime_sec
         }
     }
 

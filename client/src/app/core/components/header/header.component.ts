@@ -1,8 +1,10 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { NavigationEnd, Router } from '@angular/router';
-import { OrchestratorService, MetricData } from '../../../services/orchestrator.service';
+import { OrchestratorService } from '../../../services/orchestrator.service';
+import { SocketService } from '../../../services/socket.service';
 import { filter } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-header',
@@ -19,11 +21,14 @@ export class HeaderComponent implements OnInit, OnDestroy {
   tokenRate: string = '0';
   
   private clockTimer: any;
-  private metricsTimer: any;
+  private uptimeTimer: any;
+  private sub: Subscription | null = null;
+  private lastUptimeSeconds: number = 0;
 
   constructor(
     private router: Router, 
     private orchestratorService: OrchestratorService,
+    private socketService: SocketService,
     private datePipe: DatePipe
   ) {
     this.router.events.pipe(
@@ -37,8 +42,37 @@ export class HeaderComponent implements OnInit, OnDestroy {
     this.updateClock();
     this.clockTimer = setInterval(() => this.updateClock(), 1000);
 
-    this.fetchMetrics();
-    this.metricsTimer = setInterval(() => this.fetchMetrics(), 5000);
+    // Initial fetch to avoid 00:00:00 on load
+    this.orchestratorService.getMetrics().subscribe(res => {
+      if (res && res.performance) {
+        this.updateUptimeUI(res.performance.uptime_sec);
+        this.tokenRate = Math.round(res.performance.token_rate_per_min || 0).toString();
+      }
+    });
+
+    this.sub = this.socketService.systemUpdate$.subscribe({
+      next: (res: any) => {
+        if (res) {
+          this.updateUptimeUI(res.uptime);
+          this.tokenRate = Math.round(res.tokens_min || 0).toString();
+        }
+      },
+      error: (err) => console.log('Metrics fetch error', err)
+    });
+
+    // Local tick fallback to keep UI alive even if socket is quiet
+    this.uptimeTimer = setInterval(() => {
+      this.lastUptimeSeconds++;
+      this.updateUptimeUI(this.lastUptimeSeconds);
+    }, 1000);
+  }
+
+  private updateUptimeUI(seconds: number) {
+    this.lastUptimeSeconds = Math.floor(seconds || 0);
+    const h = Math.floor(this.lastUptimeSeconds / 3600).toString().padStart(2, '0');
+    const m = Math.floor((this.lastUptimeSeconds % 3600) / 60).toString().padStart(2, '0');
+    const s = (this.lastUptimeSeconds % 60).toString().padStart(2, '0');
+    this.uptime = `${h}:${m}:${s}`;
   }
 
   updateTitle(url: string) {
@@ -52,22 +86,9 @@ export class HeaderComponent implements OnInit, OnDestroy {
     this.currentTime = this.datePipe.transform(new Date(), 'MMM d, yyyy HH:mm:ss') || '';
   }
 
-  fetchMetrics() {
-    this.orchestratorService.getMetrics().subscribe({
-      next: (res: MetricData) => {
-        const seconds = Math.floor(res.performance.uptime_sec);
-        const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
-        const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-        const s = (seconds % 60).toString().padStart(2, '0');
-        this.uptime = `${h}:${m}:${s}`;
-        this.tokenRate = Math.round(res.performance.token_rate_per_min).toString();
-      },
-      error: (err) => console.log('Metrics fetch error', err)
-    });
-  }
-
   ngOnDestroy() {
     if (this.clockTimer) clearInterval(this.clockTimer);
-    if (this.metricsTimer) clearInterval(this.metricsTimer);
+    if (this.uptimeTimer) clearInterval(this.uptimeTimer);
+    if (this.sub) this.sub.unsubscribe();
   }
 }

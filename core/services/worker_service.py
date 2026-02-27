@@ -25,64 +25,76 @@ worker_id = str(uuid.uuid4())
 START_TIME = time.time()
 
 async def metrics_loop(sio):
+    """
+    Periodic task to gather system and performance metrics and emit via Socket.io
+    """
+    config.logger.info("Metrics loop started.")
     while True:
         try:
-            pynvml.nvmlInit()
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-            mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            gpu_load = pynvml.nvmlDeviceGetUtilizationRates(handle).gpu
-            gpu_val = gpu_load
-            pynvml.nvmlShutdown()
-        except:
-            gpu_val = 0
+            # Resource usage
+            try:
+                pynvml.nvmlInit()
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                gpu_val = pynvml.nvmlDeviceGetUtilizationRates(handle).gpu
+                pynvml.nvmlShutdown()
+            except:
+                gpu_val = 0
 
-        cpu_val = psutil.cpu_percent()
-        ram_val = psutil.virtual_memory().percent
-        disk_val = psutil.disk_usage('/').percent
-        uptime_sec = int(time.time() - START_TIME)
-
-        # Agent States & Token Rate Logic
-        agent_states = {}
-        tokens_min = 0
-        db = SessionLocal()
-        try:
-            # Check for active workers in last 60s
-            timeout = datetime.utcnow() - timedelta(seconds=60)
-            active_workers = db.query(WorkerHeartbeat).filter(WorkerHeartbeat.last_seen > timeout).count()
+            cpu_val = psutil.cpu_percent()
+            ram_val = psutil.virtual_memory().percent
+            disk_val = psutil.disk_usage('/').percent
             
-            if active_workers > 0:
-                roles = ["TeamLead", "Frontend", "Backend", "Tester", "Security", "DevOps"]
-                for r in roles:
-                    agent_states[r] = "AVAIL"
+            # Process-based uptime
+            proc = psutil.Process(os.getpid())
+            uptime_sec = int(time.time() - proc.create_time())
+
+            # Agent States & Token Rate Logic
+            agent_states = {}
+            tokens_min = 0
+            db = SessionLocal()
+            try:
+                # Check for active workers in last 60s
+                timeout = datetime.utcnow() - timedelta(seconds=60)
+                active_workers = db.query(WorkerHeartbeat).filter(WorkerHeartbeat.last_seen > timeout).count()
                 
-                active_jobs = db.query(LLMJobRecord).filter(LLMJobRecord.status == "PROCESSING").all()
-                for job in active_jobs:
-                    if job.agent_name in agent_states:
-                        agent_states[job.agent_name] = "WORKING"
+                if active_workers > 0:
+                    roles = ["TeamLead", "Frontend", "Backend", "Tester", "Security", "DevOps"]
+                    for r in roles:
+                        agent_states[r] = "AVAIL"
+                    
+                    active_jobs = db.query(LLMJobRecord).filter(LLMJobRecord.status == "PROCESSING").all()
+                    for job in active_jobs:
+                        if job.agent_name in agent_states:
+                            agent_states[job.agent_name] = "WORKING"
 
-            # Calculate Tokens/min (approximated by character count / 4 for recently completed traces)
-            recent_traces = db.query(LLMTrace).filter(LLMTrace.timestamp > timeout).all()
-            total_chars = sum(len(t.response or "") + len(t.prompt or "") for t in recent_traces)
-            tokens_min = int(total_chars / 4)
+                # Calculate Tokens/min (last 1 minute for better reactivity)
+                timeout_stats = datetime.utcnow() - timedelta(minutes=1)
+                recent_traces = db.query(LLMTrace).filter(LLMTrace.timestamp > timeout_stats).all()
+                total_chars = sum(len(t.response or "") + len(t.prompt or "") for t in recent_traces)
+                tokens_min = int(total_chars / 4)
 
-        except Exception as e:
-            config.logger.error(f"Metrics collection error: {e}")
-        finally:
-            db.close()
+            except Exception as e:
+                config.logger.error(f"DB metrics query error: {e}")
+            finally:
+                db.close()
 
-        metrics = {
-            "cpu": cpu_val,
-            "ram": ram_val,
-            "gpu": gpu_val,
-            "disk": disk_val,
-            "uptime": uptime_sec,
-            "tokens_min": tokens_min,
-            "agent_states": agent_states,
-            "timestamp": datetime.now().isoformat()
-        }
-        # Debug log for metrics
-        config.logger.info(f"System Update Emitted: Uptime={uptime_sec}s, Tokens/min={tokens_min}")
-        await sio.emit("system_update", metrics)
+            metrics = {
+                "cpu": cpu_val,
+                "ram": ram_val,
+                "gpu": gpu_val,
+                "disk": disk_val,
+                "uptime": uptime_sec,
+                "tokens_min": tokens_min,
+                "agent_states": agent_states,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Use root namespace explicitly just in case
+            await sio.emit("system_update", metrics, namespace="/")
+            
+        except Exception as outer_e:
+            config.logger.error(f"CRITICAL in metrics_loop: {outer_e}")
+            
         await asyncio.sleep(2)
 
 def watchdog_loop():
