@@ -7,7 +7,7 @@ from fastapi import Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from .app_instance import f_app, sio_app, sio
-from .database import engine, Base, SessionLocal
+from .database import engine, Base, SessionLocal, get_db
 from .models import LLMTrace
 from .config import logger, AGENT_ROLE
 from .routers import chat, llm, sprint, system, jobs, config, ollama
@@ -23,7 +23,7 @@ f_app.include_router(config.router)
 f_app.include_router(ollama.router)
 
 @f_app.get("/metrics")
-def get_metrics(db: Session = Depends(SessionLocal)):
+def get_metrics(db: Session = Depends(get_db)):
     # Simple real-time metrics fetch for non-websocket clients
     timeout = datetime.utcnow() - timedelta(minutes=10)
     recent_traces = db.query(LLMTrace).filter(LLMTrace.timestamp > timeout).all()

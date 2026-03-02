@@ -362,43 +362,70 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private extractJson(text: string): string | null {
     if (!text) return null;
     
-    // First, try to find a JSON block between markdown fences
-    const mdMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    let rawCandidate = mdMatch ? mdMatch[1].trim() : '';
-    
-    if (!rawCandidate) {
-        // Fallback: Find the first '{' and its matching '}'
-        const startIdx = text.indexOf('{');
-        if (startIdx === -1) return null;
-        
+    // Try to find ALL markdown blocks
+    const mdRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
+    let match;
+    const candidates: string[] = [];
+
+    while ((match = mdRegex.exec(text)) !== null) {
+      candidates.push(match[1].trim());
+    }
+
+    if (candidates.length === 0) {
+      // Fallback: Find the first '{' and its matching '}'
+      const startIdx = text.indexOf('{');
+      if (startIdx !== -1) {
         let braceCount = 0;
         let inString = false;
         let escaped = false;
         let foundEnd = false;
-        
+        let candidateStr = '';
+
         for (let i = startIdx; i < text.length; i++) {
-            const char = text[i];
-            if (inString) {
-                if (escaped) escaped = false;
-                else if (char === '\\') escaped = true;
-                else if (char === '"') inString = false;
-            } else {
-                if (char === '"') inString = true;
-                else if (char === '{') braceCount++;
-                else if (char === '}') {
-                    braceCount--;
-                    if (braceCount === 0) {
-                        rawCandidate = text.substring(startIdx, i + 1);
-                        foundEnd = true;
-                        break;
-                    }
-                }
+          const char = text[i];
+          if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') inString = false;
+          } else {
+            if (char === '"') inString = true;
+            else if (char === '{') braceCount++;
+            else if (char === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                candidateStr = text.substring(startIdx, i + 1);
+                foundEnd = true;
+                break;
+              }
             }
+          }
         }
-        if (!foundEnd) return null;
+        if (foundEnd) candidates.push(candidateStr);
+      }
+    }
+
+    // Evaluate candidates to find the most likely JSON plan
+    for (const rawCandidate of candidates) {
+      try {
+        const cleaned = this.robustCleanJson(rawCandidate);
+        const parsed = JSON.parse(cleaned);
+        if (parsed && (parsed.tasks || parsed.project_name)) {
+          return cleaned; // Return the first valid project plan candidate
+        }
+      } catch (e) {
+        // Continue searching
+      }
+    }
+
+    // Last resort: return the first candidate if any, even if validation failed
+    if (candidates.length > 0) {
+      return this.robustCleanJson(candidates[0]);
     }
     
-    // Hardening: Robust character-by-character cleaning of JSON strings
+    return null;
+  }
+
+  private robustCleanJson(rawCandidate: string): string {
     let cleaned = '';
     let inString = false;
     let escaped = false;
@@ -442,8 +469,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         }
     }
     
-    cleaned = cleaned.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
-    return cleaned;
+    return cleaned.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
   }
 
   onKeyDown(event: KeyboardEvent) {

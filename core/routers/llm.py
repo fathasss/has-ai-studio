@@ -24,6 +24,10 @@ async def acquire_lock(worker_id: str, db: Session = Depends(get_db)):
     job = db.query(LLMJobRecord).filter(LLMJobRecord.status == "PENDING").order_by(LLMJobRecord.priority.asc(), LLMJobRecord.created_at.asc()).first()
     if not job: raise HTTPException(status_code=404, detail="No pending jobs")
     
+    # Clear stale locks (older than 10 mins)
+    ten_mins_ago = datetime.utcnow() - timedelta(minutes=10)
+    db.query(GlobalLock).filter(GlobalLock.timestamp < ten_mins_ago).delete()
+
     # Check global lock
     existing_lock = db.query(GlobalLock).filter(GlobalLock.resource == "llm_unit").first()
     if existing_lock: raise HTTPException(status_code=423, detail="LLM unit locked")

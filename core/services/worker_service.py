@@ -64,8 +64,10 @@ async def metrics_loop(sio):
                     
                     active_jobs = db.query(LLMJobRecord).filter(LLMJobRecord.status == "PROCESSING").all()
                     for job in active_jobs:
-                        if job.agent_name in agent_states:
-                            agent_states[job.agent_name] = "WORKING"
+                        # Case-insensitive lookup
+                        for r in agent_states.keys():
+                            if job.agent_name.lower() == r.lower():
+                                agent_states[r] = "WORKING"
 
                 # Calculate Tokens/min (last 1 minute for better reactivity)
                 timeout_stats = datetime.utcnow() - timedelta(minutes=1)
