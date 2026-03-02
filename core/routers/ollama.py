@@ -8,8 +8,12 @@ router = APIRouter(tags=["Ollama"])
 @router.get("/ollama/models")
 async def list_models():
     try:
+        headers = {}
+        if config.LLM_PROVIDER == "ollama-cloud" and config.LLM_API_KEY:
+            headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
+            
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{config.OLLAMA_URL}/api/tags")
+            resp = await client.get(f"{config.OLLAMA_URL}/api/tags", headers=headers)
             if resp.status_code != 200:
                 return {"models": []}
             
@@ -31,10 +35,15 @@ async def pull_model(req: dict):
     
     async def pull_stream():
         try:
+            headers = {}
+            if config.LLM_PROVIDER == "ollama-cloud" and config.LLM_API_KEY:
+                headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
+                
             async with httpx.AsyncClient(timeout=1200.0) as client:
                 async with client.stream(
                     "POST", 
                     f"{config.OLLAMA_URL}/api/pull", 
+                    headers=headers,
                     json={"name": model_name, "stream": True}
                 ) as response:
                     if response.status_code != 200:

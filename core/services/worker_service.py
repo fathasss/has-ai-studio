@@ -221,9 +221,16 @@ def llm_worker():
 
             start_t = time.time()
             try:
+                headers = {}
+                if config.LLM_PROVIDER == "ollama-cloud" and config.LLM_API_KEY:
+                    headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
+                
+                endpoint = f"{config.OLLAMA_URL}/api/generate"
+                    
                 with httpx.Client(timeout=config.LLM_TIMEOUT) as client:
                     llm_resp = client.post(
-                        f"{config.OLLAMA_URL}/api/generate",
+                        endpoint,
+                        headers=headers,
                         json={"model": model, "prompt": combined_prompt, "stream": False}
                     )
                     llm_data = llm_resp.json()

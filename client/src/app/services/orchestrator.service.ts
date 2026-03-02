@@ -6,6 +6,7 @@ export interface DefaultConfig {
   AGENT_MODEL: string;
   OLLAMA_URL: string;
   LLM_PROVIDER: string;
+  LLM_API_KEY?: string;
 }
 
 export interface MetricData {

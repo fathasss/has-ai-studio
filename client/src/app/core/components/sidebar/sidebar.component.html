@@ -105,48 +105,49 @@
     </div>
 
     <!-- Resource Metrics Panel -->
-    <div class="bg-black/30 rounded-lg p-3 border border-white/5 space-y-4">
+    <div class="bg-black/30 rounded-lg p-3 border border-white/5 space-y-3">
       <!-- CPU -->
       <div>
-        <div class="flex justify-between items-center mb-1 text-[0.65rem] uppercase tracking-widest font-bold">
-          <span class="text-gray-400">CPU</span>
-          <span class="text-gray-300">{{ cpuUsage }}%</span>
+        <div class="flex justify-between items-center mb-1 text-[0.6rem] uppercase tracking-widest font-black">
+          <span class="text-gray-500">Processing <span class="text-blue-400/50">Core</span></span>
+          <span class="text-blue-400 font-mono">{{ cpuUsage }}%</span>
         </div>
-        <div class="h-1 bg-gray-800 rounded-full overflow-hidden">
-          <div class="h-full bg-blue-400 transition-all duration-300 ease-out" [style.width.%]="cpuUsage"></div>
+        <div class="h-1 bg-white/5 rounded-full overflow-hidden">
+          <div class="h-full bg-blue-500 transition-all duration-500" [style.width.%]="cpuUsage"></div>
         </div>
       </div>
 
       <!-- RAM -->
       <div>
-        <div class="flex justify-between items-center mb-1 text-[0.65rem] uppercase tracking-widest font-bold">
-          <span class="text-gray-400">RAM</span>
-          <span class="text-gray-300">{{ ramUsage }}%</span>
+        <div class="flex justify-between items-center mb-1 text-[0.6rem] uppercase tracking-widest font-black">
+          <span class="text-gray-500">Memory <span class="text-yellow-400/50">Pool</span></span>
+          <span class="text-yellow-400 font-mono">{{ ramUsage }}%</span>
         </div>
-        <div class="h-1 bg-gray-800 rounded-full overflow-hidden">
-          <div class="h-full bg-yellow-400 transition-all duration-300 ease-out" [style.width.%]="ramUsage"></div>
-        </div>
-      </div>
-
-      <!-- DISK -->
-      <div>
-        <div class="flex justify-between items-center mb-1 text-[0.65rem] uppercase tracking-widest font-bold">
-          <span class="text-gray-400">DISK</span>
-          <span class="text-gray-300">{{ diskUsage }}%</span>
-        </div>
-        <div class="h-1 bg-gray-800 rounded-full overflow-hidden">
-          <div class="h-full bg-green-400 transition-all duration-300 ease-out" [style.width.%]="diskUsage"></div>
+        <div class="h-1 bg-white/5 rounded-full overflow-hidden">
+          <div class="h-full bg-yellow-500 transition-all duration-500" [style.width.%]="ramUsage"></div>
         </div>
       </div>
 
       <!-- GPU -->
-      <div>
-        <div class="flex justify-between items-center mb-1 text-[0.65rem] uppercase tracking-widest font-bold">
-          <span class="text-gray-400">GPU</span>
-          <span class="text-gray-300">{{ gpuUsage }}%</span>
+       @if(gpuUsage > 0){
+        <div class="flex justify-between items-center mb-1 text-[0.6rem] uppercase tracking-widest font-black">
+          <span class="text-gray-500">Neural <span class="text-purple-400/50">Unit</span></span>
+          <span class="text-purple-400 font-mono">{{ gpuUsage }}%</span>
         </div>
-        <div class="h-1 bg-gray-800 rounded-full overflow-hidden">
-          <div class="h-full bg-purple-500 transition-all duration-300 ease-out" [style.width.%]="gpuUsage"></div>
+        <div class="h-1 bg-white/5 rounded-full overflow-hidden">
+          <div class="h-full bg-purple-500 transition-all duration-500" [style.width.%]="gpuUsage"></div>
+        </div>
+       }
+
+      <!-- System Telemetry (Uptime & Tokens) -->
+      <div class="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+        <div class="flex flex-col">
+          <span class="text-[7px] text-gray-600 font-black uppercase tracking-tighter">Inference Rate</span>
+          <span class="text-[10px] text-green-400 font-mono font-bold">{{ tokensMin }} <span class="text-[7px] text-gray-600">t/m</span></span>
+        </div>
+        <div class="flex flex-col items-end">
+          <span class="text-[7px] text-gray-600 font-black uppercase tracking-tighter">System Uptime</span>
+          <span class="text-[10px] text-gray-300 font-mono font-bold">{{ uptimeString }}</span>
         </div>
       </div>
     </div>

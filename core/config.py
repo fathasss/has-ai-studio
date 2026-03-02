@@ -33,18 +33,22 @@ def save_config(config):
     refresh_runtime_config(config)
 
 def refresh_runtime_config(config):
-    global OLLAMA_URL, AGENT_MODEL, TEAMLEAD_MODEL, runtime_config
+    global OLLAMA_URL, AGENT_MODEL, TEAMLEAD_MODEL, LLM_PROVIDER, LLM_API_KEY, runtime_config
     runtime_config = config
     OLLAMA_URL = config.get("OLLAMA_URL", OLLAMA_URL)
     AGENT_MODEL = config.get("AGENT_MODEL", AGENT_MODEL)
     TEAMLEAD_MODEL = config.get("TEAMLEAD_MODEL", AGENT_MODEL)
-    logger.info(f"Runtime configuration refreshed: AGENT={AGENT_MODEL}, TeamLead={TEAMLEAD_MODEL}, URL={OLLAMA_URL}")
+    LLM_PROVIDER = config.get("LLM_PROVIDER", LLM_PROVIDER)
+    LLM_API_KEY = config.get("LLM_API_KEY", LLM_API_KEY)
+    logger.info(f"Runtime configuration refreshed: AGENT={AGENT_MODEL}, TeamLead={TEAMLEAD_MODEL}, URL={OLLAMA_URL}, PROVIDER={LLM_PROVIDER}")
 
 runtime_config = load_config()
 
-OLLAMA_URL = runtime_config["OLLAMA_URL"]
-AGENT_MODEL = runtime_config["AGENT_MODEL"]
+OLLAMA_URL = runtime_config.get("OLLAMA_URL", "")
+AGENT_MODEL = runtime_config.get("AGENT_MODEL", "")
 TEAMLEAD_MODEL = runtime_config.get("TEAMLEAD_MODEL", AGENT_MODEL)
+LLM_PROVIDER = runtime_config.get("LLM_PROVIDER", "ollama")
+LLM_API_KEY = runtime_config.get("LLM_API_KEY", "")
 DB_PATH = os.getenv("TRACE_DB_PATH", "data/traceability.db")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT_SEC", "600"))

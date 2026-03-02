@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OrchestratorService, DefaultConfig } from '../../services/orchestrator.service';
-import { SocketService } from '../../services/socket.service';
+import { SocketService, PullProgress } from '../../services/socket.service';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -16,7 +16,8 @@ export class SettingsComponent implements OnInit {
   config: DefaultConfig = {
     AGENT_MODEL: '',
     OLLAMA_URL: '',
-    LLM_PROVIDER: 'ollama'
+    LLM_PROVIDER: 'ollama',
+    LLM_API_KEY: ''
   };
 
   models: string[] = [];
@@ -46,7 +47,7 @@ export class SettingsComponent implements OnInit {
     this.pullMsgColor = this.socketService.pullState.statusColor;
 
     this.pullSub = this.socketService.modelPullProgress$.subscribe({
-      next: (data) => {
+      next: (data: PullProgress) => {
         // Just sync local state with the central service state
         this.isPulling = this.socketService.pullState.isPulling;
         this.pullProgress = this.socketService.pullState.progress;
@@ -66,7 +67,7 @@ export class SettingsComponent implements OnInit {
         this.config = cfg;
         this.loadOllamaModels(cfg.AGENT_MODEL);
       },
-      error: (err) => console.error("Failed to load config", err)
+      error: (err: any) => console.error("Failed to load config", err)
     });
   }
 
@@ -86,7 +87,7 @@ export class SettingsComponent implements OnInit {
           this.config.AGENT_MODEL = '';
         }
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error("Failed to load models list", err);
         this.isLoadingModels = false;
       }
@@ -97,6 +98,15 @@ export class SettingsComponent implements OnInit {
     const modelToPull = this.pullModelName.trim();
     if (!modelToPull || this.isPulling) return;
 
+    // Optimization: In cloud mode, we don't 'pull' the model, we just select it.
+    if (this.config.LLM_PROVIDER === 'ollama-cloud') {
+      this.config.AGENT_MODEL = modelToPull;
+      this.pullMsg = `Cloud model '${modelToPull}' selected. Ready to use.`;
+      this.pullMsgColor = 'text-green-400';
+      this.saveConfig(); // Persist immediately
+      return;
+    }
+
     this.socketService.setPulling(modelToPull);
     // Refresh local flags from service
     this.isPulling = this.socketService.pullState.isPulling;
@@ -105,10 +115,10 @@ export class SettingsComponent implements OnInit {
     this.pullMsgColor = this.socketService.pullState.statusColor;
 
     this.orchestratorService.pullOllamaModel(modelToPull).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         // Signal sent to backend
       },
-      error: (err) => {
+      error: (err: any) => {
         this.pullMsgColor = 'text-red-500';
         this.pullMsg = `Error: ${err.error?.detail || err.error?.error || err.message}`;
         this.isPulling = false;
@@ -130,7 +140,7 @@ export class SettingsComponent implements OnInit {
         this.saveSuccess = true;
         setTimeout(() => this.saveSuccess = false, 3000);
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error('Failed to save config', err);
         alert('Failed to save configuration.');
       }

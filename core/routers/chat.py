@@ -24,9 +24,16 @@ async def chat_teamlead(req: ChatRequest):
     full_prompt = f"{prompt_tpl}\n\nCONTEXT:\n{history_str}\n\nAnswer the user directly."
     
     try:
+        headers = {}
+        endpoint = f"{config.OLLAMA_URL}/api/generate"
+        if config.LLM_PROVIDER == "ollama-cloud" and config.LLM_API_KEY:
+            headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
+            endpoint = f"{config.OLLAMA_URL}/api/generate"
+            
         async with httpx.AsyncClient(timeout=config.LLM_TIMEOUT) as client:
             resp = await client.post(
-                f"{config.OLLAMA_URL}/api/generate",
+                endpoint,
+                headers=headers,
                 json={"model": config.TEAMLEAD_MODEL, "prompt": full_prompt, "stream": False}
             )
             data = resp.json()
@@ -48,9 +55,16 @@ async def chat_preview(req: ChatRequest):
     full_prompt = f"{prompt_tpl}\n\nCONTEXT:\n{history_str}\n\nOutput instructions provided by TeamLead prompt."
     
     try:
+        headers = {}
+        endpoint = f"{config.OLLAMA_URL}/api/generate"
+        if config.LLM_PROVIDER == "ollama-cloud" and config.LLM_API_KEY:
+            headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
+            endpoint = f"{config.OLLAMA_URL}/api/generate"
+            
         async with httpx.AsyncClient(timeout=config.LLM_TIMEOUT) as client:
             resp = await client.post(
-                f"{config.OLLAMA_URL}/api/generate",
+                endpoint,
+                headers=headers,
                 json={"model": config.TEAMLEAD_MODEL, "prompt": full_prompt, "stream": False}
             )
             data = resp.json()

@@ -2,6 +2,34 @@ import { Injectable } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { Subject, Observable } from 'rxjs';
 
+export interface PullProgress {
+  status: string;
+  model: string;
+  progress?: number;
+  message?: string;
+}
+
+export interface JobUpdate {
+  job_id: string;
+  status: string;
+  sprint_id: string;
+  agent: string;
+  agent_name: string;
+}
+
+export interface SystemUpdate {
+  cpu: number;
+  ram: number;
+  gpu: number;
+  disk: number;
+  net_sent: number;
+  net_recv: number;
+  uptime: number;
+  tokens_min: number;
+  agent_states: Record<string, string>;
+  timestamp: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -10,10 +38,10 @@ export class SocketService {
   
   // Events
   public connected$ = new Subject<boolean>();
-  public jobUpdate$ = new Subject<any>();
+  public jobUpdate$ = new Subject<JobUpdate>();
   public metricUpdate$ = new Subject<any>();
-  public systemUpdate$ = new Subject<any>();
-  public modelPullProgress$ = new Subject<any>();
+  public systemUpdate$ = new Subject<SystemUpdate>();
+  public modelPullProgress$ = new Subject<PullProgress>();
 
   // Pull State Persistence
   public pullState = {
@@ -37,7 +65,7 @@ export class SocketService {
       this.connected$.next(false);
     });
 
-    this.socket.on('job_update', (data: any) => {
+    this.socket.on('job_update', (data: JobUpdate) => {
       this.jobUpdate$.next(data);
     });
 
@@ -45,11 +73,11 @@ export class SocketService {
       this.metricUpdate$.next(data);
     });
 
-    this.socket.on('system_update', (data: any) => {
+    this.socket.on('system_update', (data: SystemUpdate) => {
       this.systemUpdate$.next(data);
     });
 
-    this.socket.on('model_pull_progress', (data: any) => {
+    this.socket.on('model_pull_progress', (data: PullProgress) => {
       this.updatePullState(data);
       this.modelPullProgress$.next(data);
     });
@@ -89,7 +117,7 @@ export class SocketService {
   }
 
   onEvent(eventName: string): Observable<any> {
-    return new Observable<any>(observer => {
+    return new Observable<any>((observer: any) => {
       this.socket.on(eventName, (data: any) => observer.next(data));
       return () => this.socket.off(eventName);
     });
