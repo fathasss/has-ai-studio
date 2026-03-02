@@ -130,17 +130,43 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None):
         content = match.group(2).strip()
         
         # If content still has markdown fences, strip them (common LLM error)
-        content = re.sub(r"^```(?:\w+)?\n", "", content)
-        content = re.sub(r"\n```$", "", content)
+        # Using a more robust loop to strip nested fences if they exist
+        while True:
+            new_content = re.sub(r"^```(?:\w+)?\n", "", content)
+            new_content = re.sub(r"\n```$", "", new_content)
+            if new_content == content:
+                break
+            content = new_content.strip()
         
         # Sanitize path
         rel_path = raw_path.replace("\\", "/").lstrip("/")
+        
+        # Robust Path Sanitization: Avoid nesting like apps/ID/apps/ID
+        # If the agent prefixed with 'apps/' or 'apps/ID/', strip it.
+        project_basename = os.path.basename(project_dir)
+        path_parts = rel_path.split("/")
+        
+        # Potential prefixes to strip
+        if path_parts[0] == "apps":
+            path_parts.pop(0)
+            if path_parts and path_parts[0] == project_basename:
+                path_parts.pop(0)
+        elif path_parts[0] == project_basename:
+            path_parts.pop(0)
+            
+        rel_path = "/".join(path_parts)
+        
         if ".." in rel_path or not rel_path:
             continue
             
         full_path = os.path.join(project_dir, rel_path)
         try:
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            # Re-verify we don't accidentally write to root or outside project_dir
+            if not os.path.abspath(full_path).startswith(os.path.abspath(project_dir)):
+                logger.warning(f"Malicious path detected and blocked: {rel_path}")
+                continue
+
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(content)
             files_created.append(rel_path)

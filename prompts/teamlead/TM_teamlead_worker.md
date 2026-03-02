@@ -6,7 +6,9 @@ Generate a COMPLETE and VALID JSON task plan for the approved **UNIFIED TECHNOLO
 
 # HIGH-FIDELITY TASK FORMAT (MANDATORY)
 Every task in the JSON 'tasks' array MUST follow this technical structure:
-1. **Target File**: Specify the exact relative path of the file to be created or modified.
+1. **Target File**: Specify the exact relative path of the file to be created or modified. 
+   > [!WARNING]
+   > DO NOT include the project root, 'apps/', or 'workspace/' in the path. Start from the project's internal root (e.g., 'src/api/main.py' NOT 'apps/MYPROJ/src/api/main.py').
 2. **Technical Logic**: Provide a deep, step-by-step technical explanation of what the code should do. Avoid vague summaries. Describe state management, API interaction, and specific business logic.
 3. **Dependencies**: List specific libraries, modules, or local functions that this file requires.
 
@@ -26,9 +28,9 @@ Every task in the JSON 'tasks' array MUST follow this technical structure:
 {
   "tasks": [
     { 
-      "role": "Frontend", 
-      "phase": "UI", 
-      "task": "[TARGET FILE]: src/components/Login.tsx\n[LOGIC]: Create a login form component using React Hook Form. It should send a POST request with credentials to '/api/auth/login'. Show a toast notification upon success and redirect to '/dashboard'.\n[DEPENDENCIES]: react-hook-form, axios, react-toastify"
+      "role": "Backend", 
+      "phase": "Logic", 
+      "task": "[TARGET FILE]: src/api/user_service.py\n[LOGIC]: Implement a user registration service. Verify if the email already exists in the database. Hash the password using bcrypt. Save the user record and return the generated ID.\n[DEPENDENCIES]: sqlalchemy, bcrypt, pydantic"
     },
     ...
   ]

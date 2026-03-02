@@ -142,11 +142,11 @@ def generate_agent_report(agent, sid, jid, prompt, resp, duration):
     """Generates a technical Markdown report in the workspace directory."""
     if not sid: return
     
-    workspace_dir = os.path.join("workspace", sid)
+    workspace_dir = os.path.join("workspace", sid, agent)
     os.makedirs(workspace_dir, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_filename = f"{agent}-report_{timestamp}.md"
+    report_filename = f"report_{timestamp}.md"
     report_path = os.path.join(workspace_dir, report_filename)
     
     report_content = f"""# Agent Activity Report
