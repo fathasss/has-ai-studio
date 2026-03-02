@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from ..database import get_db
 from ..models import LLMJobRecord, LLMTrace, GlobalLock
@@ -26,7 +26,7 @@ async def acquire_lock(worker_id: str, db: Session = Depends(get_db)):
     
     # Clear stale locks (older than 10 mins)
     ten_mins_ago = datetime.utcnow() - timedelta(minutes=10)
-    db.query(GlobalLock).filter(GlobalLock.timestamp < ten_mins_ago).delete()
+    db.query(GlobalLock).filter(GlobalLock.acquired_at < ten_mins_ago).delete()
 
     # Check global lock
     existing_lock = db.query(GlobalLock).filter(GlobalLock.resource == "llm_unit").first()
@@ -64,6 +64,7 @@ async def log_trace(trace: LLMTraceSchema, db: Session = Depends(get_db)):
         response=trace.response,
         status=trace.status,
         duration_ms=trace.duration_ms,
+        project_name=trace.project_name,
         prompt_tokens=trace.prompt_tokens,
         completion_tokens=trace.completion_tokens,
         total_tokens=trace.total_tokens

@@ -18,6 +18,7 @@ class LLMTrace(Base):
     completion_tokens = Column(Integer, default=0)
     total_tokens = Column(Integer, default=0)
     status = Column(String)
+    project_name = Column(String, nullable=True)
     duration_ms = Column(Float)
     timestamp = Column(DateTime, default=datetime.utcnow)
 

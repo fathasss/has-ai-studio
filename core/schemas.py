@@ -41,3 +41,4 @@ class LLMTraceSchema(BaseModel):
     prompt_tokens: Optional[int] = 0
     completion_tokens: Optional[int] = 0
     total_tokens: Optional[int] = 0
+    project_name: Optional[str] = None

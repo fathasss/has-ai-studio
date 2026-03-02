@@ -22,7 +22,7 @@ def safe_json_loads(text: str):
     def clean_json_str(s):
         if not s: return ""
         # Remove markdown fences if present within the block
-        s = re.sub(r"^```(?:json)?\n", "", s, flags=re.IGNORECASE)
+        s = re.sub(r"^```[a-zA-Z0-9]*\s*\n", "", s, flags=re.IGNORECASE)
         s = re.sub(r"\n```$", "", s)
         
         cleaned = ""
@@ -74,8 +74,8 @@ def safe_json_loads(text: str):
     except:
         pass
         
-    # Extract from markdown blocks
-    json_blocks = re.findall(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+    # Extract from markdown blocks, allowing any language tag
+    json_blocks = re.findall(r"```[a-zA-Z0-9]*\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
     candidates = []
     for block in json_blocks:
         try:

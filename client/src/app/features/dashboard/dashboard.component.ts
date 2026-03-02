@@ -362,8 +362,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private extractJson(text: string): string | null {
     if (!text) return null;
     
-    // Try to find ALL markdown blocks
-    const mdRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
+    // Try to find ALL markdown blocks (allowing any language tag like python, bash, json etc)
+    const mdRegex = /```[a-z0-9]*\s*([\s\S]*?)```/gi;
     let match;
     const candidates: string[] = [];
 
