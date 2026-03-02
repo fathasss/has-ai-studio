@@ -1,7 +1,7 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { OrchestratorService, DefaultConfig } from '../../services/orchestrator.service';
+import { OrchestratorService, DefaultConfig, ProviderNode } from '../../services/orchestrator.service';
 import { SocketService, PullProgress } from '../../services/socket.service';
 import { Subscription } from 'rxjs';
 
@@ -12,25 +12,40 @@ import { Subscription } from 'rxjs';
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss']
 })
-export class SettingsComponent implements OnInit {
+export class SettingsComponent implements OnInit, OnDestroy {
+  get ngModelModel(): string {
+    return this.selectedNode?.model || '';
+  }
+
+  set ngModelModel(value: string) {
+    if (this.selectedNode) {
+      this.selectedNode.model = value;
+    }
+  }
+
+  onModelChange(value: string) {
+    this.ngModelModel = value;
+  }
+
   config: DefaultConfig = {
-    AGENT_MODEL: '',
-    OLLAMA_URL: '',
-    LLM_PROVIDER: 'ollama',
-    LLM_API_KEY: ''
+    NODES: [],
+    ACTIVE_NODE_ID: ''
   };
 
+  selectedNode: ProviderNode | null = null;
   models: string[] = [];
-  isLoadingModels: boolean = true;
+  isLoadingModels: boolean = false;
 
+  // Pulling state
   pullModelName: string = '';
   isPulling: boolean = false;
   pullMsg: string = '';
-  pullMsgColor: string = 'text-gray-400';
+  pullMsgColor: string = 'text-zinc-400';
   pullProgress: number = 0;
   private pullSub: Subscription | null = null;
 
   saveSuccess: boolean = false;
+  isAddingNode: boolean = false;
 
   constructor(
     private orchestratorService: OrchestratorService,
@@ -40,7 +55,7 @@ export class SettingsComponent implements OnInit {
   ngOnInit(): void {
     this.loadSettings();
     
-    // Sync initial state from service (for persistence when navigating back)
+    // Sync initial state from central service
     this.isPulling = this.socketService.pullState.isPulling;
     this.pullProgress = this.socketService.pullState.progress;
     this.pullMsg = this.socketService.pullState.message;
@@ -48,14 +63,13 @@ export class SettingsComponent implements OnInit {
 
     this.pullSub = this.socketService.modelPullProgress$.subscribe({
       next: (data: PullProgress) => {
-        // Just sync local state with the central service state
         this.isPulling = this.socketService.pullState.isPulling;
         this.pullProgress = this.socketService.pullState.progress;
         this.pullMsg = this.socketService.pullState.message;
         this.pullMsgColor = this.socketService.pullState.statusColor;
 
-        if (data.status === 'success') {
-          this.loadOllamaModels(data.model);
+        if (data.status === 'success' && this.selectedNode) {
+          this.loadOllamaModels(this.selectedNode.model);
         }
       }
     });
@@ -64,79 +78,144 @@ export class SettingsComponent implements OnInit {
   loadSettings() {
     this.orchestratorService.getConfig().subscribe({
       next: (cfg) => {
-        this.config = cfg;
-        this.loadOllamaModels(cfg.AGENT_MODEL);
+        this.config = cfg || { NODES: [], ACTIVE_NODE_ID: '' };
+        if (!this.config.NODES) this.config.NODES = [];
+        this.setActiveNodeDetails();
       },
-      error: (err: any) => console.error("Failed to load config", err)
+      error: (err: any) => {
+        console.error("Failed to load config", err);
+        this.config = { NODES: [], ACTIVE_NODE_ID: '' };
+      }
     });
   }
 
+  setActiveNodeDetails() {
+    this.selectedNode = this.config.NODES.find(n => n.id === this.config.ACTIVE_NODE_ID) || this.config.NODES[0] || null;
+    if (this.selectedNode) {
+      this.loadOllamaModels(this.selectedNode.model);
+    }
+  }
+
+  selectNode(node: ProviderNode) {
+    this.selectedNode = node;
+    this.config.ACTIVE_NODE_ID = node.id;
+    this.loadOllamaModels(node.model);
+  }
+
+  onProviderChange() {
+    if (this.selectedNode) {
+      if (this.selectedNode.provider === 'ollama-cloud') {
+        this.selectedNode.url = 'https://ollama.com';
+      } else if (this.selectedNode.provider === 'ollama') {
+        this.selectedNode.url = 'http://has-ai-ollama:11434';
+      } else if (this.selectedNode.provider === 'openai' && (!this.selectedNode.url || this.selectedNode.url.includes('ollama'))) {
+        this.selectedNode.url = 'https://api.openai.com/v1';
+      }
+      this.loadOllamaModels(this.selectedNode.model);
+    }
+  }
+
+  isManualModel: boolean = false;
+
+  toggleManualMode() {
+    this.isManualModel = !this.isManualModel;
+  }
+
   loadOllamaModels(selectedModel?: string) {
+    if (!this.selectedNode) {
+      this.models = [];
+      return;
+    }
+
     this.isLoadingModels = true;
-    this.orchestratorService.getOllamaModels().subscribe({
+    this.models = []; // Clear existing while loading
+    
+    this.orchestratorService.getOllamaModels(
+      this.selectedNode.url,
+      this.selectedNode.provider,
+      this.selectedNode.apiKey
+    ).subscribe({
       next: (res) => {
         this.models = res.models || [];
         this.isLoadingModels = false;
         
-        const currentVal = selectedModel || this.config.AGENT_MODEL;
-        if (currentVal && this.models.includes(currentVal)) {
-          this.config.AGENT_MODEL = currentVal;
-        } else if (this.models.length > 0) {
-          this.config.AGENT_MODEL = this.models[0];
-        } else {
-          this.config.AGENT_MODEL = '';
+        // If we have models but none selected, pick the first one as default
+        if (this.models.length > 0 && !this.selectedNode?.model) {
+          this.selectedNode!.model = this.models[0];
+        } else if (selectedModel && this.models.includes(selectedModel)) {
+          this.selectedNode!.model = selectedModel;
         }
       },
       error: (err: any) => {
         console.error("Failed to load models list", err);
         this.isLoadingModels = false;
+        this.models = [];
       }
     });
   }
 
+  startAddNode() {
+    const newNode: ProviderNode = {
+      id: 'node-' + Date.now(),
+      name: 'New Node',
+      provider: 'ollama',
+      url: 'http://localhost:11434',
+      model: '',
+      apiKey: ''
+    };
+    this.config.NODES.push(newNode);
+    this.selectNode(newNode);
+    this.isAddingNode = true;
+  }
+
+  deleteNode(node: ProviderNode, event: Event) {
+    event.stopPropagation();
+    if (this.config.NODES.length <= 1) {
+      alert("At least one node must remain in the configuration.");
+      return;
+    }
+    this.config.NODES = this.config.NODES.filter(n => n.id !== node.id);
+    if (this.config.ACTIVE_NODE_ID === node.id) {
+      this.setActiveNodeDetails();
+    }
+  }
+
   pullOllamaModel() {
     const modelToPull = this.pullModelName.trim();
-    if (!modelToPull || this.isPulling) return;
+    if (!modelToPull || this.isPulling || !this.selectedNode) return;
 
-    // Optimization: In cloud mode, we don't 'pull' the model, we just select it.
-    if (this.config.LLM_PROVIDER === 'ollama-cloud') {
-      this.config.AGENT_MODEL = modelToPull;
-      this.pullMsg = `Cloud model '${modelToPull}' selected. Ready to use.`;
+    if (this.selectedNode.provider === 'ollama-cloud') {
+      this.selectedNode.model = modelToPull;
+      this.pullMsg = `Cloud model '${modelToPull}' registered.`;
       this.pullMsgColor = 'text-green-400';
-      this.saveConfig(); // Persist immediately
+      this.saveConfig();
       return;
     }
 
     this.socketService.setPulling(modelToPull);
-    // Refresh local flags from service
-    this.isPulling = this.socketService.pullState.isPulling;
-    this.pullProgress = this.socketService.pullState.progress;
-    this.pullMsg = this.socketService.pullState.message;
-    this.pullMsgColor = this.socketService.pullState.statusColor;
+    this.refreshLocalPullState();
 
     this.orchestratorService.pullOllamaModel(modelToPull).subscribe({
-      next: (res: any) => {
-        // Signal sent to backend
-      },
+      next: () => {},
       error: (err: any) => {
         this.pullMsgColor = 'text-red-500';
-        this.pullMsg = `Error: ${err.error?.detail || err.error?.error || err.message}`;
+        this.pullMsg = `Error: ${err.error?.detail || err.message}`;
         this.isPulling = false;
-        // Also update service state so other components know it failed
         this.socketService.pullState.isPulling = false;
       }
     });
   }
 
-  ngOnDestroy(): void {
-    if (this.pullSub) {
-      this.pullSub.unsubscribe();
-    }
+  private refreshLocalPullState() {
+    this.isPulling = this.socketService.pullState.isPulling;
+    this.pullProgress = this.socketService.pullState.progress;
+    this.pullMsg = this.socketService.pullState.message;
+    this.pullMsgColor = this.socketService.pullState.statusColor;
   }
 
   saveConfig() {
     this.orchestratorService.saveConfig(this.config).subscribe({
-      next: (res) => {
+      next: () => {
         this.saveSuccess = true;
         setTimeout(() => this.saveSuccess = false, 3000);
       },
@@ -145,5 +224,11 @@ export class SettingsComponent implements OnInit {
         alert('Failed to save configuration.');
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    if (this.pullSub) {
+      this.pullSub.unsubscribe();
+    }
   }
 }

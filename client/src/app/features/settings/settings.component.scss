@@ -1,7 +1,62 @@
+// Variables for a cohesive design system
+$bg-primary: #09090b;
+$bg-secondary: rgba(255, 255, 255, 0.03);
+$accent-yellow: #eab308;
+$accent-purple: #a855f7;
+$border-color: rgba(255, 255, 255, 0.08);
+
+.registry-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid $border-color;
+    color: #fff;
+    border-radius: 1rem;
+    padding: 1rem 1.25rem;
+    font-size: 0.875rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    outline: none;
+
+    &::placeholder {
+        color: rgba(255, 255, 255, 0.2);
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 0.625rem;
+    }
+
+    &:focus {
+        border-color: rgba($accent-yellow, 0.4);
+        box-shadow: 0 0 20px rgba($accent-yellow, 0.1), inset 0 0 10px rgba($accent-yellow, 0.05);
+        background: rgba(0, 0, 0, 0.6);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+.registry-select {
+    @extend .registry-input;
+    appearance: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1.25rem center;
+    background-size: 1rem;
+    padding-right: 3.5rem;
+
+    option {
+        background: $bg-primary;
+        color: #fff;
+        padding: 1rem;
+    }
+}
+
 .custom-scrollbar {
     &::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
+        width: 4px;
+        height: 4px;
     }
 
     &::-webkit-scrollbar-track {
@@ -9,11 +64,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.1);
         border-radius: 10px;
 
         &:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.2);
         }
     }
 }
@@ -23,35 +78,43 @@
     height: 100%;
 }
 
-// Custom Select Reset for modern look
-select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 1rem center;
-    background-size: 1.2rem;
-    padding-right: 3rem !important;
+.glass-card {
+    background: rgba(15, 15, 18, 0.4);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid $border-color;
+    border-radius: 1.25rem;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
 
-    option {
-        background-color: #09090b;
-        color: #fff;
-        padding: 1rem;
+    &:hover {
+        background: rgba(15, 15, 18, 0.6);
+        border-color: rgba(255, 255, 255, 0.12);
+        box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
     }
 }
 
-// Input Focus Effects
-input,
-select {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+// Special Animations
+@keyframes shimmer {
+    from {
+        background-position: -200% 0;
+    }
 
-    &:focus {
-        box-shadow: 0 0 20px -5px rgba(59, 130, 246, 0.2);
+    to {
+        background-position: 200% 0;
     }
 }
 
-// Animation utilities
+.animate-shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite linear;
+}
+
 .animate-in {
-    animation-duration: 0.5s;
+    animation-duration: 0.8s;
     animation-fill-mode: both;
+    animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .fade-in {
@@ -61,10 +124,12 @@ select {
 @keyframes fadeIn {
     from {
         opacity: 0;
+        transform: translateY(10px);
     }
 
     to {
         opacity: 1;
+        transform: translateY(0);
     }
 }
 
@@ -74,12 +139,28 @@ select {
 
 @keyframes slideInRight {
     from {
-        transform: translateX(2rem);
+        transform: translateX(20px);
         opacity: 0;
     }
 
     to {
         transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.slide-in-from-top-4 {
+    animation-name: slideInTop;
+}
+
+@keyframes slideInTop {
+    from {
+        transform: translateY(-1rem);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
         opacity: 1;
     }
 }

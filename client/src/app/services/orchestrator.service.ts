@@ -2,11 +2,18 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+export interface ProviderNode {
+  id: string;
+  name: string;
+  provider: 'ollama' | 'ollama-cloud' | 'openai';
+  url: string;
+  apiKey?: string;
+  model: string;
+}
+
 export interface DefaultConfig {
-  AGENT_MODEL: string;
-  OLLAMA_URL: string;
-  LLM_PROVIDER: string;
-  LLM_API_KEY?: string;
+  NODES: ProviderNode[];
+  ACTIVE_NODE_ID: string;
 }
 
 export interface MetricData {
@@ -68,8 +75,13 @@ export class OrchestratorService {
     return this.http.get(`${this.apiUrl}/traces`);
   }
 
-  getOllamaModels(): Observable<{models: string[]}> {
-    return this.http.get<{models: string[]}>(`${this.apiUrl}/ollama/models`);
+  getOllamaModels(url?: string, provider?: string, apiKey?: string): Observable<{models: string[]}> {
+    let params: any = {};
+    if (url) params.url = url;
+    if (provider) params.provider = provider;
+    if (apiKey) params.api_key = apiKey;
+
+    return this.http.get<{models: string[]}>(`${this.apiUrl}/ollama/models`, { params });
   }
 
   pullOllamaModel(modelName: string): Observable<any> {
