@@ -37,6 +37,23 @@ async def list_models(url: str = None, provider: str = None, api_key: str = None
         config.logger.error(f"Failed to fetch Ollama models: {e}")
         return {"models": []}
 
+async def is_model_installed(model_name: str) -> bool:
+    """Checks if a model is currently installed in the active Ollama instance."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{config.OLLAMA_URL}/api/tags")
+            if resp.status_code == 200:
+                data = resp.json()
+                models = data.get("models", [])
+                # Check for both exact match and :latest variation
+                names = [m["name"] for m in models]
+                if model_name in names: return True
+                if ":" not in model_name:
+                    if f"{model_name}:latest" in names: return True
+    except:
+        pass
+    return False
+
 async def pull_stream_worker(model_name: str, target_url: str, provider: str, api_key: str):
     config.logger.info(f"Background Pull Started: model='{model_name}', target='{target_url}'")
     try:

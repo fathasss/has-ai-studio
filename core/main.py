@@ -11,6 +11,7 @@ from .database import engine, Base, SessionLocal, get_db
 from .models import LLMTrace
 from .config import logger, AGENT_ROLE
 from .routers import chat, llm, sprint, system, jobs, config, ollama
+from .routers.ollama import is_model_installed, pull_stream_worker
 from .services import worker_service
 
 # Include Routers
@@ -65,6 +66,14 @@ async def startup_event():
     if AGENT_ROLE in ["worker", "both"]:
         logger.info("Initializing Worker tasks (LLM Worker)...")
         threading.Thread(target=worker_service.llm_worker, daemon=True).start()
+        
+    # Auto-pull default model if missing
+    from .config import AGENT_MODEL, OLLAMA_URL, LLM_PROVIDER, LLM_API_KEY
+    if AGENT_ROLE in ["master", "both", "worker"]:
+        installed = await is_model_installed(AGENT_MODEL)
+        if not installed and LLM_PROVIDER == "ollama":
+            logger.info(f"Default model {AGENT_MODEL} is missing. Triggering auto-pull...")
+            asyncio.create_task(pull_stream_worker(AGENT_MODEL, OLLAMA_URL, LLM_PROVIDER, LLM_API_KEY))
 
 if __name__ == "__main__":
     import uvicorn

@@ -84,6 +84,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
     ACTIVE_NODE_ID: ''
   };
 
+  systemStatus: any = null;
+
   selectedNode: ProviderNode | null = null;
   models: string[] = [];
   isLoadingModels: boolean = false;
@@ -106,6 +108,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadSettings();
+    this.refreshSystemStatus();
+    
+    // Periodically refresh status to check installation progress
+    setInterval(() => this.refreshSystemStatus(), 10000);
     
     // Sync initial state from central service
     this.isPulling = this.socketService.pullState.isPulling;
@@ -138,6 +144,15 @@ export class SettingsComponent implements OnInit, OnDestroy {
         console.error("Failed to load config", err);
         this.config = { NODES: [], ACTIVE_NODE_ID: '' };
       }
+    });
+  }
+
+  refreshSystemStatus() {
+    this.orchestratorService.getSystemStatus().subscribe({
+      next: (status) => {
+        this.systemStatus = status;
+      },
+      error: (err) => console.error("Failed to fetch system status", err)
     });
   }
 

@@ -5,8 +5,9 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import LLMJobRecord, LLMTrace, ProjectException
-from ..config import logger, OLLAMA_URL
+from ..config import logger, OLLAMA_URL, AGENT_MODEL
 import httpx
+from .ollama import is_model_installed
 
 router = APIRouter(tags=["System"])
 
@@ -22,14 +23,20 @@ logger.info(f"APPS_DIR: {APPS_DIR} (Exists: {os.path.exists(APPS_DIR)})")
 logger.info(f"WORK_DIR: {WORK_DIR} (Exists: {os.path.exists(WORK_DIR)})")
 
 @router.get("/system/status")
-def get_system_status(db: Session = Depends(get_db)):
+async def get_system_status(db: Session = Depends(get_db)):
     process = psutil.Process(os.getpid())
     pending = db.query(LLMJobRecord).filter(LLMJobRecord.status == "PENDING").count()
     processing = db.query(LLMJobRecord).filter(LLMJobRecord.status == "PROCESSING").count()
+    
+    # Check model status
+    installed = await is_model_installed(AGENT_MODEL)
+    
     return {
         "queue_depth": pending,
         "active_jobs": processing,
         "memory_rss_mb": process.memory_info().rss / 1024 / 1024,
+        "model_id": AGENT_MODEL,
+        "model_status": "INSTALLED" if installed else "MISSING"
     }
 
 @router.get("/projects")
