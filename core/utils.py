@@ -338,13 +338,16 @@ def execute_setup_commands(commands: List[str], project_dir: str, sprint_id: str
                 db.close()
 
 def get_latest_reports(sprint_id: str) -> str:
-    """Reads the most recent report from each agent in the workspace."""
+    """Reads the most recent report from each agent in the workspace and extracts handovers."""
     workspace_root = os.path.join("workspace", sprint_id)
     if not os.path.exists(workspace_root):
         return ""
     
     reports_content = []
-    for agent_dir in os.listdir(workspace_root):
+    # Sort agent dirs to maintain some order (DevOps first usually helpful)
+    agent_dirs = sorted(os.listdir(workspace_root))
+    
+    for agent_dir in agent_dirs:
         agent_path = os.path.join(workspace_root, agent_dir)
         if os.path.isdir(agent_path):
             files = [f for f in os.listdir(agent_path) if f.startswith("report_") and f.endswith(".md")]
@@ -353,16 +356,18 @@ def get_latest_reports(sprint_id: str) -> str:
                 try:
                     with open(os.path.join(agent_path, latest_report), "r", encoding="utf-8") as f:
                         content = f.read().strip()
-                        # Prioritize Technical Handover Notes for shared context
-                        handover_match = re.search(r"## Technical Handover Notes\n(.*?)(?=\n## Results Summary|\n---|$)", content, re.DOTALL)
-                        if handover_match and handover_match.group(1).strip() and "*No detailed handover notes*" not in handover_match.group(1):
-                            summary = handover_match.group(1).strip()
-                        else:
-                            # Fallback to Summary
-                            summary_match = re.search(r"## Results Summary\n(.*?)(?=\n###|\n---|$)", content, re.DOTALL)
-                            summary = summary_match.group(1).strip() if summary_match else "N/A"
                         
-                        reports_content.append(f"### {agent_dir} Progress & Handover:\n{summary}")
+                        # Extract Technical Handover Section
+                        handover_match = re.search(r"## Technical Handover Notes\n(.*?)(?=\n## Results Summary|\n---|$)", content, re.DOTALL)
+                        handover = handover_match.group(1).strip() if handover_match else ""
+                        
+                        if handover and "*No detailed handover notes*" not in handover:
+                            reports_content.append(f"### [MANDATORY] {agent_dir} Technical Handover:\n{handover}")
+                        else:
+                            # Fallback to Summary if no handover
+                            summary_match = re.search(r"## Results Summary\n(.*?)(?=\n###|\n---|$)", content, re.DOTALL)
+                            summary = summary_match.group(1).strip() if summary_match else "Task completed."
+                            reports_content.append(f"### {agent_dir} Work Summary:\n{summary}")
                 except Exception as e:
                     logger.error(f"Error reading report {latest_report}: {e}")
     
@@ -372,33 +377,33 @@ def get_project_context(project_dir: str, sprint_id: str = None) -> str:
     """Aggregates file tree, README, and agent reports into a single context string."""
     context = []
     
-    # 1. Project File Tree
+    # 1. Agent Reports (HIGHEST PRIORITY)
+    if sprint_id:
+        reports = get_latest_reports(sprint_id)
+        if reports:
+            context.append("# CRITICAL: WORK COMPLETED BY OTHER AGENTS (MUST READ)\n" + reports)
+
+    # 2. Project File Tree
     context.append("# CURRENT PROJECT STRUCTURE")
     tree = []
-    for root, dirs, files in os.walk(project_dir):
-        # Filter unimportant dirs
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', 'venv', '__pycache__', 'dist', 'build', 'bin', 'obj']]
-        level = root.replace(project_dir, '').count(os.sep)
-        indent = '  ' * level
-        tree.append(f"{indent}{os.path.basename(root)}/")
-        for f in files:
-            tree.append(f"{indent}  {f}")
+    if os.path.exists(project_dir):
+        for root, dirs, files in os.walk(project_dir):
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', 'venv', '__pycache__', 'dist', 'build', 'bin', 'obj']]
+            level = root.replace(project_dir, '').count(os.sep)
+            indent = '  ' * level
+            tree.append(f"{indent}{os.path.basename(root)}/")
+            for f in files:
+                tree.append(f"{indent}  {f}")
     
-    context.append("\n".join(tree))
+    context.append("\n".join(tree) if tree else "[Project directory is currently empty]")
     
-    # 2. README if available
+    # 3. README if available
     readme_path = os.path.join(project_dir, "README.md")
     if os.path.exists(readme_path):
         try:
             with open(readme_path, "r", encoding="utf-8") as f:
                 context.append("\n# PROJECT OVERVIEW (README)\n" + f.read().strip())
         except: pass
-
-    # 3. Agent Reports
-    if sprint_id:
-        reports = get_latest_reports(sprint_id)
-        if reports:
-            context.append("\n# RECENT AGENT ACTIVITY\n" + reports)
             
     return "\n\n".join(context)
 

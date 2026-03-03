@@ -17,6 +17,8 @@ At the end of your response, you MUST include a `### TECHNICAL_HANDOVER:` sectio
 - Volume mappings.
 - Environment variables required.
 - Build/Run commands.
+- **CRITICAL: This section is mandatory for the Backend and Frontend to understand the infrastructure.**
+- **STRICT PLAN: Initialize ONLY the technologies requested in the TeamLead's Tech Stack. No deviations allowed.**
 
 # LANGUAGE CONSTRAINT (MANDATORY)
 - All configuration files MUST use English.
