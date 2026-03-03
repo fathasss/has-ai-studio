@@ -151,6 +151,11 @@ def generate_agent_report(agent, sid, jid, prompt, resp, duration):
     report_filename = f"report_{timestamp}.md"
     report_path = os.path.join(workspace_dir, report_filename)
     
+    # Extract Detailed Technical Handover if present
+    import re
+    handover_match = re.search(r"### TECHNICAL_HANDOVER:\s*(.*?)(?=\n### FILE:|\n\[TARGET FILE\]:|$)", resp, re.DOTALL | re.IGNORECASE)
+    handover_notes = handover_match.group(1).strip() if handover_match else ""
+    
     report_content = f"""# Agent Activity Report
 - **Sprint ID**: {sid}
 - **Job ID**: {jid}
@@ -161,12 +166,15 @@ def generate_agent_report(agent, sid, jid, prompt, resp, duration):
 ## Task Description
 {prompt}
 
+## Technical Handover Notes
+{handover_notes if handover_notes else "*No detailed handover notes provided by agent.*"}
+
 ## Results Summary
 The agent {agent} has completed the assigned task. Technical details and code generation are summarized below.
 
 ### Technical Response Snippet
 ```markdown
-{resp[:1000]}...
+{resp[:500]}...
 ```
 
 ---

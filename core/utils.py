@@ -187,14 +187,15 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None):
         # Sanitize path
         rel_path = raw_path.replace("\\", "/").lstrip("/")
         project_basename = os.path.basename(project_dir)
-        path_parts = rel_path.split("/")
         
-        if path_parts[0] == "apps":
-            path_parts.pop(0)
-            if path_parts and path_parts[0] == project_basename:
+        # Aggressively strip redundant prefixes like 'apps/', project dir name, or './'
+        path_parts = rel_path.split("/")
+        while path_parts:
+            first = path_parts[0].lower()
+            if first in ["apps", project_basename.lower(), "workspace", ".", ""]:
                 path_parts.pop(0)
-        elif path_parts[0] == project_basename:
-            path_parts.pop(0)
+            else:
+                break
             
         rel_path = "/".join(path_parts)
         
@@ -352,10 +353,16 @@ def get_latest_reports(sprint_id: str) -> str:
                 try:
                     with open(os.path.join(agent_path, latest_report), "r", encoding="utf-8") as f:
                         content = f.read().strip()
-                        # Extract just the relevant parts to keep prompt size manageable
-                        summary_match = re.search(r"## Results Summary\n(.*?)(?=\n###|\n---|$)", content, re.DOTALL)
-                        summary = summary_match.group(1).strip() if summary_match else "N/A"
-                        reports_content.append(f"### {agent_dir} Progress:\n{summary}")
+                        # Prioritize Technical Handover Notes for shared context
+                        handover_match = re.search(r"## Technical Handover Notes\n(.*?)(?=\n## Results Summary|\n---|$)", content, re.DOTALL)
+                        if handover_match and handover_match.group(1).strip() and "*No detailed handover notes*" not in handover_match.group(1):
+                            summary = handover_match.group(1).strip()
+                        else:
+                            # Fallback to Summary
+                            summary_match = re.search(r"## Results Summary\n(.*?)(?=\n###|\n---|$)", content, re.DOTALL)
+                            summary = summary_match.group(1).strip() if summary_match else "N/A"
+                        
+                        reports_content.append(f"### {agent_dir} Progress & Handover:\n{summary}")
                 except Exception as e:
                     logger.error(f"Error reading report {latest_report}: {e}")
     
