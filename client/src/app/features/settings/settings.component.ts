@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OrchestratorService, DefaultConfig, ProviderNode } from '../../services/orchestrator.service';
@@ -13,18 +13,70 @@ import { Subscription } from 'rxjs';
   styleUrls: ['./settings.component.scss']
 })
 export class SettingsComponent implements OnInit, OnDestroy {
-  get ngModelModel(): string {
-    return this.selectedNode?.model || '';
+  isNodeActive(node: ProviderNode): boolean {
+    return this.config.ACTIVE_NODE_ID === node.id;
   }
 
-  set ngModelModel(value: string) {
-    if (this.selectedNode) {
-      this.selectedNode.model = value;
+  // Model Dropdown State
+  isModelDropdownOpen = false;
+  modelSearchQuery = '';
+
+  get filteredModels(): string[] {
+    if (!this.modelSearchQuery.trim()) return this.models;
+    const query = this.modelSearchQuery.toLowerCase();
+    return this.models.filter(m => m.toLowerCase().includes(query));
+  }
+
+  get isSelectedNodeActive(): boolean {
+    return !!(this.selectedNode && this.config.ACTIVE_NODE_ID === this.selectedNode.id);
+  }
+
+  get showModelDropdown(): boolean {
+    return this.isModelDropdownOpen && !this.isLoadingModels;
+  }
+
+  get showPullStatus(): boolean {
+    return !!(this.pullMsg || this.isPulling);
+  }
+
+  get pullProgressMinWidth(): number {
+    return this.pullProgress > 0 ? 0 : 2;
+  }
+
+  get deployButtonText(): string {
+    return this.isSelectedNodeActive ? 'Cluster Deployed' : 'Deploy Cluster';
+  }
+
+  get selectedNodeId(): string | undefined {
+    return this.selectedNode?.id;
+  }
+
+  toggleModelDropdown(event?: Event) {
+    if (event) event.stopPropagation();
+    if (this.isLoadingModels) return;
+    this.isModelDropdownOpen = !this.isModelDropdownOpen;
+    if (this.isModelDropdownOpen) {
+      this.modelSearchQuery = '';
     }
   }
 
-  onModelChange(value: string) {
-    this.ngModelModel = value;
+  closeModelDropdown() {
+    this.isModelDropdownOpen = false;
+  }
+
+  selectModel(model: string) {
+    if (this.selectedNode) {
+      this.selectedNode.model = model;
+    }
+    this.closeModelDropdown();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.custom-model-select-container')) {
+      this.closeModelDropdown();
+    }
   }
 
   config: DefaultConfig = {
@@ -98,8 +150,13 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   selectNode(node: ProviderNode) {
     this.selectedNode = node;
-    this.config.ACTIVE_NODE_ID = node.id;
     this.loadOllamaModels(node.model);
+  }
+
+  deployNode() {
+    if (!this.selectedNode) return;
+    this.config.ACTIVE_NODE_ID = this.selectedNode.id;
+    this.saveConfig();
   }
 
   onProviderChange() {
@@ -137,12 +194,14 @@ export class SettingsComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: (res) => {
         this.models = res.models || [];
+        console.log("Fetched models:", this.models);
         this.isLoadingModels = false;
         
         // If we have models but none selected, pick the first one as default
         if (this.models.length > 0 && !this.selectedNode?.model) {
           this.selectedNode!.model = this.models[0];
         } else if (selectedModel && this.models.includes(selectedModel)) {
+          console.log("Maintaining selected model:", selectedModel);
           this.selectedNode!.model = selectedModel;
         }
       },
@@ -159,7 +218,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       id: 'node-' + Date.now(),
       name: 'New Node',
       provider: 'ollama',
-      url: 'http://localhost:11434',
+      url: 'http://has-ai-ollama:11434',
       model: '',
       apiKey: ''
     };

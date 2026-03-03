@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import copy
+import threading
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,39 +30,43 @@ DEFAULT_CONFIG = {
     "ACTIVE_NODE_ID": "default-edge"
 }
 
+config_lock = threading.Lock()
+
 def load_config():
-    if not os.path.exists(CONFIG_PATH):
-        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(DEFAULT_CONFIG, f, ensure_ascii=False, indent=2)
-        return DEFAULT_CONFIG
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-            
-            # Migration: If old flat config, move to NODES structure
-            if "NODES" not in cfg:
-                logger.info("Migrating legacy config to Multi-Node structure...")
-                migrated = copy.deepcopy(DEFAULT_CONFIG)
-                node = migrated["NODES"][0]
-                if "OLLAMA_URL" in cfg: node["url"] = cfg["OLLAMA_URL"]
-                if "AGENT_MODEL" in cfg: node["model"] = cfg["AGENT_MODEL"]
-                if "LLM_PROVIDER" in cfg: node["provider"] = cfg["LLM_PROVIDER"]
-                if "LLM_API_KEY" in cfg: node["apiKey"] = cfg["LLM_API_KEY"]
+    with config_lock:
+        if not os.path.exists(CONFIG_PATH):
+            os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(DEFAULT_CONFIG, f, ensure_ascii=False, indent=2)
+            return DEFAULT_CONFIG
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
                 
-                # Save immediately to stabilize
-                with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                    json.dump(migrated, f, ensure_ascii=False, indent=2)
-                return migrated
-                
-            return cfg
-    except Exception as e:
-        logger.error(f"Failed to load config, fallback to default: {e}")
-        return DEFAULT_CONFIG
+                # Migration: If old flat config, move to NODES structure
+                if "NODES" not in cfg:
+                    logger.info("Migrating legacy config to Multi-Node structure...")
+                    migrated = copy.deepcopy(DEFAULT_CONFIG)
+                    node = migrated["NODES"][0]
+                    if "OLLAMA_URL" in cfg: node["url"] = cfg["OLLAMA_URL"]
+                    if "AGENT_MODEL" in cfg: node["model"] = cfg["AGENT_MODEL"]
+                    if "LLM_PROVIDER" in cfg: node["provider"] = cfg["LLM_PROVIDER"]
+                    if "LLM_API_KEY" in cfg: node["apiKey"] = cfg["LLM_API_KEY"]
+                    
+                    # Save immediately to stabilize
+                    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                        json.dump(migrated, f, ensure_ascii=False, indent=2)
+                    return migrated
+                    
+                return cfg
+        except Exception as e:
+            logger.error(f"Failed to load config, fallback to default: {e}")
+            return DEFAULT_CONFIG
 
 def save_config(config):
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
+    with config_lock:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
     refresh_runtime_config(config)
 
 def refresh_runtime_config(config):

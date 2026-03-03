@@ -14,8 +14,9 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 export class ReportsComponent implements OnInit {
   sessions: string[] = [];
   activeSession: string | null = null;
-  reportsBySession: { [key: string]: string[] } = {};
+  reportsBySession: { [sid: string]: { [agent: string]: string[] } } = {};
   expandedSessions: Set<string> = new Set();
+  expandedAgents: Set<string> = new Set(); // Stores "sid/agent"
   activeReport: string | null = null;
   reportId: string | null = null; // Full path for report
   reportContent: SafeHtml | null = null;
@@ -53,14 +54,37 @@ export class ReportsComponent implements OnInit {
     }
   }
 
+  toggleAgentFolder(sid: string, agent: string) {
+    const key = `${sid}/${agent}`;
+    if (this.expandedAgents.has(key)) {
+      this.expandedAgents.delete(key);
+    } else {
+      this.expandedAgents.add(key);
+    }
+  }
+
   isExpanded(sid: string): boolean {
     return this.expandedSessions.has(sid);
+  }
+
+  isAgentExpanded(sid: string, agent: string): boolean {
+    return this.expandedAgents.has(`${sid}/${agent}`);
+  }
+
+  getAgentsInSession(sid: string): string[] {
+    return this.reportsBySession[sid] ? Object.keys(this.reportsBySession[sid]) : [];
   }
 
   loadReportsForSession(sid: string) {
     this.orchestratorService.getReportsForSession(sid).subscribe({
       next: (res: { files: string[] }) => {
-        this.reportsBySession[sid] = res.files || [];
+        const grouped: { [agent: string]: string[] } = {};
+        (res.files || []).forEach(file => {
+          const agent = file.includes('/') ? file.split('/')[0] : 'General';
+          if (!grouped[agent]) grouped[agent] = [];
+          grouped[agent].push(file);
+        });
+        this.reportsBySession[sid] = grouped;
       },
       error: (err: any) => console.error('Failed to load reports', err)
     });
@@ -88,25 +112,31 @@ export class ReportsComponent implements OnInit {
     return this.sanitizer.bypassSecurityTrustHtml(rawHtml as string);
   }
 
-  formatAgentName(filename: string): string {
-    return filename.split('-report_')[0];
+  formatAgentName(path: string): string {
+    if (path.includes('/')) {
+      const parts = path.split('/');
+      const filename = parts[parts.length - 1];
+      return filename.replace('report_', '').replace('.md', '').split('_')[0];
+    }
+    return path.replace('report_', '').replace('.md', '').split('_')[0];
   }
 
-  formatDate(filename: string): string {
+  formatDate(path: string): string {
+    const filename = path.includes('/') ? path.split('/').pop() || '' : path;
     const parts = filename.split('_');
-    if (parts.length < 2) return '';
-    const dateStr = parts[parts.length - 2];
-    const timeStr = parts[parts.length - 1].split('.')[0];
-    
-    // YYYYMMDD -> DD/MM/YYYY
-    const y = dateStr.substring(0, 4);
-    const m = dateStr.substring(4, 6);
-    const d = dateStr.substring(6, 8);
-    
-    // HHMMSS -> HH:MM
-    const hh = timeStr.substring(0, 2);
-    const mm = timeStr.substring(2, 4);
-    
-    return `${d}/${m}/${y} ${hh}:${mm}`;
+    if (parts.length >= 3) {
+      const datePart = parts[1]; // 20260303
+      const timePart = parts[2].split('.')[0]; // 112203
+      
+      const y = datePart.substring(0, 4);
+      const m = datePart.substring(4, 6);
+      const d = datePart.substring(6, 8);
+      
+      const hh = timePart.substring(0, 2);
+      const mm = timePart.substring(2, 4);
+      
+      return `${d}/${m}/${y} ${hh}:${mm}`;
+    }
+    return 'Unknown';
   }
 }
