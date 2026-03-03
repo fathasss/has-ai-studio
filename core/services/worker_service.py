@@ -264,7 +264,7 @@ def llm_worker():
             )
 
             # Post-Process: Files
-            if agent in ["DevOps", "Frontend", "Backend", "Tester"]:
+            if agent in ["DevOps", "Frontend", "Backend", "Tester", "Security"]:
                 extract_files(resp_text, target_dir, sid)
 
             # Generate Activity Report

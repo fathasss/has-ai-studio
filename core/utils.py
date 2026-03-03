@@ -108,6 +108,17 @@ def safe_json_loads(text: str):
     
     return fallback if fallback else None
 
+def extract_setup_commands(text: str) -> List[str]:
+    """Parses LLM output for the ### SETUP: block and returns a list of commands."""
+    import re
+    pattern = r"### SETUP:\s*(.*?)(?=\n### FILE:|\n\[TARGET FILE\]:|$)"
+    match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+    if match:
+        raw_commands = match.group(1).strip().splitlines()
+        # Clean up whitespace and empty lines
+        return [cmd.strip() for cmd in raw_commands if cmd.strip()]
+    return []
+
 def extract_files(text: str, project_dir: str, sprint_id: str = None):
     """Parses LLM output for file content and writes to disk with multiple fallback patterns."""
     from .models import ProjectException
@@ -116,6 +127,12 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None):
     os.makedirs(project_dir, exist_ok=True)
     files_created = []
     
+    # Process Agent-Defined Setup Commands
+    setup_commands = extract_setup_commands(text)
+    if setup_commands:
+        logger.info(f"Agent-defined setup detected for {sprint_id or 'workspace'}. Commands: {setup_commands}")
+        execute_setup_commands(setup_commands, project_dir, sprint_id)
+
     # Primary Pattern: ### FILE: or [TARGET FILE]: format
     pattern = r"(?:### FILE:|\[TARGET FILE\]:)\s*([^ \n\r\*`]+)(.*?)(?=(?:### FILE:|\[TARGET FILE\]:)|$)"
     matches = list(re.finditer(pattern, text, re.DOTALL | re.IGNORECASE))
@@ -180,22 +197,53 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None):
                 db.commit()
                 db.close()
     
-    # Auto-install dependencies if manifest files are created
+    # Auto-install dependencies if manifest files are created (LEGACY - but kept for compatibility - consider removing)
     if files_created:
         install_dependencies(project_dir, sprint_id)
         
     return len(files_created)
 
+
+# Dependency Installation Registry
+# Maps trigger files to their respective installation commands.
+DEPENDENCY_REGISTRY = [
+    {"trigger": "package.json", "command": "npm install", "mode": "exact"},
+    {"trigger": "requirements.txt", "command": "pip install -r requirements.txt", "mode": "exact"},
+    {"trigger": ".csproj", "command": "dotnet restore", "mode": "suffix"},
+    {"trigger": ".sln", "command": "dotnet restore", "mode": "suffix"},
+    {"trigger": "go.mod", "command": "go mod download", "mode": "exact"},
+    {"trigger": "build.gradle", "command": "./gradlew build", "mode": "exact"},
+    {"trigger": "pom.xml", "command": "mvn install", "mode": "exact"},
+    {"trigger": "Cargo.toml", "command": "cargo build", "mode": "exact"},
+]
+
 def install_dependencies(project_dir: str, sprint_id: str = None):
-    # This logic was mostly in main.py, I'm adapting it
-    from .models import ProjectException
+    """Recursively finds manifest files and installs dependencies using the Registry."""
+    import os
     from .database import SessionLocal
     
-    # Generic logic: if package.json exists, npm install. If requirements.txt, pip install.
-    if os.path.exists(os.path.join(project_dir, "package.json")):
-        execute_setup_commands(["npm install"], project_dir, sprint_id)
-    if os.path.exists(os.path.join(project_dir, "requirements.txt")):
-        execute_setup_commands(["pip install -r requirements.txt"], project_dir, sprint_id)
+    processed_dirs = set()
+
+    for root, dirs, files in os.walk(project_dir):
+        # Skip heavy or hidden directories
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', 'venv', '__pycache__', 'dist', 'build', 'bin', 'obj']]
+        
+        for rule in DEPENDENCY_REGISTRY:
+            trigger = rule["trigger"]
+            mode = rule["mode"]
+            command = rule["command"]
+            
+            match_found = False
+            if mode == "exact" and trigger in files:
+                match_found = True
+            elif mode == "suffix" and any(f.endswith(trigger) for f in files):
+                match_found = True
+            
+            registry_key = f"{root}:{command}"
+            if match_found and registry_key not in processed_dirs:
+                logger.info(f"Trigger {trigger} found in {root}. Executing: {command}...")
+                execute_setup_commands([command], root, sprint_id)
+                processed_dirs.add(registry_key)
 
 def execute_setup_commands(commands: List[str], project_dir: str, sprint_id: str = None):
     from .models import ProjectException
