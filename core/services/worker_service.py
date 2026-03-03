@@ -17,7 +17,7 @@ from ..models import (
     LLMJobRecord, LLMTrace, GlobalLock, WorkerHeartbeat
 )
 from ..utils import (
-    safe_json_loads, log_project_exception, extract_files
+    safe_json_loads, log_project_exception, extract_files, get_project_context
 )
 from ..prompts import load_prompt
 
@@ -216,8 +216,12 @@ def llm_worker():
             elif agent == "Tester": system_prompt = load_prompt("tester", "TT_tester_worker", "")
             elif agent == "Security": system_prompt = load_prompt("security", "SM_security_worker", "")
             elif agent == "TeamLead": system_prompt = load_prompt("teamlead", "TM_teamlead_worker", "")
+
+            # Load Project Context (File Tree, Reports, README)
+            project_context = get_project_context(target_dir, sid)
             
-            combined_prompt = f"{system_prompt}\n\nTASK:\n{prompt}" if system_prompt else prompt
+            context_header = f"# PROJECT CONTEXT (MANDATORY READ)\n{project_context}\n\n"
+            combined_prompt = f"{system_prompt}\n\n{context_header}TASK:\n{prompt}" if system_prompt else f"{context_header}TASK:\n{prompt}"
 
             start_t = time.time()
             try:
@@ -265,7 +269,8 @@ def llm_worker():
 
             # Post-Process: Files
             if agent in ["DevOps", "Frontend", "Backend", "Tester", "Security"]:
-                extract_files(resp_text, target_dir, sid)
+                num_extracted = extract_files(resp_text, target_dir, sid)
+                config.logger.info(f"[{jid}] Extracted {num_extracted} files for {sid}")
 
             # Generate Activity Report
             generate_agent_report(agent, sid, jid, prompt, resp_text, duration)

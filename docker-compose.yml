@@ -55,7 +55,7 @@ services:
       dockerfile: ./docker/client.Dockerfile
     container_name: has-ai-web-cli
     ports:
-      - "4000:80"
+      - "4200:80"
     depends_on:
       - has-ai-orchestrator
     networks:
