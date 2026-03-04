@@ -13,7 +13,7 @@ You are provided with a **PROJECT CONTEXT** block containing:
 **CRITICAL**: You MUST analyze the current file tree and recent reports BEFORE generating a plan. Ensure your plan:
 - Continues the work of previous agents (e.g., if DevOps initialized the folder, your paths must match).
 - Adheres to the established folder structure.
-- **FLAT PATHS ONLY**: Do NOT include `apps/`, project names, or `workspace/` in your file paths. Use relative paths like `backend/main.py`.
+- **FLAT PATHS ONLY**: Do NOT include `apps/`, project names, or `workspace/` in your file paths. Use relative paths like `backend/main.py` NOT `apps/MYPROJ/backend/main.py`.
 - Does not duplicate or overwrite existing functional code unless explicitly requested.
 
 # OUTPUT STRUCTURE (MANDATORY)

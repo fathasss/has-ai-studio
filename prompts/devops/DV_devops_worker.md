@@ -10,6 +10,7 @@ You are provided with a **PROJECT CONTEXT** block. You MUST:
 2. **Infrastructure-as-Code**: Ensure your `Dockerfile` and `docker-compose.yml` correctly reference the internal file structure seen in the tree.
 3. **Environment Sync**: Synchronize `.env` variables with what the Backend and Frontend expect based on their reports.
 4. **FLAT PATHS ONLY**: Your file headers MUST be relative to the project root. DO NOT include `apps/`, project names, or `workspace/`. Correct: `### FILE: Dockerfile`. Incorrect: `### FILE: apps/my-project/Dockerfile`.
+13. **ABSOLUTE NO NESTING**: Do NOT create an `apps/` or `workspace/` folder inside the project. All shell commands in `### SETUP:` must be relative to the root. Use `mkdir -p backend/src` NOT `mkdir -p apps/backend/src`.
 
 # TECHNICAL HANDOVER (MANDATORY)
 At the end of your response, you MUST include a `### TECHNICAL_HANDOVER:` section. Describe:

@@ -10,7 +10,7 @@ You are provided with a **PROJECT CONTEXT** block. You MUST:
 2. **Backend Alignment**: Use the API endpoints and data structures described in the Backend reports.
 3. **Styling Consistency**: Check for existing `index.css` or Tailwind configurations to maintain visual harmony.
 4. **No Placeholders**: If other agents have implemented services, use them instead of mocking them.
-5. **FLAT PATHS ONLY**: Your file headers MUST be relative to the project root.
+5. **FLAT PATHS ONLY**: Your file headers MUST be relative to the project root. Use `frontend/src/...` NOT `apps/frontend/src/...`.
 6. **STRICT PLAN**: Follow the architecture defined in the TeamLead's Tech Stack strictly. Do not deviate.
 
 # TECHNICAL HANDOVER (MANDATORY)

@@ -110,14 +110,24 @@ def safe_json_loads(text: str):
     return fallback if fallback else None
 
 def extract_setup_commands(text: str) -> List[str]:
-    """Parses LLM output for the ### SETUP: block and returns a list of commands."""
+    """Parses LLM output for the ### SETUP: block and returns a list of commands with path sanitization."""
     import re
     pattern = r"### SETUP:\s*(.*?)(?=\n### FILE:|\n\[TARGET FILE\]:|$)"
     match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
     if match:
         raw_commands = match.group(1).strip().splitlines()
-        # Clean up whitespace and empty lines
-        return [cmd.strip() for cmd in raw_commands if cmd.strip()]
+        commands = []
+        for cmd in raw_commands:
+            cmd = cmd.strip()
+            if not cmd: continue
+            
+            # Sanitize paths in commands (e.g., mkdir -p apps/backend -> mkdir -p backend)
+            # This looks for common path prefixes and strips them
+            cmd = re.sub(r"(?<=mkdir -p\s)(?:apps/|workspace/|./)+", "", cmd, flags=re.IGNORECASE)
+            cmd = re.sub(r"(?<=cd\s)(?:apps/|workspace/|./)+", "", cmd, flags=re.IGNORECASE)
+            
+            commands.append(cmd)
+        return commands
     return []
 
 def validate_content(filename: str, content: str) -> Tuple[bool, str]:
@@ -192,7 +202,10 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None):
         path_parts = rel_path.split("/")
         while path_parts:
             first = path_parts[0].lower()
+            # Also check if it matches the project_basename (e.g., SPRINT-82552)
             if first in ["apps", project_basename.lower(), "workspace", ".", ""]:
+                path_parts.pop(0)
+            elif first.startswith("sprint-"): # Generic sprint prefix check
                 path_parts.pop(0)
             else:
                 break
