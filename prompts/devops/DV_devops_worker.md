@@ -110,16 +110,18 @@ FROM python:3.11-slim AS runtime
 ...
 ```
 
-Mandatory requirements:
+Mandatory requirements for Dockerfile:
+- ALWAYS use `pip install -r requirements.txt` for Python projects. NEVER use `poetry`, `pipenv`, or `Pipfile` unless explicitly demanded by the TeamLead.
+- If copying `requirements.txt` or `package.json`, ensure they are placed in the correct `WORKDIR` before running install commands.
 - Use language-appropriate slim/alpine base images:
   - Python → `python:3.11-slim`
   - Node.js → `node:20-alpine`
   - Go → `golang:1.22-alpine` (builder) + `gcr.io/distroless/static` (runtime)
   - .NET → `mcr.microsoft.com/dotnet/sdk` (builder) + `mcr.microsoft.com/dotnet/aspnet` (runtime)
-- Copy only what is needed into the runtime stage.
-- Run as a non-root user. Create a dedicated user if needed.
+- Copy ONLY what is needed into the runtime stage.
+- Run as a non-root user. If you use `USER appuser`, you MUST explicitly create it first (e.g., `RUN useradd -m appuser`).
 - Expose only the port(s) actually used by the application.
-- Set a proper `ENTRYPOINT` or `CMD`.
+- Set a proper `ENTRYPOINT` or `CMD`. Pay strict attention to the file tree: if `main.py` is inside `backend/`, your execution command MUST reflect that (e.g., `uvicorn backend.main:app`).
 - Add a `HEALTHCHECK` instruction.
 
 ## 4. .dockerignore
