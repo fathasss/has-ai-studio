@@ -1,140 +1,367 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-import httpx
+"""
+Ollama model management router.
+
+Provides endpoints for listing available models and pulling new models
+from an Ollama instance with real-time progress via WebSocket.
+"""
+
+from __future__ import annotations
+
 import asyncio
 import json
+import re
+import time
+from enum import Enum
+from urllib.parse import urlparse
+
+import httpx
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator
+
 from .. import config
 from ..app_instance import sio
 
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
 router = APIRouter(tags=["Ollama"])
 
-@router.get("/ollama/models")
-async def list_models(url: str = None, provider: str = None, api_key: str = None):
-    try:
-        config.logger.info(f"Ollama Model List Request: url='{url}', provider='{provider}', api_key_set={'Yes' if api_key else 'No'}")
-        
-        # Use provided params or fallback to global config
-        target_url = url or config.OLLAMA_URL
-        target_provider = provider or config.LLM_PROVIDER
-        target_api_key = api_key or config.LLM_API_KEY
-        
-        config.logger.info(f"Resolution: Using URL='{target_url}' for model discovery")
+ALLOWED_URL_SCHEMES = {"http", "https"}
+MODEL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9:._\-/]*$")
+PROGRESS_EMIT_INTERVAL = 0.5  # seconds — minimum gap between WS emissions
 
-        headers = {}
-        if target_provider == "ollama-cloud" and target_api_key:
-            headers["Authorization"] = f"Bearer {target_api_key}"
-            
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{target_url}/api/tags", headers=headers)
+
+class OllamaTimeouts:
+    """Centralized timeout configuration for Ollama HTTP calls."""
+    QUICK_CHECK: float = 5.0
+    API_CALL: float = 15.0
+    MODEL_PULL: float = 3600.0
+
+
+class LLMProvider(str, Enum):
+    """Supported LLM provider backends."""
+    OLLAMA = "ollama"
+    OLLAMA_CLOUD = "ollama-cloud"
+
+
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
+
+class PullModelRequest(BaseModel):
+    """Request schema for the model pull endpoint."""
+    model: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Ollama model name (e.g. 'llama3', 'mistral:7b')",
+    )
+
+    @field_validator("model")
+    @classmethod
+    def validate_model_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Model name cannot be empty")
+        if not MODEL_NAME_PATTERN.match(v):
+            raise ValueError(
+                "Model name contains invalid characters. "
+                "Allowed: letters, digits, ':', '.', '-', '_', '/'"
+            )
+        return v
+
+
+class ModelListResponse(BaseModel):
+    """Response schema for the model listing endpoint."""
+    models: list[str]
+
+
+class PullStartedResponse(BaseModel):
+    """Response schema for the model pull initiation endpoint."""
+    status: str
+    message: str
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def validate_ollama_url(url: str) -> str:
+    """
+    Validate and sanitize an Ollama server URL.
+
+    Prevents SSRF by enforcing scheme whitelist and requiring a valid hostname.
+    Returns a clean base URL without trailing slashes or paths.
+    """
+    url = url.strip().rstrip("/")
+    parsed = urlparse(url)
+
+    if parsed.scheme not in ALLOWED_URL_SCHEMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid URL scheme '{parsed.scheme}'. Allowed: {', '.join(ALLOWED_URL_SCHEMES)}",
+        )
+
+    if not parsed.hostname:
+        raise HTTPException(status_code=400, detail="Invalid URL: missing hostname")
+
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def normalize_model_name(name: str) -> str:
+    """Ensure a model name contains a tag. Defaults to ':latest'."""
+    return name if ":" in name else f"{name}:latest"
+
+
+def _build_auth_headers(provider: str | None, api_key: str | None) -> dict[str, str]:
+    """Build authorization headers if the provider requires them."""
+    headers: dict[str, str] = {}
+    if provider == LLMProvider.OLLAMA_CLOUD and api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
+# ---------------------------------------------------------------------------
+# Concurrent pull guard
+# ---------------------------------------------------------------------------
+
+_active_pulls: dict[str, bool] = {}
+_pull_lock = asyncio.Lock()
+
+
+# ---------------------------------------------------------------------------
+# Core functions
+# ---------------------------------------------------------------------------
+
+async def is_model_installed(
+    model_name: str,
+    ollama_url: str | None = None,
+    headers: dict[str, str] | None = None,
+) -> bool:
+    """
+    Check whether a model is currently installed in an Ollama instance.
+
+    Args:
+        model_name: The model identifier to look for.
+        ollama_url: Optional override for the Ollama server URL.
+        headers: Optional HTTP headers (e.g. for auth).
+
+    Returns:
+        True if the model (or its ':latest' variant) is installed.
+    """
+    target_url = ollama_url or config.OLLAMA_URL
+    try:
+        async with httpx.AsyncClient(timeout=OllamaTimeouts.QUICK_CHECK) as client:
+            resp = await client.get(f"{target_url}/api/tags", headers=headers or {})
             if resp.status_code != 200:
-                config.logger.warning(f"Failed to fetch models from {target_url}: {resp.status_code}")
-                return {"models": []}
-            
+                config.logger.debug(
+                    f"Model install check: non-200 from {target_url} ({resp.status_code})"
+                )
+                return False
+
             data = resp.json()
-            model_names = [m["name"] for m in data.get("models", [])]
-            config.logger.info(f"Fetched {len(model_names)} models from {target_url}")
-            return {"models": model_names}
-    except Exception as e:
-        config.logger.error(f"Failed to fetch Ollama models: {e}")
-        return {"models": []}
+            installed_names: set[str] = {
+                normalize_model_name(m["name"])
+                for m in data.get("models", [])
+            }
+            return normalize_model_name(model_name) in installed_names
 
-async def is_model_installed(model_name: str) -> bool:
-    """Checks if a model is currently installed in the active Ollama instance."""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{config.OLLAMA_URL}/api/tags")
-            if resp.status_code == 200:
-                data = resp.json()
-                models = data.get("models", [])
-                # Check for both exact match and :latest variation
-                names = [m["name"] for m in models]
-                if model_name in names: return True
-                if ":" not in model_name:
-                    if f"{model_name}:latest" in names: return True
-    except:
-        pass
-    return False
+    except (httpx.HTTPError, httpx.TimeoutException, KeyError, ValueError) as e:
+        config.logger.debug(f"Model install check failed for '{model_name}': {e}")
+        return False
 
-async def pull_stream_worker(model_name: str, target_url: str, provider: str, api_key: str):
-    config.logger.info(f"Background Pull Started: model='{model_name}', target='{target_url}'")
+
+async def pull_stream_worker(
+    model_name: str,
+    target_url: str,
+    provider: str,
+    api_key: str | None,
+) -> None:
+    """
+    Background worker that streams a model pull from Ollama.
+
+    Emits real-time progress events via Socket.IO. Throttles emissions
+    to prevent WebSocket flooding on large downloads.
+    """
+    config.logger.info(f"Pull started: model='{model_name}', target='{target_url}'")
+    headers = _build_auth_headers(provider, api_key)
+
     try:
-        headers = {}
-        if provider == "ollama-cloud" and api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-            
-        async with httpx.AsyncClient(timeout=1800.0) as client:
+        async with httpx.AsyncClient(timeout=OllamaTimeouts.MODEL_PULL) as client:
             async with client.stream(
-                "POST", 
-                f"{target_url}/api/pull", 
+                "POST",
+                f"{target_url}/api/pull",
                 headers=headers,
-                json={"name": model_name, "stream": True}
+                json={"name": model_name, "stream": True},
             ) as response:
+
                 if response.status_code != 200:
-                    config.logger.error(f"Ollama pull stream failed initiation: {response.status_code}")
+                    config.logger.error(
+                        f"Pull stream initiation failed: HTTP {response.status_code}"
+                    )
                     await sio.emit("model_pull_progress", {
-                        "model": model_name, 
-                        "status": "error", 
-                        "message": f"Ollama HTTP {response.status_code}"
+                        "model": model_name,
+                        "status": "error",
+                        "message": f"Ollama returned HTTP {response.status_code}",
                     })
                     return
+
+                last_emit_time: float = 0
 
                 async for line in response.aiter_lines():
                     if not line:
                         continue
+
                     try:
                         body = json.loads(line)
-                        if "error" in body:
-                            config.logger.error(f"Ollama error in stream: {body['error']}")
-                            await sio.emit("model_pull_progress", {
-                                "model": model_name,
-                                "status": "error",
-                                "message": body["error"]
-                            })
-                            return
+                    except json.JSONDecodeError as e:
+                        config.logger.debug(f"Pull stream: skipping malformed line: {e}")
+                        continue
 
-                        status = body.get("status", "")
-                        completed = body.get("completed", 0)
-                        total = body.get("total", 0)
-                        progress = int((completed / total) * 100) if total > 0 else 0
-                        
-                        # Broadcast to all clients
+                    # --- Error in stream ---
+                    if "error" in body:
+                        config.logger.error(f"Ollama pull error: {body['error']}")
+                        await sio.emit("model_pull_progress", {
+                            "model": model_name,
+                            "status": "error",
+                            "message": body["error"],
+                        })
+                        return
+
+                    # --- Progress ---
+                    status = body.get("status", "")
+                    completed = body.get("completed", 0)
+                    total = body.get("total", 0)
+                    progress = int((completed / total) * 100) if total > 0 else 0
+
+                    now = time.monotonic()
+                    is_milestone = status in ("success", "error") or progress >= 100
+
+                    if is_milestone or (now - last_emit_time) >= PROGRESS_EMIT_INTERVAL:
                         await sio.emit("model_pull_progress", {
                             "model": model_name,
                             "status": status,
                             "completed": completed,
                             "total": total,
-                            "progress": progress
+                            "progress": min(progress, 100),
                         })
-                    except Exception as e:
-                        config.logger.debug(f"Pull stream parse skip: {e}")
+                        last_emit_time = now
 
-        config.logger.info(f"Pull successfully completed for '{model_name}'")
+        # --- Completed successfully ---
+        config.logger.info(f"Pull completed: model='{model_name}'")
         await sio.emit("model_pull_progress", {
             "model": model_name,
             "status": "success",
-            "progress": 100
+            "progress": 100,
         })
-        
-    except Exception as e:
-        config.logger.error(f"Critical error in pull_stream_worker: {e}")
+
+    except httpx.TimeoutException:
+        config.logger.error(f"Pull timed out for '{model_name}'")
         await sio.emit("model_pull_progress", {
             "model": model_name,
             "status": "error",
-            "message": f"Orchestrator Internal Error: {str(e)}"
+            "message": "Download timed out",
         })
 
-@router.post("/ollama/pull")
-async def pull_model(req: dict, background_tasks: BackgroundTasks):
-    model_name = req.get("model")
-    if not model_name:
-        raise HTTPException(status_code=400, detail="Model name required")
+    except Exception as e:
+        config.logger.error(f"Pull worker critical error: {e}", exc_info=True)
+        await sio.emit("model_pull_progress", {
+            "model": model_name,
+            "status": "error",
+            "message": "Internal server error during download",
+        })
 
-    # Pass current active config to the background worker
+
+async def _guarded_pull_worker(
+    model_name: str,
+    target_url: str,
+    provider: str,
+    api_key: str | None,
+) -> None:
+    """Wrapper that ensures the active-pull lock is always released."""
+    try:
+        await pull_stream_worker(model_name, target_url, provider, api_key)
+    finally:
+        async with _pull_lock:
+            _active_pulls.pop(model_name, None)
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@router.get("/ollama/models", response_model=ModelListResponse)
+async def list_models(
+    url: str = Query(None, description="Custom Ollama server URL"),
+    provider: LLMProvider = Query(None, description="LLM provider type"),
+    x_api_key: str = Header(None, alias="X-API-Key"),
+):
+    """
+    List available models from an Ollama instance.
+
+    Queries the ``/api/tags`` endpoint of the target Ollama server.
+    Falls back to the globally configured ``OLLAMA_URL`` when no custom
+    URL is provided. Returns an empty list on connection failure
+    (graceful degradation).
+    """
+    try:
+        target_url = validate_ollama_url(url) if url else config.OLLAMA_URL
+        target_provider = provider.value if provider else config.LLM_PROVIDER
+        target_api_key = x_api_key or config.LLM_API_KEY
+
+        config.logger.info(f"Model list request: url='{target_url}', provider='{target_provider}'")
+
+        headers = _build_auth_headers(target_provider, target_api_key)
+
+        async with httpx.AsyncClient(timeout=OllamaTimeouts.API_CALL) as client:
+            resp = await client.get(f"{target_url}/api/tags", headers=headers)
+
+            if resp.status_code != 200:
+                config.logger.warning(
+                    f"Model list: non-200 from {target_url} ({resp.status_code})"
+                )
+                return ModelListResponse(models=[])
+
+            data = resp.json()
+            model_names = [m["name"] for m in data.get("models", [])]
+            config.logger.info(f"Fetched {len(model_names)} models from {target_url}")
+            return ModelListResponse(models=model_names)
+
+    except HTTPException:
+        raise  # Re-raise validation errors from validate_ollama_url
+    except Exception as e:
+        config.logger.error(f"Model list failed: {e}")
+        return ModelListResponse(models=[])
+
+
+@router.post("/ollama/pull", response_model=PullStartedResponse)
+async def pull_model(req: PullModelRequest, background_tasks: BackgroundTasks):
+    """
+    Initiate a background model pull from Ollama.
+
+    Streams download progress to connected clients via Socket.IO events.
+    Prevents duplicate concurrent pulls of the same model.
+    """
+    model_name = req.model
+
+    async with _pull_lock:
+        if model_name in _active_pulls:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Model '{model_name}' is already being pulled",
+            )
+        _active_pulls[model_name] = True
+
     background_tasks.add_task(
-        pull_stream_worker, 
-        model_name, 
-        config.OLLAMA_URL, 
-        config.LLM_PROVIDER, 
-        config.LLM_API_KEY
+        _guarded_pull_worker,
+        model_name,
+        config.OLLAMA_URL,
+        config.LLM_PROVIDER,
+        config.LLM_API_KEY,
     )
-    
-    return {"status": "started", "message": f"Pulling {model_name} in background..."}
+
+    return PullStartedResponse(
+        status="started",
+        message=f"Pulling '{model_name}' in background",
+    )

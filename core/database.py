@@ -1,13 +1,12 @@
 import os
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import sessionmaker, declarative_base
 from .config import DB_PATH
 
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"timeout": 5})
 
-class Base(DeclarativeBase):
-    pass
+Base = declarative_base()
 
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):

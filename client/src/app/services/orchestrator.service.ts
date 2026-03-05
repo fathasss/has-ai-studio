@@ -79,9 +79,11 @@ export class OrchestratorService {
     let params: any = {};
     if (url) params.url = url;
     if (provider) params.provider = provider;
-    if (apiKey) params.api_key = apiKey;
 
-    return this.http.get<{models: string[]}>(`${this.apiUrl}/ollama/models`, { params });
+    let headers: any = {};
+    if (apiKey) headers['X-Api-Key'] = apiKey;
+
+    return this.http.get<{models: string[]}>(`${this.apiUrl}/ollama/models`, { params, headers });
   }
 
   pullOllamaModel(modelName: string): Observable<any> {

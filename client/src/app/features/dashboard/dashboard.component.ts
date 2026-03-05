@@ -3,8 +3,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { OrchestratorService } from '../../services/orchestrator.service';
+import { SocketService } from '../../services/socket.service';
 import { marked } from 'marked';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { Subscription } from 'rxjs';
 
 interface ChatMessage {
   role: 'TeamLead' | 'PO';
@@ -48,8 +50,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   public executionStatus: string = '';
   public latestTeamLeadMessage: SafeHtml | null = null;
 
+  private chatSubscription?: Subscription;
+
   constructor(
     private orchestratorService: OrchestratorService, 
+    private socketService: SocketService,
     private router: Router,
     private sanitizer: DomSanitizer
   ) {
@@ -58,6 +63,39 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.loadSessions();
     this.restoreState();
+    
+    // Subscribe to real-time chat messages (like TeamLead final status reports)
+    this.chatSubscription = this.socketService.onEvent('new_chat_message').subscribe((msg: any) => {
+      if (msg.sprint_id === this.currentSprintId && msg.role !== 'user') {
+        const assistantRole = 'TeamLead'; // Normalize role display
+        
+        // DÜZELTME: Sohbet balonunda JSON planlarını gizle, sadece metni göster
+        const rawContent = msg.content || '';
+        const cleanContent = rawContent.replace(/```json[\s\S]*?```/i, '').trim();
+        const displayContent = cleanContent || rawContent;
+
+        this.chatHistory.push({ role: assistantRole, content: displayContent });
+        this.rawAgentHistory.push({ role: 'assistant', content: rawContent });
+        
+        this.syncState();
+        setTimeout(() => this.scrollToBottom(), 100);
+        
+        // Modal update logic
+        this.latestTeamLeadMessage = this.renderMarkdown(displayContent);
+        
+        // Clear pending execution if it's a completion or blocker message
+        if (rawContent.includes('### STATUS:')) {
+          this.hasPendingPlan = false; 
+        }
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    if (this.chatSubscription) {
+      this.chatSubscription.unsubscribe();
+    }
+    this.syncState();
   }
 
   restoreState() {
@@ -166,31 +204,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.orchestratorService.chatTeamLead(this.rawAgentHistory).subscribe({
       next: (res) => {
         const rawResponse = res.response;
-        // Metin içindeki JSON bloğunu sohbetten gizlemek için filtrele
-        const cleanResponse = rawResponse.replace(/```json[\s\S]*?```/i, '').trim();
         
-        const assistantContent = cleanResponse || rawResponse;
+        // DÜZELTME: Artık mesajı burada chatHistory'e pushlamıyoruz.
+        // Backend saveChatMessage() çağırdığında Socket.IO üzerinden gelecek.
+        // Bu sayede mükerrer mesaj sorununu kökten çözüyoruz.
         
-        // Modal için son mesajı sakla
-        this.latestTeamLeadMessage = this.renderMarkdown(assistantContent);
-
-        this.chatHistory.push({ role: 'TeamLead', content: assistantContent });
-        this.rawAgentHistory.push({ role: 'assistant', content: rawResponse });
-        this.syncState();
-        setTimeout(() => this.scrollToBottom(), 50);
-        
-        // Save Assistant message
+        // Sadece asistanın yanıtını kaydet (Socket tetiklenecek)
         this.orchestratorService.saveChatMessage(this.currentSprintId, 'TeamLead', rawResponse).subscribe(() => {
-          this.loadSessions(); // Update sessions list in case it's a new one
+          this.loadSessions(); 
         });
 
         this.isTyping = false;
         
-        // If we already have a plan, or if the user is in the "planning" phase, refresh it
-        const contentLower = assistantContent.toLowerCase();
+        // Plan kontrolü (Gerekirse silent refresh tetikle)
+        const contentLower = rawResponse.toLowerCase();
         const triggerKeywords = ['plan', 'architecture', 'mimari', 'tasarım', 'structure', 'blueprint', 'şema', 'hazırl', 'oluştur', 'hazır', 'analiz', 'preview'];
         const hasTriggerWord = triggerKeywords.some(word => contentLower.includes(word));
-        const hasStructuralMarker = assistantContent.includes('##') || assistantContent.includes('###');
+        const hasStructuralMarker = rawResponse.includes('##') || rawResponse.includes('###');
 
         if (this.hasPendingPlan || hasTriggerWord || hasStructuralMarker) {
           this.hasPendingPlan = true;
@@ -408,18 +438,41 @@ export class DashboardComponent implements OnInit, OnDestroy {
     for (const rawCandidate of candidates) {
       try {
         const cleaned = this.robustCleanJson(rawCandidate);
-        const parsed = JSON.parse(cleaned);
+        
+        // Try parsing directly
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(cleaned);
+        } catch (e) {
+          // If direct parse fails, the candidate might have trailing text (like a tree)
+          // Look for the last matching '}' for the first '{'
+          const sIdx = cleaned.indexOf('{');
+          if (sIdx !== -1) {
+             let balance = 0;
+             let inStr = false;
+             for (let i = sIdx; i < cleaned.length; i++) {
+                if (cleaned[i] === '"' && cleaned[i-1] !== '\\') inStr = !inStr;
+                if (!inStr) {
+                   if (cleaned[i] === '{') balance++;
+                   if (cleaned[i] === '}') {
+                      balance--;
+                      if (balance === 0) {
+                         const innerJson = cleaned.substring(sIdx, i + 1);
+                         parsed = JSON.parse(innerJson);
+                         break;
+                      }
+                   }
+                }
+             }
+          }
+        }
+        
         if (parsed && (parsed.tasks || parsed.project_name)) {
-          return cleaned; // Return the first valid project plan candidate
+          return JSON.stringify(parsed); // Return re-serialized clean JSON
         }
       } catch (e) {
         // Continue searching
       }
-    }
-
-    // Last resort: return the first candidate if any, even if validation failed
-    if (candidates.length > 0) {
-      return this.robustCleanJson(candidates[0]);
     }
     
     return null;
@@ -496,7 +549,4 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.scrollToBottom();
   }
 
-  ngOnDestroy() {
-    this.syncState();
-  }
 }

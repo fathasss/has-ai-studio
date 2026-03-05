@@ -1,22 +1,52 @@
 import os
-import json
 from .config import logger
+
+
+# DÜZELTME 1: __file__ her zaman absolute olmayabilir.
+# Modül yüklendiğinde bir kez resolve et — her çağrıda tekrar hesaplama.
+_PROMPTS_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "prompts")
+)
+
 
 def load_prompt(agent_name: str, key: str, fallback: str) -> str:
     """
-    Loads a prompt from a file. 
-    First looks for prompts/{agent_name}/{key}.md
+    Loads a prompt from: prompts/{agent_name}/{key}.md
+
+    Args:
+        agent_name: Subdirectory name under prompts/ (e.g. 'backend', 'devops').
+        key:        Filename without extension (e.g. 'BE_backend_worker').
+        fallback:   Returned as-is if the file cannot be found or read.
+
+    Returns:
+        Prompt string (stripped), or fallback if file is missing/unreadable.
     """
-    prompts_root = os.path.join(os.path.dirname(__file__), "..", "prompts")
-    
-    # Try Markdown path: prompts/{agent_name}/{key}.md
-    md_path = os.path.join(prompts_root, agent_name, f"{key}.md")
-    if os.path.exists(md_path):
+    # DÜZELTME 4: Path'i normalize et — symlink ve relative cwd senaryolarını kapat.
+    md_path = os.path.normpath(
+        os.path.join(_PROMPTS_ROOT, agent_name, f"{key}.md")
+    )
+
+    # Güvenlik: resolved path prompts root dışına çıkmamalı
+    if not md_path.startswith(_PROMPTS_ROOT):
+        logger.error(f"Path traversal attempt blocked: {md_path}")
+        return fallback
+
+    if os.path.isfile(md_path):
         try:
             with open(md_path, "r", encoding="utf-8") as f:
-                return f.read().strip()
+                content = f.read().strip()
+            if not content:
+                logger.warning(f"Prompt file is empty: {md_path}. Using fallback.")
+                return fallback
+            return content
         except Exception as e:
-            logger.warning(f"Error reading MD prompt {md_path}: {e}")
+            logger.warning(f"Error reading prompt {md_path}: {e}. Using fallback.")
+            return fallback
 
-    logger.warning(f"Could not load prompt {key} for agent {agent_name} at {md_path}")
+    # DÜZELTME 2 & 3: Fallback'e düşüldüğünde ne döndürüldüğünü logla.
+    logger.warning(
+        f"Prompt not found for agent='{agent_name}' key='{key}' "
+        f"at '{md_path}'. "
+        f"Falling back to {'provided fallback string' if fallback else 'empty string'}."
+    )
     return fallback
