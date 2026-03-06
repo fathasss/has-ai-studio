@@ -119,40 +119,120 @@ The JSON must conform exactly to this schema so the worker system can parse it:
 {
   "tasks": [
     {
+      "task_id": "T1",
+      "depends_on": [],
       "role": "DevOps",
-      "phase": "infrastructure",
-      "task": "[TARGET FILE]: requirements.txt\n[LOGIC]: ...\n[DEPENDENCIES]: ..."
+      "phase": "Setup",
+      "file_action": "CREATE",
+      "target_file": "requirements.txt",
+      "description": "Pin all production dependencies with exact versions: fastapi==0.111.0, uvicorn==0.29.0, sqlalchemy==2.0.30, asyncpg==0.29.0, bcrypt==4.1.2, pydantic==2.7.1. Add dev dependencies: pytest==8.2.0, httpx==0.27.0.",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "File exists at project root",
+        "All dependencies have exact pinned versions (no ^ or ~)",
+        "pip install -r requirements.txt completes without errors"
+      ]
     },
     {
+      "task_id": "T2",
+      "depends_on": ["T1"],
+      "role": "DevOps",
+      "phase": "Setup",
+      "file_action": "CREATE",
+      "target_file": "Dockerfile",
+      "description": "Create a multi-stage Dockerfile. Stage 1 (builder): use python:3.11-slim, install dependencies. Stage 2 (runtime): copy installed packages and app source, run as non-root user, expose port 8000, CMD uvicorn src.main:app --host 0.0.0.0 --port 8000.",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "docker build completes without errors",
+        "Container runs as non-root user",
+        "Port 8000 is exposed"
+      ]
+    },
+    {
+      "task_id": "T3",
+      "depends_on": ["T1"],
       "role": "Backend",
-      "phase": "implementation",
-      "task": "[TARGET FILE]: src/main.py\n[LOGIC]: ...\n[DEPENDENCIES]: ..."
+      "phase": "Logic",
+      "file_action": "CREATE",
+      "target_file": "src/routers/user_router.py",
+      "description": "Define POST /api/v1/users. Accept Pydantic schema {name: str, email: EmailStr, password: str min_length=8}. Call user_service.create_user(). Return 201 with {id, name, email}. Return 409 if email exists. Return 400 for validation failures. Return 500 with structured error body {success: false, errorCode, message} on unexpected exceptions.",
+      "dependencies": ["fastapi", "src/services/user_service.py", "src/schemas/user_schema.py"],
+      "acceptance_criteria": [
+        "POST /api/v1/users with valid payload returns 201 with id and email",
+        "Duplicate email returns 409",
+        "Missing required field returns 400",
+        "Password shorter than 8 chars returns 400"
+      ]
     },
     {
+      "task_id": "T4",
+      "depends_on": ["T1"],
       "role": "Frontend",
-      "phase": "implementation",
-      "task": "[TARGET FILE]: src/App.tsx\n[LOGIC]: ...\n[DEPENDENCIES]: ..."
+      "phase": "Logic",
+      "file_action": "CREATE",
+      "target_file": "src/pages/RegisterPage.tsx",
+      "description": "Render a registration form with controlled inputs: name, email, password. On submit call authService.register(payload). Show loading spinner during request. Display inline field errors on HTTP 400. Show toast notification on HTTP 409 (email taken). Redirect to /dashboard on HTTP 201. Use VITE_API_BASE_URL env variable — never hardcode URLs.",
+      "dependencies": ["react", "react-router-dom", "src/services/authService.ts", "src/components/Spinner.tsx"],
+      "acceptance_criteria": [
+        "Form renders name, email, password fields",
+        "Submit button disabled during loading",
+        "Inline error shown for 400 responses",
+        "Toast shown for 409 responses",
+        "Redirects to /dashboard on 201"
+      ]
     },
     {
+      "task_id": "T5",
+      "depends_on": ["T3", "T4"],
       "role": "Security",
-      "phase": "security",
-      "task": "[TARGET FILE]: src/middleware/rate_limit.py\n[LOGIC]: ...\n[DEPENDENCIES]: ..."
+      "phase": "Security",
+      "file_action": "CREATE",
+      "target_file": "src/middleware/rate_limit.py",
+      "description": "Apply per-IP rate limiting to all /api/v1/auth/* routes using slowapi. Limit: 10 requests/minute. Return HTTP 429 with Retry-After header on breach. Log offending IP and timestamp at WARNING level. Do not expose internal error details in the response body.",
+      "dependencies": ["slowapi", "fastapi"],
+      "acceptance_criteria": [
+        "11th request within 60s returns HTTP 429",
+        "Retry-After header present in 429 response",
+        "Rate limit events logged at WARNING level"
+      ]
     },
     {
+      "task_id": "T6",
+      "depends_on": ["T3", "T4", "T5"],
       "role": "Tester",
-      "phase": "qa",
-      "task": "[TARGET FILE]: tests/test_main.py\n[LOGIC]: ...\n[DEPENDENCIES]: ..."
+      "phase": "Testing",
+      "file_action": "CREATE",
+      "target_file": "tests/test_user_router.py",
+      "description": "Write pytest-asyncio tests for POST /api/v1/users. Cases: (1) valid payload returns 201 with id and email, (2) duplicate email returns 409, (3) missing email field returns 400, (4) password shorter than 8 chars returns 400. Use httpx.AsyncClient with app fixture. Assert each response body matches UserResponse schema. If any case fails, output '### RESULT: FAILED' on its own line at the end of the response.",
+      "dependencies": ["pytest", "pytest-asyncio", "httpx", "src/main.py"],
+      "acceptance_criteria": [
+        "All 4 test cases pass",
+        "Test file is runnable with: pytest tests/test_user_router.py",
+        "No hardcoded secrets or real DB connections in tests"
+      ]
     }
   ]
 }
 ```
 
-Field rules:
-- `role` — exactly one of: `DevOps`, `Backend`, `Frontend`, `Security`, `Tester`
-- `phase` — exactly one of: `infrastructure`, `implementation`, `security`, `qa`
-- `task` — must contain all three labeled sections: `[TARGET FILE]`, `[LOGIC]`, `[DEPENDENCIES]`
-- All paths are root-relative. No `apps/`, no `workspace/` prefix.
-- No two tasks may share the same `[TARGET FILE]`.
+## Field Rules
+
+- **`task_id`** — unique string: `"T1"`, `"T2"`, etc.
+- **`depends_on`** — list of `task_id` values this task waits for. Empty `[]` means no dependencies. Only reference IDs that appear earlier in the array.
+- **`role`** — exactly one of: `DevOps`, `Backend`, `Frontend`, `Security`, `Tester`
+- **`phase`** — exactly one of:
+  - `Setup` — DevOps infrastructure tasks
+  - `Logic` — Backend or Frontend feature implementation
+  - `Integration` — service wiring, DB connections, external API integration
+  - `Security` — security audit and hardening
+  - `Testing` — Tester validation tasks
+- **`file_action`** — exactly one of:
+  - `CREATE` — file does not exist yet, create from scratch
+  - `MODIFY` — file already exists, extend or fix specific parts. Never use `MODIFY` on a file not yet created by a prior task.
+- **`target_file`** — root-relative path. No `apps/` or `workspace/` prefix. No two tasks may share the same `target_file`.
+- **`description`** — step-by-step instructions covering: inputs/outputs, error cases with HTTP codes, async pattern if applicable, security measures.
+- **`dependencies`** — exact package names and local module paths required. Empty `[]` if none.
+- **`acceptance_criteria`** — measurable, testable conditions the Tester will verify directly.
 
 ---
 

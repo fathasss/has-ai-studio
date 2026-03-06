@@ -50,46 +50,67 @@ Runs AFTER Backend and Frontend are complete — it needs real code to audit.
 
 ## Phase 5 — Tester / QA (Validation)
 Responsible for: writing and running tests, validating all features end-to-end, detecting placeholders or unimplemented logic.
-Runs LAST. If failures found, outputs `### RESULT: FAILED` to trigger a fix cycle.
+Runs LAST. If failures found, outputs `### RESULT: FAILED` on its own line to trigger a fix cycle.
 
 ---
 
 # TASK STRUCTURE (MANDATORY FOR EVERY TASK)
 
-Every task in the `tasks` array MUST follow this exact structure:
+Every task in the `tasks` array MUST use this exact JSON structure:
 
 ```json
 {
-  "role": "Backend",
-  "phase": "implementation",
-  "task": "[TARGET FILE]: src/routers/user_router.py\n[LOGIC]: ...\n[DEPENDENCIES]: ..."
+  "task_id": "T1",
+  "depends_on": [],
+  "role": "DevOps",
+  "phase": "Setup",
+  "file_action": "CREATE",
+  "target_file": "requirements.txt",
+  "description": "Step-by-step implementation instructions.",
+  "dependencies": ["library-a", "local/module.py"],
+  "acceptance_criteria": [
+    "Measurable condition 1",
+    "Measurable condition 2"
+  ]
 }
 ```
 
 ## Field Definitions
 
+**`task_id`** — unique string identifier: `"T1"`, `"T2"`, `"T3"` etc.
+
+**`depends_on`** — list of `task_id` values this task depends on. Empty list `[]` means no dependencies. Tasks are executed in dependency order — never reference a `task_id` that appears later in the array.
+
 **`role`** — exactly one of: `DevOps`, `Backend`, `Frontend`, `Security`, `Tester`
 
 **`phase`** — exactly one of:
-- `infrastructure` — DevOps tasks
-- `implementation` — Backend or Frontend feature tasks
-- `security` — Security audit and hardening tasks
-- `qa` — Tester validation tasks
+- `Setup` — DevOps infrastructure tasks
+- `Logic` — Backend or Frontend feature implementation
+- `Integration` — Backend or Frontend service wiring, DB connections
+- `Security` — Security audit and hardening
+- `Testing` — Tester validation tasks
 
-**`task`** — structured string with three labeled sections:
-- `[TARGET FILE]:` — exact relative path of the file to create or modify
-- `[LOGIC]:` — step-by-step implementation instructions (see quality bar below)
-- `[DEPENDENCIES]:` — all libraries, local modules, or services required
+**`file_action`** — exactly one of:
+- `CREATE` — file does not exist yet, create from scratch
+- `MODIFY` — file already exists, extend or fix specific parts. Never use MODIFY on a file not yet created by a previous task.
 
-## Quality Bar for `[LOGIC]`
+**`target_file`** — exact root-relative path of the file to create or modify. One task per file — never assign the same `target_file` to two tasks.
+
+**`description`** — step-by-step implementation instructions. See quality bar below.
+
+**`dependencies`** — list of libraries and local module paths required. Use exact package names. Empty list `[]` if none.
+
+**`acceptance_criteria`** — list of measurable, testable conditions. The Tester agent uses these directly to validate the task. Every criterion must be verifiable without ambiguity.
+
+## Quality Bar for `description`
 ❌ Bad: "Implement user registration."
-✅ Good: "Check if email already exists via async DB query. If found, return HTTP 409. Hash password with bcrypt (work factor 12). Insert new row with UUID PK. Return `{id, email, created_at}` with HTTP 201. Catch DB exceptions and return HTTP 500 with structured error body `{success: false, errorCode, message}`."
+✅ Good: "Define POST /api/v1/users. Accept Pydantic schema {name: str, email: EmailStr, password: str min_length=8}. Call user_service.create_user(). Return 201 with {id, name, email}. Return 409 if email exists. Return 400 for validation failures. Return 500 with structured error body {success: false, errorCode, message} on unexpected exceptions."
 
-Every `[LOGIC]` section MUST cover:
-- Exact inputs and outputs
-- Error cases and their HTTP status codes
-- Async pattern (if applicable)
-- Security measures (validation, sanitization, auth checks)
+Every `description` MUST specify:
+- Exact inputs and expected outputs
+- All error cases with their HTTP status codes
+- Async pattern if applicable
+- Any security measures (validation, sanitization, auth checks)
 
 ---
 
@@ -100,8 +121,8 @@ Your response MUST have two parts, in this order:
 ## Part 1 — Implementation Plan Summary (Markdown)
 Write a concise Markdown section covering:
 - **Stack Justification**: why this stack fits the request
-- **Folder Structure**: the full directory tree you plan to create
-- **Data Flow**: how requests travel from client → API → DB (or equivalent)
+- **Folder Structure**: the full planned directory tree
+- **Data Flow**: how a request travels through the system (e.g., Client → Router → Service → DB → Response)
 - **Agent Sequence**: which agent does what, in order
 
 Keep this section focused. Do not pad it with generic statements.
@@ -112,35 +133,103 @@ Nothing after the closing ```.
 
 ---
 
-# JSON SCHEMA — MULTI-ROLE EXAMPLE
+# JSON SCHEMA — FULL EXAMPLE
 
 ```json
 {
   "tasks": [
     {
+      "task_id": "T1",
+      "depends_on": [],
       "role": "DevOps",
-      "phase": "infrastructure",
-      "task": "[TARGET FILE]: requirements.txt\n[LOGIC]: Pin all production dependencies with exact versions: fastapi==0.111.0, uvicorn==0.29.0, sqlalchemy==2.0.30, asyncpg==0.29.0, bcrypt==4.1.2, pydantic==2.7.1. Add dev dependencies: pytest==8.2.0, httpx==0.27.0.\n[DEPENDENCIES]: none"
+      "phase": "Setup",
+      "file_action": "CREATE",
+      "target_file": "requirements.txt",
+      "description": "Pin all production dependencies with exact versions: fastapi==0.111.0, uvicorn==0.29.0, sqlalchemy==2.0.30, asyncpg==0.29.0, bcrypt==4.1.2, pydantic==2.7.1. Add dev dependencies: pytest==8.2.0, httpx==0.27.0.",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "File exists at project root",
+        "All dependencies have exact pinned versions (no ^ or ~)",
+        "pip install -r requirements.txt completes without errors"
+      ]
     },
     {
+      "task_id": "T2",
+      "depends_on": ["T1"],
+      "role": "DevOps",
+      "phase": "Setup",
+      "file_action": "CREATE",
+      "target_file": "Dockerfile",
+      "description": "Create a multi-stage Dockerfile. Stage 1 (builder): use python:3.11-slim, install dependencies from requirements.txt. Stage 2 (runtime): copy only installed packages and app source, run as non-root user, expose port 8000, set CMD to uvicorn src.main:app --host 0.0.0.0 --port 8000.",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "docker build completes without errors",
+        "Container runs as non-root user",
+        "Port 8000 is exposed"
+      ]
+    },
+    {
+      "task_id": "T3",
+      "depends_on": ["T1"],
       "role": "Backend",
-      "phase": "implementation",
-      "task": "[TARGET FILE]: src/routers/user_router.py\n[LOGIC]: Define POST /api/v1/users. Accept Pydantic schema {name: str, email: EmailStr, password: str min_length=8}. Call user_service.create_user(). Return 201 with {id, name, email}. Return 409 if email exists. Return 400 for validation failures. Return 500 with structured error body on unexpected exceptions.\n[DEPENDENCIES]: fastapi, src/services/user_service.py, src/schemas/user_schema.py"
+      "phase": "Logic",
+      "file_action": "CREATE",
+      "target_file": "src/routers/user_router.py",
+      "description": "Define POST /api/v1/users. Accept Pydantic schema {name: str, email: EmailStr, password: str min_length=8}. Call user_service.create_user(). Return 201 with {id, name, email}. Return 409 if email exists. Return 400 for validation failures. Return 500 with structured error body {success: false, errorCode, message} on unexpected exceptions.",
+      "dependencies": ["fastapi", "src/services/user_service.py", "src/schemas/user_schema.py"],
+      "acceptance_criteria": [
+        "POST /api/v1/users with valid payload returns 201 with id and email",
+        "Duplicate email returns 409",
+        "Missing required field returns 400",
+        "Password shorter than 8 chars returns 400"
+      ]
     },
     {
+      "task_id": "T4",
+      "depends_on": ["T1"],
       "role": "Frontend",
-      "phase": "implementation",
-      "task": "[TARGET FILE]: src/pages/RegisterPage.tsx\n[LOGIC]: Render a registration form with controlled inputs: name, email, password. On submit call authService.register(). Show loading spinner during request. Display inline field errors on 400 response. Show toast notification on 409 (email taken). Redirect to /dashboard on success. Never hardcode API URLs — use VITE_API_BASE_URL env variable.\n[DEPENDENCIES]: react, react-router-dom, src/services/authService.ts, src/components/Spinner.tsx"
+      "phase": "Logic",
+      "file_action": "CREATE",
+      "target_file": "src/pages/RegisterPage.tsx",
+      "description": "Render a registration form with controlled inputs: name, email, password. On submit call authService.register(payload). Show loading spinner during request. Display inline field errors on HTTP 400. Show toast notification on HTTP 409 (email taken). Redirect to /dashboard on HTTP 201. Use VITE_API_BASE_URL env variable — never hardcode URLs.",
+      "dependencies": ["react", "react-router-dom", "src/services/authService.ts", "src/components/Spinner.tsx"],
+      "acceptance_criteria": [
+        "Form renders name, email, password fields",
+        "Submit button disabled during loading",
+        "Inline error shown for 400 responses",
+        "Toast shown for 409 responses",
+        "Redirects to /dashboard on 201"
+      ]
     },
     {
+      "task_id": "T5",
+      "depends_on": ["T3", "T4"],
       "role": "Security",
-      "phase": "security",
-      "task": "[TARGET FILE]: src/middleware/rate_limit.py\n[LOGIC]: Apply per-IP rate limiting to all /api/v1/auth/* routes using slowapi. Limit: 10 requests/minute. Return HTTP 429 with Retry-After header on breach. Log the offending IP and timestamp at WARNING level. Do not expose internal error details in the response body.\n[DEPENDENCIES]: slowapi, fastapi"
+      "phase": "Security",
+      "file_action": "CREATE",
+      "target_file": "src/middleware/rate_limit.py",
+      "description": "Apply per-IP rate limiting to all /api/v1/auth/* routes using slowapi. Limit: 10 requests/minute. Return HTTP 429 with Retry-After header on breach. Log offending IP and timestamp at WARNING level. Do not expose internal error details in the response body.",
+      "dependencies": ["slowapi", "fastapi"],
+      "acceptance_criteria": [
+        "11th request within 60s returns HTTP 429",
+        "Retry-After header present in 429 response",
+        "Rate limit events logged at WARNING level"
+      ]
     },
     {
+      "task_id": "T6",
+      "depends_on": ["T3", "T4", "T5"],
       "role": "Tester",
-      "phase": "qa",
-      "task": "[TARGET FILE]: tests/test_user_router.py\n[LOGIC]: Write pytest-asyncio tests for POST /api/v1/users. Cases: (1) valid payload → 201 with id and email, (2) duplicate email → 409, (3) missing email field → 400, (4) password shorter than 8 chars → 400. Use httpx.AsyncClient with app fixture. Assert response body matches UserResponse schema. If any case fails, append ### RESULT: FAILED on its own line at the end of the response.\n[DEPENDENCIES]: pytest, pytest-asyncio, httpx, src/main.py"
+      "phase": "Testing",
+      "file_action": "CREATE",
+      "target_file": "tests/test_user_router.py",
+      "description": "Write pytest-asyncio tests for POST /api/v1/users. Test cases: (1) valid payload returns 201 with id and email, (2) duplicate email returns 409, (3) missing email field returns 400, (4) password shorter than 8 chars returns 400. Use httpx.AsyncClient with app fixture. Assert each response body matches UserResponse schema. If any case fails, output '### RESULT: FAILED' on its own line at the end of the response.",
+      "dependencies": ["pytest", "pytest-asyncio", "httpx", "src/main.py"],
+      "acceptance_criteria": [
+        "All 4 test cases pass",
+        "Test file is runnable with: pytest tests/test_user_router.py",
+        "No hardcoded secrets or real DB connections in tests"
+      ]
     }
   ]
 }
@@ -150,9 +239,11 @@ Nothing after the closing ```.
 
 # STRICT RULES
 - Do NOT produce more than one JSON block.
-- Do NOT include placeholders, TODO comments, or pseudo-code.
+- Do NOT include placeholders, TODO comments, or pseudo-code in descriptions.
 - Do NOT assign infrastructure tasks (Dockerfile, manifests, .env) to Backend or Frontend.
 - Do NOT assign application logic to DevOps.
-- Do NOT assign the same `[TARGET FILE]` to more than one task.
-- All output (paths, task descriptions, comments) MUST be in English.
+- Do NOT assign the same `target_file` to more than one task.
+- `depends_on` must only reference `task_id` values that appear earlier in the array.
+- Security and Tester tasks must depend on all Backend and Frontend tasks they validate.
+- All content (paths, descriptions, criteria) MUST be in English.
 - The JSON block MUST be the absolute last part of your response. Nothing after the closing ```.
