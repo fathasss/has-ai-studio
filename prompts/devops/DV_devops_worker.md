@@ -116,6 +116,8 @@ All configuration files, comments, and environment variable names MUST be in Eng
 ## 1. Dependency Manifest
 Use the manifest file appropriate for the approved stack. Pin all dependencies to exact stable versions — no wildcards (`^`, `~`, `*`).
 
+**CRITICAL**: The manifest MUST list ALL packages that the backend code imports. Cross-check the TeamLead's plan — if the plan mentions `sqlalchemy`, `asyncpg`, `bcrypt`, `pydantic`, `pyjwt`, etc., ALL of them must appear in the manifest with pinned versions. An incomplete manifest will cause runtime import errors.
+
 | Stack | Manifest file | Notes |
 |---|---|---|
 | Python | `requirements.txt` | Default. Use `pyproject.toml` only if TeamLead explicitly requests it. Never use `poetry` or `Pipfile` unless required. |
@@ -165,6 +167,22 @@ Match the entry point command to the actual file tree. Examples:
 Adjust the path to match the actual file location in the project tree. If `main.py` is at root, use `main:app`. If it is at `src/main.py`, use `src.main:app`.
 
 ### Mandatory Dockerfile rules
+- **CRITICAL**: In a multi-stage build, the runtime stage MUST `COPY --from=builder` the application code AND installed dependencies. A runtime stage without `COPY --from=builder` produces an EMPTY, non-functional container. Example:
+  ```dockerfile
+  # Python example
+  FROM python:3.11-slim AS builder
+  WORKDIR /app
+  COPY requirements.txt .
+  RUN pip install --no-cache-dir --target=/install -r requirements.txt
+  COPY . .
+
+  FROM python:3.11-slim
+  WORKDIR /app
+  COPY --from=builder /install /usr/local/lib/python3.11/site-packages
+  COPY --from=builder /app .
+  RUN useradd -m appuser
+  USER appuser
+  ```
 - Copy the manifest file (`requirements.txt`, `package.json`, etc.) into `WORKDIR` BEFORE running install commands — enables Docker layer cache.
 - Copy ONLY what is needed into the runtime stage. Never copy the entire build context.
 - Run as a non-root user. Create the user explicitly before switching:
@@ -174,6 +192,7 @@ Adjust the path to match the actual file location in the project tree. If `main.
   ```
   For Alpine: use `adduser -D appuser`.
   For distroless: use a numeric UID (`USER 1001`).
+- **You MUST NOT use `USER appuser` without first creating the user with `RUN useradd` or `RUN adduser`.**
 - Expose only the port(s) actually used by the application.
 - Add a `HEALTHCHECK` instruction appropriate for the stack:
   ```dockerfile
@@ -206,9 +225,19 @@ target/
 
 ## 5. docker-compose.yml (Development)
 - Define all services, volumes, and networks.
+- **CRITICAL**: Use ONLY official Docker Hub images for databases and services. Examples:
+  - PostgreSQL: `postgres:16-alpine` (NOT `asyncpg/postgres` — this does not exist)
+  - MySQL: `mysql:8.0`
+  - Redis: `redis:7-alpine`
+  - MongoDB: `mongo:7`
+  - Never invent or fabricate image names. If unsure, use the official image from Docker Hub.
 - Reference `.env` for all secrets via `env_file: .env` or variable references — never hardcode values inline.
 - Add a `healthcheck` block for each service.
 - Use named volumes for database data persistence.
+
+## CRITICAL: Dependency Awareness
+**If the backend code uses a database (Postgres, MySQL, Redis, etc.), you MUST define that database service in `docker-compose.yml`.** 
+Never leave the backend service isolated if it requires a persistence layer. Ensure that the `DATABASE_URL` in environment variables correctly points to the service name you defined (e.g., `postgresql://user:pass@db:5432/...`).
 
 ## 6. CI/CD (only if explicitly requested in the TeamLead's plan)
 - Produce a GitHub Actions workflow or equivalent ONLY if the TeamLead's plan explicitly mentions CI/CD.

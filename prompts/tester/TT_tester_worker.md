@@ -236,6 +236,12 @@ or
 ### RESULT: FAILED
 ```
 
+**CRITICAL SEPARATION RULES:**
+- `### RESULT:` MUST be on its own line OUTSIDE of any `### FILE:` block. It is a signal, NOT file content.
+- NEVER place `### RESULT:` inside a code block or after a `### FILE:` marker.
+- The `### RESULT:` line must be the absolute LAST line after `### TECHNICAL_HANDOVER:`.
+- Test files (e.g., `tests/test_main.py`) MUST contain runnable test code — never plain text, signals, or explanations.
+
 Use `FAILED` if ANY of these are true:
 - A placeholder or unimplemented logic was found that could not be auto-fixed
 - A required endpoint or function is missing

@@ -25,6 +25,198 @@ DEPENDENCY_REGISTRY = [
 ]
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Cross-language detection: dosya uzantısına uymayan kod pattern'leri.
+# Bir .py dosyasında Go kodu veya bir .go dosyasında Python kodu
+# tespit edilirse validate_content başarısız döner.
+# ═══════════════════════════════════════════════════════════════════
+LANGUAGE_MISMATCH_RULES = {
+    '.py': [
+        (r'^\s*package\s+\w+', "Go 'package' declaration found in Python file"),
+        (r'^\s*func\s+\w+\s*\(', "Go 'func' declaration found in Python file"),
+        (r'^\s*import\s*\(\s*$', "Go multi-import block found in Python file"),
+        (r'^\s*using\s+System', "C# 'using System' found in Python file"),
+        (r'^\s*namespace\s+\w+', "C# 'namespace' found in Python file"),
+        (r'^\s*public\s+class\s+', "Java/C# class found in Python file"),
+    ],
+    '.go': [
+        (r'^\s*from\s+\w+\s+import\s+', "Python import found in Go file"),
+        (r'^\s*def\s+\w+\s*\(', "Python function found in Go file"),
+        (r'^\s*class\s+\w+', "Python class found in Go file"),
+    ],
+    '.cs': [
+        (r'^\s*from\s+\w+\s+import\s+', "Python import found in C# file"),
+        (r'^\s*def\s+\w+\s*\(', "Python function found in C# file"),
+        (r'^\s*package\s+\w+', "Go package found in C# file"),
+    ],
+    '.java': [
+        (r'^\s*from\s+\w+\s+import\s+', "Python import found in Java file"),
+        (r'^\s*def\s+\w+\s*\(', "Python function found in Java file"),
+    ],
+    '.js': [
+        (r'^\s*def\s+\w+\s*\(', "Python function found in JS file"),
+    ],
+    '.ts': [
+        (r'^\s*def\s+\w+\s*\(', "Python function found in TS file"),
+    ],
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# Framework conflict detection (Python): Aynı projede FastAPI ve Flask
+# veya Django karıştırılmasını tespit eder.
+# ═══════════════════════════════════════════════════════════════════
+FRAMEWORK_SIGNATURES = {
+    'fastapi': [r'from\s+fastapi\s+import', r'FastAPI\(\)'],
+    'flask':   [r'from\s+flask\s+import',   r'Flask\(__name__\)', r'from\s+flask_login\s+import'],
+    'django':  [r'from\s+django',           r'django\.'],
+}
+
+
+def detect_framework_in_content(content: str) -> Optional[str]:
+    """Returns the dominant framework name found in content, or None."""
+    for fw_name, patterns in FRAMEWORK_SIGNATURES.items():
+        for pat in patterns:
+            if re.search(pat, content, re.MULTILINE):
+                return fw_name
+    return None
+
+
+def detect_project_framework(project_dir: str) -> Optional[str]:
+    """Scans existing .py files in project_dir to find the dominant framework."""
+    if not os.path.exists(project_dir):
+        return None
+
+    framework_counts: dict = {}
+    for root, dirs, files in os.walk(project_dir):
+        dirs[:] = [
+            d for d in dirs
+            if not d.startswith('.') and d not in {
+                'node_modules', 'venv', '.venv', '__pycache__',
+                'dist', 'build', 'bin', 'obj', 'tests', 'test'
+            }
+        ]
+        for fname in files:
+            if not fname.endswith('.py'):
+                continue
+            fpath = os.path.join(root, fname)
+            try:
+                with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
+                    text = f.read()
+                fw = detect_framework_in_content(text)
+                if fw:
+                    framework_counts[fw] = framework_counts.get(fw, 0) + 1
+            except Exception:
+                pass
+
+    if not framework_counts:
+        return None
+    return max(framework_counts, key=framework_counts.get)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Project-Aware Validation Helpers: Mantıksal ve altyapı tutarlılığı.
+# ═══════════════════════════════════════════════════════════════════
+
+def validate_python_local_imports(content: str, rel_path: str, project_dir: str, planned_files: List[str]) -> Tuple[bool, str]:
+    """Ensures that local imports (starts with src. or current root modules) exist."""
+    # Sadece 'src' ile başlayan veya projedeki klasör isimleriyle başlayanları yakala
+    project_subdirs = {d for d in os.listdir(project_dir) if os.path.isdir(os.path.join(project_dir, d))}
+    # Planned files'lardan da klasör isimlerini çıkar (belki henüz klasör yok diskte)
+    for pf in planned_files:
+        parts = pf.split('/')
+        if len(parts) > 1: project_subdirs.add(parts[0])
+
+    # from x.y import z
+    # import x.y
+    from_imports = re.findall(r'(?m)^\s*from\s+([a-zA-Z0-9_\.]+)\s+import', content)
+    direct_imports = re.findall(r'(?m)^\s*import\s+([a-zA-Z0-9_\.]+)', content)
+    
+    all_imports = from_imports + direct_imports
+    
+    for imp in all_imports:
+        parts = imp.split('.')
+        root_mod = parts[0]
+        
+        # Eğer root module bir proje klasörü ise, bu bir local import kabul edilir
+        if root_mod in project_subdirs or root_mod == 'src':
+            # Dosya yolunu oluştur: src.db.database -> src/db/database.py
+            target_rel_path = "/".join(parts) + ".py"
+            target_rel_path_alt = "/".join(parts) + "/__init__.py"
+            
+            # 1. Diskte var mı?
+            # 2. Şu anki extraction listesinde (planned_files) var mı?
+            if target_rel_path not in planned_files and \
+               target_rel_path_alt not in planned_files and \
+               not os.path.exists(os.path.join(project_dir, target_rel_path)) and \
+               not os.path.exists(os.path.join(project_dir, target_rel_path_alt)):
+                return False, f"ModuleNotFoundError: Local module '{imp}' not found in project tree or planned files."
+                
+    return True, ""
+
+
+def validate_docker_compose_consistency(content: str) -> Tuple[bool, str]:
+    """Checks if database URLs in environment match services in the same file."""
+    try:
+        # Basit bir check: regex ile servisleri ve env'leri bul (YAML parser'a gerek kalmadan)
+        # Genelde 'postgresql://', 'postgres://', 'mysql://', 'redis://'
+        db_urls = re.findall(r'(postgresql|postgres|mysql|redis|mongodb)://', content, re.IGNORECASE)
+        if not db_urls:
+            return True, ""
+            
+        # Servis tanımlarını bul (indentation fark etmeksizin '  service_name:')
+        services = re.findall(r'(?m)^\s{2}([a-zA-Z0-9_-]+):', content)
+        
+        for db_type in db_urls:
+            found_service = False
+            db_type = db_type.lower()
+            # Eğer 'postgres' url'si varsa, 'db', 'postgres', 'database' veya 'psql' adında servis arayalım
+            search_keywords = [db_type, 'db', 'database', 'sql']
+            if any(kw in " ".join(services).lower() for kw in search_keywords):
+                found_service = True
+            
+            # Eğer url var ama servis yok gibi görünüyorsa uyaralım (Hata değil uyarı, çünkü external DB olabilir)
+            # Ancak Agent'lar genelde self-contained proje üretmeli.
+            if not found_service:
+                logger.warning(f"Docker-Compose: Found '{db_type}' URL but no corresponding service in the same file. Might fail in dev.")
+                
+        return True, ""
+    except Exception:
+        return True, ""
+
+
+def validate_dockerfile_paths(content: str, project_dir: str, planned_files: List[str]) -> Tuple[bool, str]:
+    """Ensures that CMD/ENTRYPOINT refers to existing files."""
+    # CMD ["uvicorn", "main:app", ...]
+    # CMD ["python", "main.py"]
+    # CMD python src/main.py
+    
+    cmd_match = re.search(r'(?m)^\s*(?:CMD|ENTRYPOINT)\s+(.*)', content)
+    if not cmd_match:
+        return True, ""
+        
+    cmd_val = cmd_match.group(1).strip()
+    
+    # Python + main.py senaryosu
+    if "python" in cmd_val.lower() and (".py" in cmd_val.lower()):
+        # main.py veya src/main.py gibi bir string ara
+        file_matches = re.findall(r'([a-zA-Z0-9_\-\/]+\.py)', cmd_val)
+        for f in file_matches:
+            if f not in planned_files and not os.path.exists(os.path.join(project_dir, f)):
+                return False, f"Dockerfile error: CMD targets '{f}' but file is missing or in a different directory."
+
+    # Uvicorn: main:app
+    if "uvicorn" in cmd_val.lower():
+        # "main:app" veya "src.main:app"
+        uv_match = re.search(r'["\']?([a-zA-Z0-9_\.]+):[a-zA-Z0-9_]+["\']?', cmd_val)
+        if uv_match:
+            mod_path = uv_match.group(1)
+            target_rel = mod_path.replace('.', '/') + ".py"
+            if target_rel not in planned_files and not os.path.exists(os.path.join(project_dir, target_rel)):
+                return False, f"Dockerfile error: Uvicorn targets '{mod_path}' but '{target_rel}' not found. Check file location!"
+
+    return True, ""
+
+
 def map_role(role: str) -> str:
     if not role or not role.strip():
         logger.warning("map_role called with empty role, defaulting to 'Backend'")
@@ -272,7 +464,7 @@ def extract_setup_commands(text: str, project_dir: str) -> List[str]:
     return commands
 
 
-def validate_content(filename: str, content: str) -> Tuple[bool, str]:
+def validate_content(filename: str, content: str, project_framework: str = None, project_dir: str = None, planned_files: List[str] = None) -> Tuple[bool, str]:
     ext = os.path.splitext(filename)[1].lower()
 
     MARKDOWN_LEAKAGE_MARKERS = ["```", "### FILE:", "[TARGET FILE]:"]
@@ -283,6 +475,42 @@ def validate_content(filename: str, content: str) -> Tuple[bool, str]:
     first_line = content.lstrip().splitlines()[0] if content.strip() else ""
     if first_line.startswith("Note:") or first_line.startswith("NOTE:"):
         return False, "Content appears to be a note/explanation, not code"
+
+    # Project-Aware Validations (Requires project_dir and planned_files)
+    if project_dir and planned_files:
+        if ext == '.py':
+            is_ok, err = validate_python_local_imports(content, filename, project_dir, planned_files)
+            if not is_ok: return False, err
+            
+        if filename.lower().endswith('dockerfile'):
+            is_ok, err = validate_dockerfile_paths(content, project_dir, planned_files)
+            if not is_ok: return False, err
+            
+        if filename.lower() == 'docker-compose.yml':
+            is_ok, err = validate_docker_compose_consistency(content)
+            if not is_ok: return False, err
+
+    # RESULT signal leakage: Tester/Security agent'ın sonuç satırı dosya içeriği olmamalı
+    stripped_content = content.strip()
+    if re.match(r'^\s*\*{0,2}Result\s+Signal\*{0,2}\s*$', stripped_content, re.IGNORECASE):
+        return False, "Content is a raw result signal, not code"
+    if re.match(r'^\s*###\s*RESULT:\s*(PASSED|FAILED)\s*$', stripped_content, re.IGNORECASE):
+        return False, "Content is a RESULT signal, not code"
+
+    # Cross-language detection: dosya uzantısına uymayan kod pattern'leri
+    if ext in LANGUAGE_MISMATCH_RULES:
+        for pattern, msg in LANGUAGE_MISMATCH_RULES[ext]:
+            if re.search(pattern, content, re.MULTILINE):
+                return False, f"Language mismatch: {msg}"
+
+    # Framework conflict detection (Python dosyaları için)
+    if ext == '.py' and project_framework:
+        content_fw = detect_framework_in_content(content)
+        if content_fw and content_fw != project_framework:
+            return False, (
+                f"Framework conflict: file uses '{content_fw}' but project uses "
+                f"'{project_framework}'. Mixing frameworks is not allowed."
+            )
 
     if ext == '.py':
         try:
@@ -328,6 +556,12 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None, agent_name
     os.makedirs(project_dir, exist_ok=True)
     files_created = []
 
+    # Proje içindeki mevcut dosyalardan dominant framework'ü tespit et.
+    # Bu bilgi validate_content'e geçirilerek framework karışıklığı yakalanır.
+    project_framework = detect_project_framework(project_dir)
+    if project_framework:
+        logger.info(f"Detected project framework: {project_framework}")
+
     setup_commands = extract_setup_commands(text, project_dir)
     if setup_commands:
         logger.info(f"Agent-defined setup detected for {sprint_id or 'workspace'}. Commands: {setup_commands}")
@@ -338,8 +572,25 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None, agent_name
         text, re.IGNORECASE
     ))
 
+    # Pre-parse: Hangi dosyalar üretilecek? (Validation için gerekli)
+    planned_files = []
+    for m in file_markers:
+        raw_p = m.group(1).strip().replace("\\", "/").lstrip("/")
+        # Path temizleme mantığını burada da işlet ki tam liste olsun
+        p_parts = raw_p.split("/")
+        while p_parts:
+            fst = p_parts[0].lower()
+            if fst in ["apps", os.path.basename(project_dir).lower(), "workspace", ".", ""]: p_parts.pop(0)
+            elif fst.startswith("sprint-"): p_parts.pop(0)
+            else: break
+        planned_files.append("/".join(p_parts).rstrip("/"))
+
     for i, marker in enumerate(file_markers):
         raw_path = marker.group(1).strip()
+        rel_path = planned_files[i]
+
+        if ".." in rel_path or not rel_path:
+            continue
 
         start_pos = marker.end()
         end_pos = file_markers[i+1].start() if i + 1 < len(file_markers) else len(text)
@@ -355,40 +606,18 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None, agent_name
         content = re.sub(r"```$", "", content).strip()
         content = content.lstrip("`").rstrip("`").strip()
 
-        rel_path = raw_path.replace("\\", "/").lstrip("/")
-        project_basename = os.path.basename(project_dir)
-
-        path_parts = rel_path.split("/")
-        while path_parts:
-            first = path_parts[0].lower()
-            if first in ["apps", project_basename.lower(), "workspace", ".", ""]:
-                path_parts.pop(0)
-            elif first.startswith("sprint-"):
-                path_parts.pop(0)
-            elif len(path_parts) > 1 and first == path_parts[1].lower():
-                path_parts.pop(0)
-            else:
-                break
-
-        rel_path = "/".join(path_parts).rstrip("/")
-
-        if ".." in rel_path or not rel_path:
-            continue
-
         full_path = os.path.join(project_dir, rel_path)
 
         if not os.path.abspath(full_path).startswith(os.path.abspath(project_dir)):
             logger.warning(f"Malicious path detected and blocked: {rel_path}")
             continue
 
-        is_valid, err_msg = validate_content(rel_path, content)
+        is_valid, err_msg = validate_content(rel_path, content, project_framework, project_dir, planned_files)
         if not is_valid:
-            logger.warning(f"Validation failed for {rel_path}: {err_msg}")
+            logger.warning(f"Validation BLOCKED for {rel_path}: {err_msg}")
             if sprint_id:
                 log_project_exception(sprint_id, "extract_files", f"VALIDATE {rel_path}", err_msg)
-            # DÜZELTME 5: Geçersiz içerik yazılmaya devam ediyor — bu bilinçli karar
-            # ama en azından flag ile işaretleniyor ki caller ayırt edebilsin.
-            # Tamamen engellemek istiyorsanız burada `continue` ekleyin.
+            continue
 
         try:
             if os.path.exists(full_path) and os.path.isdir(full_path):
