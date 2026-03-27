@@ -230,3 +230,9 @@ Rules:
 - Security and Tester tasks must declare all Backend and Frontend task IDs they depend on in `depends_on`.
 - All content (paths, descriptions, criteria) MUST be in English.
 - The JSON block MUST be the absolute last part of your MODE 3 and MODE 4 response.
+
+# MANDATORY PLANNING CHECKLIST
+1. **Entry Point**: Every web project MUST have a clear entry point (e.g., `src/main.py`) explicitly planned.
+2. **Infrastructure**: If backend code uses a database, there MUST be a corresponding service in the `docker-compose.yml`.
+3. **Language Consistency**: Never mix languages (e.g., Go and Python) in the same project.
+4. **Plan Integrity**: Your JSON plan MUST be syntactically correct and COMPLETE. Truncated plans will FAIL the system validation.

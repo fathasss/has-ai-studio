@@ -113,6 +113,65 @@ def detect_project_framework(project_dir: str) -> Optional[str]:
     return max(framework_counts, key=framework_counts.get)
 
 
+def get_project_language(project_dir: str) -> Optional[str]:
+    """Reads the anchored project language from .project_meta if exists."""
+    meta_path = os.path.join(project_dir, ".project_meta")
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("language")
+        except Exception:
+            pass
+    return None
+
+
+def set_project_language(project_dir: str, lang: str):
+    """Anchors the project to a specific language."""
+    if not os.path.exists(project_dir):
+        os.makedirs(project_dir, exist_ok=True)
+    meta_path = os.path.join(project_dir, ".project_meta")
+    try:
+        data = {}
+        if os.path.exists(meta_path):
+            with open(meta_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        
+        if "language" not in data:
+            data["language"] = lang
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            logger.info(f"Project anchored to language: {lang}")
+    except Exception as e:
+        logger.error(f"Failed to set project language: {e}")
+
+
+def repair_truncated_json(text: str) -> str:
+    """Attempts to fix common LLM JSON truncation issues (missing closings)."""
+    text = text.strip()
+    if not text: return text
+    
+    # Sayaclar
+    open_braces = text.count('{')
+    close_braces = text.count('}')
+    open_brackets = text.count('[')
+    close_brackets = text.count(']')
+    
+    # Basit onarım: Eğer tırnaklar orantısızsa ve sonu tırnakla bitmiyorsa tırnak kapat
+    if text.count('"') % 2 != 0:
+        text += '"'
+        
+    # Brackets/Braces kapat
+    while open_brackets > close_brackets:
+        text += ']'
+        close_brackets += 1
+    while open_braces > close_braces:
+        text += '}'
+        close_braces += 1
+        
+    return text
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Project-Aware Validation Helpers: Mantıksal ve altyapı tutarlılığı.
 # ═══════════════════════════════════════════════════════════════════
@@ -157,30 +216,30 @@ def validate_python_local_imports(content: str, rel_path: str, project_dir: str,
 def validate_docker_compose_consistency(content: str) -> Tuple[bool, str]:
     """Checks if database URLs in environment match services in the same file."""
     try:
-        # Basit bir check: regex ile servisleri ve env'leri bul (YAML parser'a gerek kalmadan)
-        # Genelde 'postgresql://', 'postgres://', 'mysql://', 'redis://'
+        # Hallucination check: sqlite:latest image'ı uydurma bir pattern
+        if re.search(r'image:\s*sqlite(?::latest)?', content, re.IGNORECASE):
+            return False, "Docker-Compose error: 'sqlite:latest' is not a valid server image. SQLite is file-based."
+
+        # DB URL'leri bul
         db_urls = re.findall(r'(postgresql|postgres|mysql|redis|mongodb)://', content, re.IGNORECASE)
         if not db_urls:
             return True, ""
             
-        # Servis tanımlarını bul (indentation fark etmeksizin '  service_name:')
         services = re.findall(r'(?m)^\s{2}([a-zA-Z0-9_-]+):', content)
         
         for db_type in db_urls:
             found_service = False
             db_type = db_type.lower()
-            # Eğer 'postgres' url'si varsa, 'db', 'postgres', 'database' veya 'psql' adında servis arayalım
             search_keywords = [db_type, 'db', 'database', 'sql']
             if any(kw in " ".join(services).lower() for kw in search_keywords):
                 found_service = True
             
-            # Eğer url var ama servis yok gibi görünüyorsa uyaralım (Hata değil uyarı, çünkü external DB olabilir)
-            # Ancak Agent'lar genelde self-contained proje üretmeli.
+            # Hardening Phase 2: Artık uyarı değil, HATA.
             if not found_service:
-                logger.warning(f"Docker-Compose: Found '{db_type}' URL but no corresponding service in the same file. Might fail in dev.")
+                return False, f"Docker-Compose Error: Found '{db_type}' URL but no corresponding service (e.g., 'db' or '{db_type}') in services."
                 
         return True, ""
-    except Exception:
+    except Exception as e:
         return True, ""
 
 
@@ -336,7 +395,13 @@ def safe_json_loads(text: str) -> Optional[dict]:
     candidates = []
     for block in json_blocks:
         try:
-            parsed = json.loads(clean_json_str(block.strip()))
+            cleaned = clean_json_str(block.strip())
+            try:
+                parsed = json.loads(cleaned)
+            except json.JSONDecodeError:
+                # Truncated repair denemesi
+                repaired = repair_truncated_json(cleaned)
+                parsed = json.loads(repaired)
             candidates.append(parsed)
         except Exception:
             pass
@@ -466,6 +531,21 @@ def extract_setup_commands(text: str, project_dir: str) -> List[str]:
 
 def validate_content(filename: str, content: str, project_framework: str = None, project_dir: str = None, planned_files: List[str] = None) -> Tuple[bool, str]:
     ext = os.path.splitext(filename)[1].lower()
+
+    # Hardening Phase 2: Project Language Anchor Check
+    if project_dir and ext in ['.py', '.go', '.cs', '.java', '.js', '.ts']:
+        anchored_lang = get_project_language(project_dir)
+        
+        # Eğer henüz dil sabitlenmemişse, bu dosyanın dilini proje dili yapalım
+        current_lang_map = {'.py': 'python', '.go': 'go', '.cs': 'csharp', '.java': 'java', '.js': 'javascript', '.ts': 'typescript'}
+        current_lang = current_lang_map.get(ext)
+        
+        if not anchored_lang and current_lang:
+            set_project_language(project_dir, current_lang)
+            anchored_lang = current_lang
+            
+        if anchored_lang and current_lang and anchored_lang != current_lang:
+            return False, f"Language Hybridization ERROR: Project is anchored to '{anchored_lang}' but file is '{current_lang}'. Mixing languages is forbidden."
 
     MARKDOWN_LEAKAGE_MARKERS = ["```", "### FILE:", "[TARGET FILE]:"]
     for marker in MARKDOWN_LEAKAGE_MARKERS:

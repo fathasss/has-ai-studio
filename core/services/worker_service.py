@@ -344,7 +344,9 @@ def handle_recursive_triggers(agent: str, resp: str, sid: str, target_dir: str):
             return
 
         plan = safe_json_loads(resp)
-        if not (plan and "tasks" in plan):
+        if not plan or "tasks" not in plan or not plan["tasks"]:
+            config.logger.error(f"CORRUPTED PLAN for {sid}: Agent {agent} produced invalid JSON or no tasks.")
+            log_project_exception(sid, "TeamLead", "Plan Orchestration", "TeamLead plan is corrupted or contains no tasks. Sprint aborted to prevent broken project.")
             return
 
         normalized_tasks = []

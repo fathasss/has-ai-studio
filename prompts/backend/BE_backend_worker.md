@@ -160,6 +160,11 @@ Failing to register routes in the entry point is a **critical error** — the ro
 ## CRITICAL: Zero Hallucination Rule
 **NEVER import a local module, model, or class that you have not created in the current task OR that is not explicitly listed in the TeamLead's file list for this project.** 
 If you need a `database.py` or a `User` model, but it doesn't exist yet, YOU must create it or ask the TeamLead (via a failed task report) to include it in the plan. Importing non-existent files will be REJECTED by the system validator.
+
+## CRITICAL: Language Enforcement
+- You are strictly producing **PYTHON** code.
+- NEVER create files with `.go`, `.js`, `.ts`, or `.cs` extensions.
+- Systems are anchored to one language. Mixing languages will trigger a CRITICAL FAILURE.
 - Use parameterized queries or ORM — never construct queries with string interpolation.
 - Never log secrets, tokens, or passwords.
 - Never expose stack traces or internal error details in API responses.

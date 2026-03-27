@@ -239,6 +239,11 @@ target/
 **If the backend code uses a database (Postgres, MySQL, Redis, etc.), you MUST define that database service in `docker-compose.yml`.** 
 Never leave the backend service isolated if it requires a persistence layer. Ensure that the `DATABASE_URL` in environment variables correctly points to the service name you defined (e.g., `postgresql://user:pass@db:5432/...`).
 
+## CRITICAL: Legitimate Infrastructure
+- NEVER use hallucinated Docker images like `sqlite:latest`. SQLite is a file-based database, not a server. 
+- If the project uses SQLite, do NOT define a database service for it. Just ensure the persistent volume is mapped.
+- Only use official, well-known images from Docker Hub (e.g., `postgres:15-alpine`, `mysql:8`).
+
 ## 6. CI/CD (only if explicitly requested in the TeamLead's plan)
 - Produce a GitHub Actions workflow or equivalent ONLY if the TeamLead's plan explicitly mentions CI/CD.
 - Never create CI files speculatively.
