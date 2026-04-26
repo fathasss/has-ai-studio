@@ -162,8 +162,8 @@ Failing to register routes in the entry point is a **critical error** — the ro
 If you need a `database.py` or a `User` model, but it doesn't exist yet, YOU must create it or ask the TeamLead (via a failed task report) to include it in the plan. Importing non-existent files will be REJECTED by the system validator.
 
 ## CRITICAL: Language Enforcement
-- You are strictly producing **PYTHON** code.
-- NEVER create files with `.go`, `.js`, `.ts`, or `.cs` extensions.
+- Produce code ONLY in the language specified by the TeamLead's approved stack.
+- NEVER mix languages within the same project. If the TeamLead specified Python, write Python. If Go, write Go. If Node.js, write JavaScript/TypeScript.
 - Systems are anchored to one language. Mixing languages will trigger a CRITICAL FAILURE.
 - Use parameterized queries or ORM — never construct queries with string interpolation.
 - Never log secrets, tokens, or passwords.

@@ -269,26 +269,52 @@ def llm_worker():
 
             project_context = get_project_context(target_dir, sid)
             context_header  = f"# PROJECT CONTEXT (MANDATORY READ)\n{project_context}\n\n"
-            combined_prompt = (
-                f"{system_prompt}\n\n{context_header}TASK:\n{prompt}"
-                if system_prompt else
-                f"{context_header}TASK:\n{prompt}"
-            )
+            user_content = f"{context_header}TASK:\n{prompt}"
+
+            # DÜZELTME: /api/generate → /api/chat geçişi.
+            # system_prompt ve user content ayrı mesajlar olarak gönderiliyor.
+            # Bu sayede LLM rol ayrımını doğru yapıyor ve bağlamı kaybetmiyor.
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": user_content})
 
             start_t   = time.time()
             resp_text = ""
             try:
                 headers = {}
-                if config.LLM_PROVIDER == "ollama-cloud" and config.LLM_API_KEY:
-                    headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
+                provider = config.LLM_PROVIDER
+
+                # Provider'a göre endpoint ve payload seç
+                if provider == "openai":
+                    endpoint = f"{config.OLLAMA_URL}/v1/chat/completions"
+                    if config.LLM_API_KEY:
+                        headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
+                    headers["Content-Type"] = "application/json"
+                    payload = {"model": model, "messages": messages, "stream": False}
+                else:
+                    endpoint = f"{config.OLLAMA_URL}/api/chat"
+                    if provider == "ollama-cloud" and config.LLM_API_KEY:
+                        headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
+                    payload = {"model": model, "messages": messages, "stream": False}
 
                 with httpx.Client(timeout=config.LLM_TIMEOUT) as client:
-                    llm_http_resp = client.post(
-                        f"{config.OLLAMA_URL}/api/generate",
-                        headers=headers,
-                        json={"model": model, "prompt": combined_prompt, "stream": False}
-                    )
-                    resp_text = llm_http_resp.json().get("response", "")
+                    llm_http_resp = client.post(endpoint, headers=headers, json=payload)
+
+                    if llm_http_resp.status_code != 200:
+                        resp_text = f"Error: LLM returned HTTP {llm_http_resp.status_code}: {llm_http_resp.text[:500]}"
+                        config.logger.error(resp_text)
+                    else:
+                        data = llm_http_resp.json()
+                        if provider == "openai":
+                            choices = data.get("choices", [])
+                            resp_text = choices[0].get("message", {}).get("content", "") if choices else ""
+                        else:
+                            resp_text = data.get("message", {}).get("content", "")
+
+                        if not resp_text.strip():
+                            resp_text = f"Error: LLM returned empty response. Provider={provider}, Model={model}"
+                            config.logger.error(resp_text)
             except Exception as e:
                 resp_text = f"Error: {str(e)}"
 

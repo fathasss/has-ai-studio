@@ -74,6 +74,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
         const cleanContent = rawContent.replace(/```json[\s\S]*?```/i, '').trim();
         const displayContent = cleanContent || rawContent;
 
+        // DÜZELTME 6: Mükerrer mesaj koruması — son mesajla aynı içeriği tekrar ekleme.
+        // saveChatMessage() -> Socket.IO new_chat_message döngüsünde duplikasyon önlenir.
+        const lastMsg = this.chatHistory.length > 0
+          ? this.chatHistory[this.chatHistory.length - 1]
+          : null;
+        if (lastMsg && lastMsg.role === assistantRole && lastMsg.content === displayContent) {
+          return; // Mükerrer mesajı atla
+        }
+
         this.chatHistory.push({ role: assistantRole, content: displayContent });
         this.rawAgentHistory.push({ role: 'assistant', content: rawContent });
         
