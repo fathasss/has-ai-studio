@@ -285,7 +285,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.refreshingPlan = false;
         }
       },
-      error: (err) => {
+      error: (err: any) => {
         if (!isSilent) this.planError = err.message || "Failed to load preview";
         this.isLoadingPlan = false;
         this.refreshingPlan = false;
@@ -305,7 +305,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.executionStatus = 'Preparing plan...';
     
     this.orchestratorService.previewSprint(this.rawAgentHistory).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         try {
           const jsonStr = this.extractJson(res.response);
           if (!jsonStr) throw new Error("JSON not found in TeamLead response. Try again or check the requirements.");
@@ -322,7 +322,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.showPreviewModal = true; 
         }
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error("Preview call failed:", err);
         this.planError = err.message || "Failed to reach TeamLead. Check your connection.";
         this.isLoadingPlan = false;

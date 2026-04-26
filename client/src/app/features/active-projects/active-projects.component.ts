@@ -20,6 +20,7 @@ interface AgentConfig {
   meetingY: number;
   isFlipped: boolean; // to face left or right
   idleState?: 'WANDERING' | 'BREAK' | 'SERVER' | 'CHAT' | 'ARCADE' | 'WHITEBOARD' | 'LIBRARY';
+  idleMessage?: string;
 }
 
 @Component({
@@ -91,7 +92,10 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
     this.sysSub = this.socketService.systemUpdate$.subscribe((_data: any) => {});
 
     // Movement Loop for dynamic avatar positioning
-    this.movementTimer = setInterval(() => this.updateAgentPositions(), 2000);
+    // Increased to 25 seconds so they realistically spend time and talk
+    this.movementTimer = setInterval(() => this.updateAgentPositions(), 25000);
+    // Initial call
+    setTimeout(() => this.updateAgentPositions(), 1000);
   }
 
   loadSprints() {
@@ -142,9 +146,11 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
     }
   }
 
-  get selectedAgentTraces() {
+  activeTab: 'WORK' | 'CHAT' = 'WORK';
+
+  get selectedAgentWorkTraces() {
     if (!this.selectedAgent) return [];
-    let list = this.traces.filter(t => t.agent === this.selectedAgent || t.agent_name === this.selectedAgent);
+    let list = this.traces.filter(t => (t.agent === this.selectedAgent || t.agent_name === this.selectedAgent) && t.sprint_id !== 'idle');
 
     const activeJobs = this.jobs.filter(j =>
       j.status === 'PROCESSING' &&
@@ -159,6 +165,12 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
     }));
 
     return [...virtualTraces, ...list].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  get selectedAgentChatTraces() {
+    if (!this.selectedAgent) return [];
+    return this.traces.filter(t => (t.agent === this.selectedAgent || t.agent_name === this.selectedAgent) && t.sprint_id === 'idle')
+               .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
   getAgentConfig(agentId: string): AgentConfig | undefined {
@@ -227,45 +239,84 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
       } else {
         if (Math.random() > 0.3) { // 70% chance to change state
           const rand = Math.random();
+          let locationName = '';
           
           if (rand < 0.3) {
             // Wander around empty space
             agent.idleState = 'WANDERING';
             agent.x = 200 + Math.random() * 200; 
             agent.y = 350 + Math.random() * 200;
+            agent.idleMessage = undefined;
           } else if (rand < 0.45) {
             // Coffee Break (Top Left)
             agent.idleState = 'BREAK';
             agent.x = 80 + Math.random() * 30; 
             agent.y = 80 + Math.random() * 30;
+            locationName = 'Coffee Stand';
           } else if (rand < 0.60) {
             // Water Cooler (Top Center)
             agent.idleState = 'CHAT';
-            agent.x = 420 + Math.random() * 40;
-            agent.y = 80 + Math.random() * 30;
+            agent.x = 440;
+            agent.y = 95;
+            locationName = 'Water Cooler (Gossip Area)';
           } else {
             // Role specific
             if (agent.id === 'DevOps') {
                // Server Rack (Bottom Left)
                agent.idleState = 'SERVER';
-               agent.x = 80 + Math.random() * 30;
-               agent.y = 480 + Math.random() * 30;
+               agent.x = 95;
+               agent.y = 495;
+               locationName = 'Server Rack';
             } else if (agent.id === 'Frontend' || agent.id === 'TeamLead') {
                // Whiteboard (Bottom Center)
                agent.idleState = 'WHITEBOARD';
-               agent.x = 420 + Math.random() * 40;
-               agent.y = 480 + Math.random() * 30;
+               agent.x = 440;
+               agent.y = 495;
+               locationName = 'Whiteboard';
             } else if (agent.id === 'Security' || agent.id === 'Backend') {
                // Library (Top Mid-Left)
                agent.idleState = 'LIBRARY';
-               agent.x = 260 + Math.random() * 40;
-               agent.y = 80 + Math.random() * 30;
+               agent.x = 280;
+               agent.y = 95;
+               locationName = 'Library';
             } else if (agent.id === 'Tester') {
                // Arcade (Mid Left)
                agent.idleState = 'ARCADE';
-               agent.x = 80 + Math.random() * 30;
-               agent.y = 280 + Math.random() * 30;
+               agent.x = 95;
+               agent.y = 295;
+               locationName = 'Arcade Machine';
             }
+          }
+
+          // Grouping logic: If another agent is already at this exact location, adjust position so they face each other
+          const occupant = this.agents.find(a => a.id !== agent.id && Math.abs(a.x - agent.x) < 30 && Math.abs(a.y - agent.y) < 30 && a.idleState !== 'WANDERING');
+          if (occupant) {
+             agent.x = occupant.x + 40; // Place right next to them
+             agent.y = occupant.y;
+             agent.isFlipped = true;    // Face them
+             occupant.isFlipped = false;
+          } else if (agent.idleState !== 'WANDERING') {
+             // Add tiny jitter so they aren't completely static if alone
+             agent.x += (Math.random() * 10 - 5);
+             agent.y += (Math.random() * 10 - 5);
+          }
+
+          if (locationName) {
+            agent.idleMessage = '...';
+            this.orchestratorService.generateIdleChat(agent.id, locationName).subscribe({
+              next: (res) => {
+                agent.idleMessage = res.response;
+                this.traces.unshift({
+                  agent: agent.id,
+                  agent_name: agent.name,
+                  timestamp: new Date().toISOString(),
+                  response: `[${locationName}] ${res.response}`,
+                  sprint_id: 'idle',
+                  isVirtual: false
+                });
+              },
+              error: () => agent.idleMessage = '*sigh*'
+            });
           }
         }
       }

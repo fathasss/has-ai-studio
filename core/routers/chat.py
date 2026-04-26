@@ -206,6 +206,71 @@ async def chat_preview(req: ChatRequest):
 # Chat History Endpoints (unchanged)
 # ═══════════════════════════════════════════════════════════════════
 
+import time
+import uuid
+import datetime
+from sqlalchemy import desc
+from ..schemas import IdleChatRequest
+from ..models import LLMTrace
+
+@router.post("/chat/idle")
+async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
+    start_time = time.time()
+    
+    # Fetch recent context for this location
+    recent_traces = db.query(LLMTrace).filter(
+        LLMTrace.job_id == "idle",
+        LLMTrace.prompt.like(f"[{req.location}]%"),
+        LLMTrace.timestamp > datetime.datetime.utcnow() - datetime.timedelta(minutes=2)
+    ).order_by(desc(LLMTrace.timestamp)).limit(2).all()
+    
+    context_str = ""
+    if recent_traces:
+        # Reverse to chronological order
+        context_str = "İşte bu mekandaki son konuşmalar:\n" + "\n".join(
+            [f"{t.agent_name}: {t.response}" for t in reversed(recent_traces)]
+        ) + "\n\nBu konuşmalara doğal bir şekilde karşılık ver veya kendi düşünceni ekle."
+        
+    system_prompt = f"Sen yazılım geliştirme ekibindeki '{req.agent}' rolündeki ajansın. Şu anda '{req.location}' konumundasın. SADECE VE SADECE TÜRKÇE KONUŞACAKSIN. Ekip arkadaşlarınla aranız çok iyi, aşırı samimi, kanka/dost seviyesindesiniz. Senli benli, sıcak ve esprili bir dil kullan."
+    user_prompt = f"{context_str}\nKısa, aşırı samimi, doğal ve karakterine uygun tek cümlelik bir laf et veya yanındakilere takıl. Maksimum 50 kelime kullan. Başına isim veya tırnak işareti koyma."
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+    
+    try:
+        raw_response = await _call_llm(messages, config.AGENT_MODEL)
+        
+        # Limit the response to ~50 words
+        words = raw_response.split()
+        if len(words) > 50:
+            raw_response = " ".join(words[:50]) + "..."
+            
+        raw_response = raw_response.replace('"', '').replace("'", "")
+            
+        duration_ms = (time.time() - start_time) * 1000
+        trace = LLMTrace(
+            id=str(uuid.uuid4()),
+            job_id="idle",
+            sprint_id="idle",
+            agent_name=req.agent,
+            worker_id="master",
+            execution_node="local",
+            priority=0,
+            prompt=f"[{req.location}] {user_prompt}",
+            response=raw_response,
+            status="SUCCESS",
+            duration_ms=duration_ms
+        )
+        db.add(trace)
+        db.commit()
+        
+        return {"response": raw_response}
+    except Exception as e:
+        config.logger.error(f"Chat idle error: {e}")
+        return {"response": "..."}
+
 @router.get("/chat/history/{sprint_id}")
 async def get_chat_history(sprint_id: str, db: Session = Depends(get_db)):
     msgs = db.query(ChatMessageRecord).filter(ChatMessageRecord.sprint_id == sprint_id).order_by(ChatMessageRecord.timestamp).all()

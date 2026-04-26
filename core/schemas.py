@@ -12,6 +12,10 @@ class ChatRequest(BaseModel):
     history: list
     params: Optional[dict] = {}
 
+class IdleChatRequest(BaseModel):
+    agent: str
+    location: str
+
 class ExecuteRequest(BaseModel):
     sprint_id: str
     plan: dict

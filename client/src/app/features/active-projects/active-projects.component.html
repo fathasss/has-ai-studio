@@ -166,23 +166,10 @@
             <div class="status-cloud completed" *ngIf="getJobStatus(agent.id) === 'COMPLETED'">
               <span class="cloud-text">✅ DONE</span>
             </div>
-            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'BREAK'">
-              <span class="cloud-text">☕ Break</span>
-            </div>
-            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'SERVER'">
-              <span class="cloud-text">🔧 Checking...</span>
-            </div>
-            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'CHAT'">
-              <span class="cloud-text">💬 Chatting</span>
-            </div>
-            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'ARCADE'">
-              <span class="cloud-text">🎮 Playing</span>
-            </div>
-            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'WHITEBOARD'">
-              <span class="cloud-text">💡 Brainstorming</span>
-            </div>
-            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'LIBRARY'">
-              <span class="cloud-text">📚 Reading Docs</span>
+            
+            <!-- Dynamic Idle Chat Bubble -->
+            <div class="speech-bubble" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleMessage">
+              <span class="cloud-text">{{ agent.idleMessage }}</span>
             </div>
             
             <img [src]="agent.avatar" class="agent-sprite" [alt]="agent.name" />
@@ -240,22 +227,45 @@
     </div>
 
     <div class="detail-traces" *ngIf="selectedAgent">
-      <h4>Activity Log</h4>
-      <div *ngIf="selectedAgentTraces.length === 0" class="no-traces">
-        No activity yet for this agent.
+      <div class="trace-tabs">
+        <button [class.active]="activeTab === 'WORK'" (click)="activeTab = 'WORK'">Project Logs</button>
+        <button [class.active]="activeTab === 'CHAT'" (click)="activeTab = 'CHAT'">Conversations</button>
       </div>
-      <div *ngFor="let t of selectedAgentTraces"
-           class="trace-item"
-           [class.virtual]="t.isVirtual"
-           (click)="toggleTrace(t.timestamp)">
-        <div class="trace-header">
-          <span class="trace-time">{{ t.timestamp | date:'HH:mm:ss' }}</span>
-          <span class="trace-toggle">{{ isExpanded(t.timestamp) ? '▼' : '▶' }}</span>
+
+      <ng-container *ngIf="activeTab === 'WORK'">
+        <div *ngIf="selectedAgentWorkTraces.length === 0" class="no-traces">
+          No project activity yet.
         </div>
-        <div class="trace-body" [class.expanded]="isExpanded(t.timestamp)">
-          <pre>{{ t.response }}</pre>
+        <div *ngFor="let t of selectedAgentWorkTraces"
+             class="trace-item"
+             [class.virtual]="t.isVirtual"
+             (click)="toggleTrace(t.timestamp)">
+          <div class="trace-header">
+            <span class="trace-time">{{ t.timestamp | date:'HH:mm:ss' }}</span>
+            <span class="trace-toggle">{{ isExpanded(t.timestamp) ? '▼' : '▶' }}</span>
+          </div>
+          <div class="trace-body" [class.expanded]="isExpanded(t.timestamp)">
+            <pre>{{ t.response }}</pre>
+          </div>
         </div>
-      </div>
+      </ng-container>
+
+      <ng-container *ngIf="activeTab === 'CHAT'">
+        <div *ngIf="selectedAgentChatTraces.length === 0" class="no-traces">
+          No conversations yet.
+        </div>
+        <div *ngFor="let t of selectedAgentChatTraces"
+             class="trace-item"
+             (click)="toggleTrace(t.timestamp)">
+          <div class="trace-header">
+            <span class="trace-time">{{ t.timestamp | date:'HH:mm:ss' }}</span>
+            <span class="trace-toggle">{{ isExpanded(t.timestamp) ? '▼' : '▶' }}</span>
+          </div>
+          <div class="trace-body" [class.expanded]="isExpanded(t.timestamp)">
+            <pre>{{ t.response }}</pre>
+          </div>
+        </div>
+      </ng-container>
     </div>
   </div>
 </div>

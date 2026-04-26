@@ -98,6 +98,10 @@ export class OrchestratorService {
     return this.http.post(`${this.apiUrl}/chat/preview`, { history });
   }
 
+  generateIdleChat(agent: string, location: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/chat/idle`, { agent, location });
+  }
+
   executeSprint(sprintId: string, plan: any, history: any[]): Observable<any> {
     return this.http.post(`${this.apiUrl}/sprint/execute`, { sprint_id: sprintId, plan, history });
   }

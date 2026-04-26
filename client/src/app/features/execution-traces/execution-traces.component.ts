@@ -12,6 +12,7 @@ import { OrchestratorService } from '../../services/orchestrator.service';
 export class ExecutionTracesComponent implements OnInit {
   traces: any[] = [];
   expandedLogs: Set<number> = new Set();
+  activeTab: 'SYSTEM' | 'AGENT' = 'SYSTEM';
 
   constructor(private orchestratorService: OrchestratorService) {}
 
@@ -26,6 +27,14 @@ export class ExecutionTracesComponent implements OnInit {
       },
       error: (err) => console.error("Failed to load global traces", err)
     });
+  }
+
+  get systemTraces() {
+    return this.traces.filter(t => t.sprint_id !== 'idle');
+  }
+
+  get agentTraces() {
+    return this.traces.filter(t => t.sprint_id === 'idle');
   }
 
   toggleLog(index: number) {
