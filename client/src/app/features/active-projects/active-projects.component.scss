@@ -1,0 +1,1012 @@
+// ═══════════════════════════════════════════════════════════════
+// Active Projects — Isometric Virtual Office
+// ═══════════════════════════════════════════════════════════════
+
+$bg: #050505;
+$card: #0a0a0a;
+$accent: #facc15;
+$accent-glow: rgba(250, 204, 21, 0.3);
+$success: #22c55e;
+$danger: #ef4444;
+$border: rgba(255, 255, 255, 0.08);
+$text: #ffffff;
+$text-dim: #71717a;
+
+// ── Animations ──
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes typing {
+  0% { width: 0; }
+  50% { width: 100%; }
+  100% { width: 0; }
+}
+
+@keyframes cloud-bob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.03); }
+}
+
+@keyframes screen-flicker {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes slide-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+// ── Container ──
+.office-container {
+  display: flex;
+  height: calc(100vh - 6rem);
+  gap: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+// ── Sprint Panel (Left) ──
+.sprint-panel {
+  width: 220px;
+  min-width: 220px;
+  background: rgba(10, 10, 10, 0.9);
+  border-right: 1px solid $border;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 1rem;
+
+  &-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+
+    h3 {
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: $accent;
+      font-weight: 900;
+      margin: 0;
+    }
+  }
+}
+
+.refresh-btn {
+  background: none;
+  border: 1px solid $border;
+  color: $text-dim;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: $accent;
+    color: $accent;
+  }
+}
+
+.no-sprints {
+  color: $text-dim;
+  font-style: italic;
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.sprint-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid $border;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.02);
+
+  &:hover { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.15); }
+  &.active {
+    background: rgba(250, 204, 21, 0.08);
+    border-color: rgba(250, 204, 21, 0.4);
+    box-shadow: 0 0 20px rgba(250, 204, 21, 0.1);
+  }
+
+  .sprint-icon { font-size: 1.2rem; }
+  .sprint-info {
+    display: flex;
+    flex-direction: column;
+    .sprint-id { font-weight: 700; font-size: 0.75rem; color: $text; letter-spacing: 0.05em; }
+    .sprint-label { font-size: 0.6rem; color: $text-dim; letter-spacing: 0.1em; text-transform: uppercase; }
+  }
+}
+
+// ── Main Office Area ──
+.office-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.office-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid $border;
+  flex-shrink: 0;
+  background: rgba(10, 10, 10, 0.6);
+
+  .office-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    .office-icon { font-size: 1.5rem; }
+    h2 { font-size: 0.85rem; letter-spacing: 0.2em; color: $text; font-weight: 900; margin: 0; }
+  }
+
+  .office-meta {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .sprint-badge {
+    background: rgba(250, 204, 21, 0.1);
+    border: 1px solid rgba(250, 204, 21, 0.3);
+    color: $accent;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    
+    &.status-idle {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: $text-dim;
+    }
+  }
+
+  .progress-badge {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: $success;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+}
+
+.empty-office {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: $text-dim;
+
+  .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.3; }
+  p { font-size: 0.85rem; letter-spacing: 0.05em; }
+}
+
+// ── Isometric Office Floor ──
+.iso-office {
+  flex: 1;
+  position: relative;
+  overflow: auto; // allow scrolling if needed
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  perspective: 800px;
+}
+
+.office-stage {
+  position: relative;
+  width: 900px;
+  height: 650px;
+  flex-shrink: 0;
+  // This contains all absolute coordinates
+}
+
+.grid-floor {
+  position: absolute;
+  left: -50%;
+  top: -50%;
+  width: 200%;
+  height: 200%;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  transform: rotateX(60deg) rotateZ(45deg);
+  transform-origin: center center;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.zone-area {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(15, 15, 15, 0.8) 100%);
+  
+  .zone-icon {
+    position: absolute;
+    top: -15px;
+    right: -15px;
+    font-size: 1.2rem;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  }
+
+  .room-tag {
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: #fff;
+    font-size: 0.45rem;
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+}
+
+// ── Coffee / Break Stand ──
+.coffee-stand {
+  left: 50px;
+  top: 50px;
+  width: 120px;
+  height: 90px;
+  gap: 15px;
+
+  .coffee-machine {
+    width: 25px;
+    height: 35px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 4px;
+    position: relative;
+    &::after {
+      content: '';
+      position: absolute;
+      top: 5px; right: -5px;
+      width: 5px; height: 10px;
+      background: #444;
+    }
+  }
+
+  .coffee-table {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #2a2015;
+    border: 2px solid #4a3e30;
+  }
+}
+
+// ── Server Rack ──
+.server-rack {
+  left: 50px;
+  top: 550px;
+  width: 80px;
+  height: 90px;
+  background: #0d0d0d;
+  border: 2px solid #222;
+  border-radius: 4px;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: 10px;
+
+  .server-lights {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    span {
+      width: 30px;
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      animation: screen-flicker 1s infinite alternate;
+      &:nth-child(1) { background: $success; animation-delay: 0.1s; }
+      &:nth-child(2) { background: $success; animation-delay: 0.4s; }
+      &:nth-child(3) { background: $danger; animation-delay: 0.7s; }
+    }
+  }
+}
+
+// ── Water Cooler ──
+.water-cooler {
+  left: 280px;
+  top: 50px;
+  width: 60px;
+  height: 90px;
+  flex-direction: column;
+  background: transparent;
+  border: none;
+
+  .cooler-bottle {
+    width: 30px;
+    height: 40px;
+    background: rgba(6, 182, 212, 0.4);
+    border: 2px solid rgba(6, 182, 212, 0.6);
+    border-radius: 10px 10px 4px 4px;
+    margin-bottom: 2px;
+  }
+  .cooler-base {
+    width: 34px;
+    height: 35px;
+    background: #eee;
+    border-radius: 4px;
+  }
+}
+
+// ── Arcade Machine ──
+.arcade-machine {
+  left: 50px;
+  top: 300px;
+  width: 80px;
+  height: 90px;
+  background: #a855f7;
+  border: 2px solid #7e22ce;
+  border-radius: 8px 8px 0 0;
+  flex-direction: column;
+  padding-top: 10px;
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.2);
+
+  .arcade-screen {
+    width: 40px;
+    height: 30px;
+    background: #000;
+    border: 2px solid #fff;
+    border-radius: 4px;
+    animation: screen-flicker 0.5s infinite;
+  }
+  .arcade-controls {
+    margin-top: 5px;
+    width: 50px;
+    height: 15px;
+    background: #222;
+    transform: perspective(100px) rotateX(20deg);
+  }
+}
+
+// ── Whiteboard ──
+.whiteboard-area {
+  left: 350px;
+  top: 550px;
+  width: 120px;
+  height: 90px;
+  flex-direction: column;
+  background: transparent;
+  border: none;
+
+  .whiteboard-board {
+    width: 100px;
+    height: 60px;
+    background: #fff;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    position: relative;
+    &::after {
+      content: '';
+      position: absolute;
+      top: 10px; left: 10px;
+      width: 60px; height: 2px;
+      background: $danger;
+      box-shadow: 0 5px 0 $success, 0 10px 0 $accent;
+    }
+  }
+  .whiteboard-stand {
+    width: 80px;
+    height: 20px;
+    border-left: 2px solid #555;
+    border-right: 2px solid #555;
+  }
+}
+
+// ── Library ──
+.library-area {
+  left: 450px;
+  top: 50px;
+  width: 100px;
+  height: 90px;
+  background: #3e2723;
+  border: 2px solid #2e1d1a;
+  border-radius: 4px;
+  
+  .bookshelf {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    padding: 5px;
+
+    .book-row {
+      width: 100%;
+      height: 20px;
+      background: repeating-linear-gradient(90deg, #ef4444 0px, #ef4444 5px, #3b82f6 5px, #3b82f6 10px, #facc15 10px, #facc15 12px, #10b981 12px, #10b981 18px);
+      border-bottom: 2px solid #2e1d1a;
+    }
+  }
+}
+
+// ── Meeting Room ──
+.meeting-room {
+  position: absolute;
+  left: 250px;
+  top: 200px;
+  width: 350px;
+  padding: 1.5rem;
+  border: 2px solid rgba(250, 204, 21, 0.2);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.05) 0%, rgba(15, 15, 15, 0.9) 100%);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+
+  .meeting-table {
+    width: 60px;
+    height: 40px;
+    background: linear-gradient(135deg, #2a2015 0%, #1a1510 100%);
+    border-radius: 6px;
+    border: 1px solid rgba(250, 204, 21, 0.15);
+    flex-shrink: 0;
+  }
+
+  .plan-board {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid $border;
+    border-radius: 8px;
+    padding: 0.5rem;
+
+    .board-title {
+      font-size: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      color: $accent;
+      margin-bottom: 0.25rem;
+    }
+    .board-lines {
+      font-size: 0.6rem;
+      color: $text-dim;
+      line-height: 1.4;
+    }
+  }
+
+  .room-tag {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: $accent;
+    color: #000;
+    font-size: 0.5rem;
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    padding: 2px 10px;
+    border-radius: 10px;
+  }
+}
+
+// ── Worker Desks ──
+.agent-desk {
+  position: absolute;
+  width: 100px;
+  padding: 0.5rem;
+  border: 1px solid $border;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(20, 20, 20, 0.9) 0%, rgba(10, 10, 10, 0.95) 100%);
+  cursor: pointer;
+  transition: all 0.4s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 1;
+
+  &:hover {
+    transform: translateY(-4px);
+    border-color: var(--agent-color);
+    box-shadow: 0 8px 25px var(--agent-glow);
+  }
+
+  &.selected {
+    border-color: var(--agent-color);
+    box-shadow: 0 0 30px var(--agent-glow), inset 0 0 20px rgba(255, 255, 255, 0.02);
+    transform: translateY(-4px);
+  }
+
+  &.working {
+    border-color: $success;
+    box-shadow: 0 0 25px rgba(34, 197, 94, 0.3);
+  }
+
+  &.completed {
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+
+  .desk-surface {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 25px; // Space for the avatar to "sit"
+  }
+
+  .desk-monitor {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    .monitor-screen {
+      width: 40px;
+      height: 24px;
+      background: #111;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 3px 3px 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+
+      &.screen-active {
+        border-color: $success;
+        background: rgba(34, 197, 94, 0.08);
+        box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+      }
+      &.screen-done {
+        border-color: rgba(34, 197, 94, 0.3);
+        background: rgba(34, 197, 94, 0.05);
+      }
+
+      .screen-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 3px;
+        width: 100%;
+
+        span {
+          height: 2px;
+          background: $success;
+          border-radius: 1px;
+          animation: typing 2s ease-in-out infinite;
+          &:nth-child(2) { animation-delay: 0.3s; width: 70%; }
+          &:nth-child(3) { animation-delay: 0.6s; width: 50%; }
+        }
+      }
+
+      .screen-icon {
+        font-size: 0.6rem;
+        color: $text-dim;
+      }
+    }
+
+    .monitor-stand {
+      width: 6px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 0 0 2px 2px;
+    }
+  }
+
+  .desk-keyboard {
+    width: 25px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .desk-chair {
+    width: 18px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 50%;
+    position: absolute;
+    bottom: 35px;
+  }
+
+  .desk-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: absolute;
+    bottom: 5px;
+
+    .label-name {
+      font-size: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+    }
+    .label-status {
+      font-size: 0.45rem;
+      color: $text-dim;
+      letter-spacing: 0.1em;
+      margin-top: 1px;
+    }
+  }
+}
+
+// ── Dynamic Avatars Layer ──
+.avatars-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; // let clicks pass through space
+  z-index: 10;
+}
+
+.dynamic-avatar {
+  position: absolute;
+  left: -20px; // Offset to center the 40px avatar on the (x,y) coordinate
+  top: -20px;
+  width: 40px;
+  height: 40px;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 3s cubic-bezier(0.25, 0.1, 0.25, 1); // Smooth walking
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  &.flipped .agent-sprite {
+    transform: scaleX(-1);
+  }
+
+  .agent-sprite {
+    width: 48px;
+    height: 48px;
+    image-rendering: pixelated;
+    transition: filter 0.3s, transform 0.3s;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+  }
+
+  &.working .agent-sprite {
+    animation: float 2s ease-in-out infinite;
+  }
+
+  &.completed .agent-sprite {
+    filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.4));
+  }
+
+  .selected-ring {
+    position: absolute;
+    width: 56px;
+    height: 56px;
+    border: 2px dashed;
+    border-radius: 50%;
+    animation: pulse-glow 2s infinite linear;
+    pointer-events: none;
+  }
+}
+
+// ── Status Clouds ──
+.status-cloud {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  animation: cloud-bob 2s ease-in-out infinite;
+  pointer-events: none;
+
+  .cloud-text {
+    display: inline-block;
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.9) 0%, rgba(22, 163, 74, 0.9) 100%);
+    color: #fff;
+    font-size: 0.5rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+  }
+
+  &.completed .cloud-text {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.7) 0%, rgba(22, 163, 74, 0.5) 100%);
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.2);
+  }
+
+  &.break .cloud-text {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.9) 0%, rgba(147, 51, 234, 0.9) 100%);
+    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
+  }
+}
+
+// ── Pipeline Progress Bar ──
+.pipeline-bar {
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid $border;
+  background: rgba(5, 5, 5, 0.9);
+  flex-shrink: 0;
+
+  .pipeline-title {
+    font-size: 0.55rem;
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    color: $text-dim;
+    margin-bottom: 0.5rem;
+  }
+}
+
+.pipeline-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+
+  .step-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid $border;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.55rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.03);
+    transition: all 0.4s;
+    color: $text-dim;
+  }
+
+  .step-name {
+    font-size: 0.6rem;
+    color: $text-dim;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: all 0.3s;
+  }
+
+  &.step-completed {
+    .step-dot { background: rgba(34, 197, 94, 0.2); border-color: $success; color: $success; }
+    .step-name { color: $success; }
+  }
+
+  &.step-working {
+    .step-dot {
+      background: $success;
+      border-color: $success;
+      color: #000;
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.6);
+      animation: pulse-glow 1.5s infinite;
+    }
+    .step-name { color: $success; font-weight: 800; }
+  }
+
+  .step-pulse {
+    width: 8px;
+    height: 8px;
+    background: #000;
+    border-radius: 50%;
+    animation: pulse-glow 1s infinite;
+  }
+}
+
+.pipeline-connector {
+  width: 20px;
+  height: 2px;
+  background: $border;
+  margin: 0 4px;
+  transition: all 0.4s;
+
+  &.connector-done {
+    background: rgba(34, 197, 94, 0.4);
+    box-shadow: 0 0 5px rgba(34, 197, 94, 0.3);
+  }
+}
+
+// ── Detail Panel (Right Slide-in) ──
+.detail-panel {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: rgba(8, 8, 8, 0.95);
+  border-left: 1px solid $border;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+
+  &.open {
+    width: 360px;
+    min-width: 360px;
+    animation: slide-in 0.4s ease;
+  }
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem;
+  border-bottom: 1px solid $border;
+  flex-shrink: 0;
+
+  .detail-agent-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+
+    .detail-avatar {
+      width: 44px;
+      height: 44px;
+      image-rendering: pixelated;
+      border-radius: 8px;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 0.9rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+
+    .detail-role {
+      font-size: 0.6rem;
+      color: $text-dim;
+      letter-spacing: 0.1em;
+    }
+  }
+
+  .close-btn {
+    background: none;
+    border: 1px solid $border;
+    color: $text-dim;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+
+    &:hover { border-color: $danger; color: $danger; }
+  }
+}
+
+.detail-status {
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid $border;
+
+  .status-indicator {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+
+    &.status-working {
+      background: rgba(34, 197, 94, 0.15);
+      color: $success;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    &.status-completed {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    &.status-idle {
+      background: rgba(255, 255, 255, 0.05);
+      color: $text-dim;
+      border: 1px solid $border;
+    }
+  }
+}
+
+.detail-traces {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+
+  h4 {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: $text-dim;
+    font-weight: 900;
+    margin: 0 0 1rem 0;
+    text-transform: uppercase;
+  }
+
+  .no-traces {
+    color: $text-dim;
+    font-size: 0.75rem;
+    font-style: italic;
+    text-align: center;
+    padding: 2rem 0;
+  }
+}
+
+.trace-item {
+  border: 1px solid $border;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  overflow: hidden;
+
+  &:hover { border-color: rgba(255, 255, 255, 0.15); }
+
+  &.virtual {
+    border-color: rgba(34, 197, 94, 0.3);
+    animation: pulse-glow 2s infinite;
+  }
+
+  .trace-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.02);
+
+    .trace-time {
+      font-size: 0.6rem;
+      color: $text-dim;
+      font-weight: 600;
+      font-family: 'Courier New', monospace;
+    }
+    .trace-toggle {
+      font-size: 0.5rem;
+      color: $text-dim;
+    }
+  }
+
+  .trace-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+
+    &.expanded { max-height: 600px; }
+
+    pre {
+      padding: 0.75rem;
+      margin: 0;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.7);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-family: 'Courier New', monospace;
+      line-height: 1.5;
+      background: rgba(0, 0, 0, 0.3);
+    }
+  }
+}

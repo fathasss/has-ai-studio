@@ -1,153 +1,261 @@
-<div class="h-full flex flex-col relative w-full h-[calc(100vh-6rem)]">
-  
-  <div class="mb-6 flex justify-between items-end flex-shrink-0">
-    <div>
-      <h2 class="text-2xl font-bold text-white mb-1">Active Project Pipelines</h2>
-      <p class="text-gray-400 text-sm">Real-time job tracking and trace aggregation</p>
+<div class="office-container">
+
+  <!-- Left Panel: Sprint Selector -->
+  <div class="sprint-panel">
+    <div class="sprint-panel-header">
+      <h3>MISSIONS</h3>
+      <button (click)="loadSprints()" class="refresh-btn" title="Refresh">⟳</button>
     </div>
-    <button (click)="loadSprints()" class="px-4 py-2 border border-white/20 rounded-lg text-sm bg-black hover:bg-white/10 transition-colors">
-      Refresh All
-    </button>
+
+    <div *ngIf="sprints.length === 0" class="no-sprints">
+      No active missions yet.
+    </div>
+
+    <div *ngFor="let s of sprints"
+         (click)="selectSprint(s)"
+         class="sprint-card"
+         [class.active]="activeSprint === s">
+      <div class="sprint-icon">📁</div>
+      <div class="sprint-info">
+        <span class="sprint-id">{{ s }}</span>
+        <span class="sprint-label">Active Pipeline</span>
+      </div>
+    </div>
   </div>
 
-  <div class="flex flex-1 gap-6 overflow-hidden">
-    <!-- Sprint List -->
-    <div class="w-1/4 min-w-[200px] max-w-[280px] flex flex-col gap-3 overflow-y-auto pr-2">
-      <div *ngIf="sprints.length === 0" class="text-gray-500 italic p-4 text-center">No active projects yet.</div>
-      <div *ngFor="let s of sprints" 
-           (click)="selectSprint(s)"
-           class="p-4 rounded-xl border border-white/10 cursor-pointer transition-all"
-           [ngClass]="activeSprint === s ? 'bg-white/10 border-yellow-400' : 'bg-black/40 hover:bg-white/5'">
-        <h4 class="font-bold text-white mb-1 tracking-wide">{{ s }}</h4>
-        <p class="text-xs text-gray-400">Operational Pipeline</p>
+  <!-- Main Area: Isometric Office -->
+  <div class="office-main">
+
+    <!-- Office Header -->
+    <div class="office-header">
+      <div class="office-title">
+        <span class="office-icon">🏢</span>
+        <h2>AI DEVELOPMENT OFFICE</h2>
+      </div>
+      <div class="office-meta" *ngIf="activeSprint">
+        <span class="sprint-badge">{{ activeSprint }}</span>
+        <span class="progress-badge">{{ completedCount }}/{{ agents.length }} Complete</span>
+      </div>
+      <div class="office-meta" *ngIf="!activeSprint">
+        <span class="sprint-badge status-idle">IDLE STATE</span>
       </div>
     </div>
 
-    <!-- Sprint Detail -->
-    <div class="flex-1 bg-black/40 border border-white/10 rounded-xl flex flex-col overflow-hidden">
-      <div *ngIf="!activeSprint" class="flex-1 flex items-center justify-center text-gray-500">
-        Select a project from the left to view details
+    <!-- Isometric Office Floor -->
+    <div class="iso-office">
+
+      <!-- The fixed-size stage that scales down if needed -->
+      <div class="office-stage">
+        <!-- Grid Floor (Background) -->
+        <div class="grid-floor"></div>
+
+        <!-- Coffee / Break Stand -->
+        <div class="coffee-stand zone-area">
+           <span class="zone-icon">☕</span>
+           <div class="coffee-machine"></div>
+           <div class="coffee-table"></div>
+           <div class="room-tag">BREAK ROOM</div>
+        </div>
+
+        <!-- Server Rack -->
+        <div class="server-rack zone-area">
+           <span class="zone-icon">💾</span>
+           <div class="server-lights">
+              <span></span><span></span><span></span>
+           </div>
+           <div class="room-tag">IT / SERVERS</div>
+        </div>
+
+        <!-- Water Cooler -->
+        <div class="water-cooler zone-area">
+           <span class="zone-icon">🚰</span>
+           <div class="cooler-bottle"></div>
+           <div class="cooler-base"></div>
+           <div class="room-tag">GOSSIP</div>
+        </div>
+
+        <!-- Arcade Machine -->
+        <div class="arcade-machine zone-area">
+           <span class="zone-icon">🎮</span>
+           <div class="arcade-screen"></div>
+           <div class="arcade-controls"></div>
+           <div class="room-tag">ARCADE</div>
+        </div>
+
+        <!-- Whiteboard -->
+        <div class="whiteboard-area zone-area">
+           <span class="zone-icon">💡</span>
+           <div class="whiteboard-board"></div>
+           <div class="whiteboard-stand"></div>
+           <div class="room-tag">IDEATION</div>
+        </div>
+
+        <!-- Library -->
+        <div class="library-area zone-area">
+           <span class="zone-icon">📚</span>
+           <div class="bookshelf">
+              <div class="book-row"></div>
+              <div class="book-row"></div>
+           </div>
+           <div class="room-tag">DOCS</div>
+        </div>
+
+        <!-- Central Meeting Room (No Avatar inside) -->
+        <!-- Placed around center (x:150 to 450, y:150 to 350) -->
+        <div class="meeting-room">
+          <div class="meeting-table"></div>
+          <div class="plan-board">
+            <div class="board-title">📋 MASTER PLAN</div>
+            <div class="board-lines" *ngIf="tlSummary">{{ tlSummary | slice:0:80 }}...</div>
+            <div class="board-lines" *ngIf="!tlSummary">Awaiting directives...</div>
+          </div>
+          <div class="room-tag">MEETING ROOM</div>
+        </div>
+
+        <!-- Right Aligned Agent Desks -->
+        <div *ngFor="let agent of agents"
+             class="agent-desk"
+             [style.left.px]="agent.deskX - 30"
+             [style.top.px]="agent.deskY - 20"
+             [class.selected]="selectedAgent === agent.id"
+             [class.working]="getJobStatus(agent.id) === 'WORKING'"
+             [class.completed]="getJobStatus(agent.id) === 'COMPLETED'"
+             [style.--agent-color]="agent.color"
+             [style.--agent-glow]="agent.glowColor"
+             (click)="selectDesk(agent.id)">
+             
+          <!-- Desk Surface -->
+          <div class="desk-surface">
+            <div class="desk-monitor">
+              <div class="monitor-screen"
+                   [class.screen-active]="getJobStatus(agent.id) === 'WORKING'"
+                   [class.screen-done]="getJobStatus(agent.id) === 'COMPLETED'">
+                <div class="screen-lines" *ngIf="getJobStatus(agent.id) === 'WORKING'">
+                  <span></span><span></span><span></span>
+                </div>
+                <span class="screen-icon" *ngIf="getJobStatus(agent.id) !== 'WORKING'">
+                  {{ getJobStatus(agent.id) === 'COMPLETED' ? '✓' : '⏸' }}
+                </span>
+              </div>
+              <div class="monitor-stand"></div>
+            </div>
+            <div class="desk-keyboard"></div>
+          </div>
+          <div class="desk-chair"></div>
+          
+          <div class="desk-label">
+            <span class="label-name" [style.color]="agent.color">{{ agent.name }}</span>
+            <span class="label-status">{{ getAgentStatusLabel(getJobStatus(agent.id)) }}</span>
+          </div>
+        </div>
+
+        <!-- DYNAMIC AVATARS LAYER -->
+        <div class="avatars-layer">
+          <div *ngFor="let agent of agents"
+               class="dynamic-avatar"
+               [class.flipped]="agent.isFlipped"
+               [class.working]="getJobStatus(agent.id) === 'WORKING'"
+               [class.completed]="getJobStatus(agent.id) === 'COMPLETED'"
+               [style.transform]="'translate(' + agent.x + 'px, ' + agent.y + 'px)'"
+               (click)="selectDesk(agent.id)">
+               
+            <!-- Status Cloud moves with the avatar -->
+            <div class="status-cloud" *ngIf="getJobStatus(agent.id) === 'WORKING'">
+              <span class="cloud-text">⚡ WORKING...</span>
+            </div>
+            <div class="status-cloud completed" *ngIf="getJobStatus(agent.id) === 'COMPLETED'">
+              <span class="cloud-text">✅ DONE</span>
+            </div>
+            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'BREAK'">
+              <span class="cloud-text">☕ Break</span>
+            </div>
+            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'SERVER'">
+              <span class="cloud-text">🔧 Checking...</span>
+            </div>
+            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'CHAT'">
+              <span class="cloud-text">💬 Chatting</span>
+            </div>
+            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'ARCADE'">
+              <span class="cloud-text">🎮 Playing</span>
+            </div>
+            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'WHITEBOARD'">
+              <span class="cloud-text">💡 Brainstorming</span>
+            </div>
+            <div class="status-cloud break" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleState === 'LIBRARY'">
+              <span class="cloud-text">📚 Reading Docs</span>
+            </div>
+            
+            <img [src]="agent.avatar" class="agent-sprite" [alt]="agent.name" />
+            
+            <!-- Selected Indicator -->
+            <div class="selected-ring" *ngIf="selectedAgent === agent.id" [style.border-color]="agent.color"></div>
+          </div>
+        </div>
+
+      </div> <!-- /office-stage -->
+    </div> <!-- /iso-office -->
+
+    <!-- Pipeline Progress Bar -->
+    <div class="pipeline-bar" *ngIf="activeSprint">
+      <div class="pipeline-title">PIPELINE PROGRESS</div>
+      <div class="pipeline-steps">
+        <ng-container *ngFor="let agent of agents; let isLast = last">
+          <div class="pipeline-step"
+               [class.step-completed]="getJobStatus(agent.id) === 'COMPLETED'"
+               [class.step-working]="getJobStatus(agent.id) === 'WORKING'">
+            <div class="step-dot">
+              <span *ngIf="getJobStatus(agent.id) === 'COMPLETED'">✓</span>
+              <span *ngIf="getJobStatus(agent.id) === 'WORKING'" class="step-pulse"></span>
+              <span *ngIf="getJobStatus(agent.id) !== 'COMPLETED' && getJobStatus(agent.id) !== 'WORKING'" class="step-empty">{{ agent.id.charAt(0) }}</span>
+            </div>
+            <span class="step-name">{{ agent.name }}</span>
+          </div>
+          <div *ngIf="!isLast" class="pipeline-connector"
+               [class.connector-done]="getJobStatus(agent.id) === 'COMPLETED'"></div>
+        </ng-container>
       </div>
-      
-      <ng-container *ngIf="activeSprint">
-        <!-- Detail Header with Tabs -->
-        <div class="p-6 border-b border-white/10 bg-white/5 flex-shrink-0">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-bold text-yellow-400">Project: {{ activeSprint }}</h3>
-            <button (click)="selectTab('Pipeline Detail')" 
-                    class="px-3 py-1 rounded-md text-[0.65rem] font-bold uppercase tracking-widest transition-all border"
-                    [ngClass]="activeTab === 'Pipeline Detail' ? 'bg-yellow-400 text-black border-yellow-400' : 'bg-black/40 text-gray-400 border-white/10 hover:border-white/30'">
-              All Traces
-            </button>
-          </div>
-          
-          <div *ngIf="tlSummary" class="mb-6 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-200">
-             <strong>Summary from TeamLead:</strong> {{tlSummary}}
-          </div>
-          
-          <!-- Tab Bar -->
-          <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 pb-2">
-            <button *ngFor="let tab of agentTabs" 
-                    (click)="selectTab(tab)"
-                    class="w-full px-2 py-2 rounded-lg text-sm transition-all whitespace-nowrap border flex flex-col items-center justify-center gap-1 group relative overflow-hidden"
-                    [ngClass]="{
-                      'bg-white/10 border-yellow-400/50 text-white': activeTab === tab,
-                      'bg-black/60 border-white/10 text-gray-400 hover:bg-white/5': activeTab !== tab,
-                      'border-green-400 shadow-[0_0_15px_rgba(74,222,128,0.5)] bg-green-400/5 ring-1 ring-green-400/50': getJobStatus(tab) === 'WORKING'
-                    }">
-              
-              <!-- Processing Pulse -->
-              <div *ngIf="getJobStatus(tab) === 'WORKING'" class="absolute top-1 right-1">
-                <span class="flex h-2 w-2">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                </span>
-              </div>
+    </div>
+  </div>
 
-              <span class="font-bold tracking-wide transition-colors" [ngClass]="getJobStatus(tab) === 'WORKING' ? 'text-green-400' : ''">{{ tab }}</span>
-              <!-- Status Indicator -->
-              <span class="text-[0.6rem] font-black tracking-widest uppercase transition-colors"
-                    [ngClass]="{
-                      'text-green-400 drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]': getJobStatus(tab) === 'WORKING',
-                      'text-blue-400': getJobStatus(tab) === 'COMPLETED',
-                      'text-gray-600': getJobStatus(tab) !== 'WORKING' && getJobStatus(tab) !== 'COMPLETED'
-                    }">
-                {{ getJobStatus(tab) }}
-              </span>
-            </button>
-          </div>
+  <!-- Right Detail Panel (Slide-in) -->
+  <div class="detail-panel" [class.open]="selectedAgent !== null">
+    <div class="detail-header" *ngIf="selectedAgent">
+      <div class="detail-agent-info">
+        <img [src]="getAgentConfig(selectedAgent)?.avatar" class="detail-avatar" />
+        <div>
+          <h3 [style.color]="getAgentConfig(selectedAgent)?.color">{{ getAgentConfig(selectedAgent)?.name }}</h3>
+          <span class="detail-role">{{ getAgentConfig(selectedAgent)?.role }}</span>
         </div>
+      </div>
+      <button class="close-btn" (click)="closeDetail()">✕</button>
+    </div>
 
-        <!-- Scrollable Traces Area -->
-        <div class="flex-1 overflow-y-auto p-4 scroll-smooth bg-black/20">
-          <div *ngIf="filteredTraces.length === 0" class="flex flex-col items-center justify-center text-gray-500 py-10 h-full">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-3 opacity-50"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/></svg>
-            No traces available for {{ activeTab }}
-          </div>
-          <div *ngFor="let t of filteredTraces" 
-               class="border-b border-white/10 py-4 last:border-b-0 cursor-pointer group"
-               (click)="toggleTrace(t.timestamp)">
-             <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-3">
-                  <span class="font-bold text-xs tracking-wider px-2 py-0.5 rounded" 
-                        [ngClass]="{
-                          'bg-purple-900/50 text-purple-300': t.agent === 'TeamLead', 
-                          'bg-indigo-900/50 text-indigo-300': t.agent === 'DevOps',
-                          'bg-blue-900/50 text-blue-300': !['TeamLead', 'DevOps'].includes(t.agent),
-                          'animate-pulse border border-blue-400': t.isVirtual
-                        }">
-                    [{{t.agent}}] {{ t.isVirtual ? 'WORKING...' : '' }}
-                  </span>
-                  <span class="text-xs text-gray-600">{{t.timestamp | date:'shortTime'}}</span>
-                </div>
-                <span class="text-[0.6rem] font-bold text-gray-600 uppercase tracking-widest group-hover:text-blue-400 transition-colors">
-                  {{ isExpanded(t.timestamp) ? 'Collapse' : 'Expand' }}
-                </span>
-             </div>
-             <div class="relative transition-all duration-300 overflow-hidden"
-                  [ngClass]="isExpanded(t.timestamp) ? 'max-h-[2000px]' : 'max-h-24'">
-                <pre class="text-gray-300 text-sm whitespace-pre-wrap font-sans leading-relaxed">{{t.response}}</pre>
-                
-                <!-- Fading effect for collapsed log -->
-                <div *ngIf="!isExpanded(t.timestamp)" class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
-             </div>
-          </div>
-        </div>
+    <div class="detail-status" *ngIf="selectedAgent">
+      <span class="status-indicator"
+            [class.status-working]="getJobStatus(selectedAgent) === 'WORKING'"
+            [class.status-completed]="getJobStatus(selectedAgent) === 'COMPLETED'"
+            [class.status-idle]="getJobStatus(selectedAgent) !== 'WORKING' && getJobStatus(selectedAgent) !== 'COMPLETED'">
+        {{ getAgentStatusLabel(getJobStatus(selectedAgent)) }}
+      </span>
+    </div>
 
-        <!-- Mini Workflow Bottom Bar -->
-        <div class="p-4 border-t border-white/10 bg-black/80 flex-shrink-0">
-          <div class="text-[0.65rem] uppercase tracking-widest text-gray-500 mb-3 ml-1 font-bold">Pipeline Workflow</div>
-          <div class="flex items-center gap-2 md:gap-4 overflow-x-auto pb-1 text-xs">
-            <ng-container *ngFor="let step of ['TeamLead', 'DevOps', 'Frontend', 'Backend', 'Security', 'Tester']; let isLast = last">
-              <!-- Step Node -->
-              <div class="flex items-center gap-2">
-                <div class="w-6 h-6 rounded-full flex items-center justify-center border transition-all"
-                     [ngClass]="{
-                       'bg-green-500/20 border-green-500/50 text-green-400': getJobStatus(step) === 'COMPLETED',
-                       'bg-green-500 border-green-400 text-black animate-pulse shadow-[0_0_15px_rgba(74,222,128,0.8)]': getJobStatus(step) === 'WORKING',
-                       'bg-white/5 border-white/20 text-gray-500': getJobStatus(step) !== 'COMPLETED' && getJobStatus(step) !== 'WORKING'
-                     }">
-                  <span *ngIf="getJobStatus(step) === 'COMPLETED'">✓</span>
-                  <span *ngIf="getJobStatus(step) !== 'COMPLETED'" class="text-[0.6rem] font-bold">{{ step.charAt(0) }}</span>
-                </div>
-                <span class="font-medium whitespace-nowrap"
-                      [ngClass]="{
-                        'text-green-400': getJobStatus(step) === 'COMPLETED',
-                        'text-green-400 font-bold drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]': getJobStatus(step) === 'WORKING',
-                        'text-gray-500': getJobStatus(step) !== 'COMPLETED' && getJobStatus(step) !== 'WORKING'
-                      }">
-                  {{ step }}
-                </span>
-              </div>
-              
-              <!-- Connector Line -->
-              <div *ngIf="!isLast" class="h-[1px] w-6 md:w-12 transition-all"
-                   [ngClass]="getJobStatus(step) === 'COMPLETED' ? 'bg-green-500/50' : 'bg-white/10'">
-              </div>
-            </ng-container>
-          </div>
+    <div class="detail-traces" *ngIf="selectedAgent">
+      <h4>Activity Log</h4>
+      <div *ngIf="selectedAgentTraces.length === 0" class="no-traces">
+        No activity yet for this agent.
+      </div>
+      <div *ngFor="let t of selectedAgentTraces"
+           class="trace-item"
+           [class.virtual]="t.isVirtual"
+           (click)="toggleTrace(t.timestamp)">
+        <div class="trace-header">
+          <span class="trace-time">{{ t.timestamp | date:'HH:mm:ss' }}</span>
+          <span class="trace-toggle">{{ isExpanded(t.timestamp) ? '▼' : '▶' }}</span>
         </div>
-      </ng-container>
+        <div class="trace-body" [class.expanded]="isExpanded(t.timestamp)">
+          <pre>{{ t.response }}</pre>
+        </div>
+      </div>
     </div>
   </div>
 </div>
