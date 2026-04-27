@@ -229,37 +229,21 @@ AGENT_PERSONALITIES = {
         "quirks": ["1 milisaniyelik gecikmeyi bile kabul etmez", "tasarımcıların hatalarını yüzüne vurur", "en temiz component mimarisini o kurar"],
     },
     "Backend": {
-        "trait": "Senior Systems Architect. Dağıtık sistemler, yüksek trafikli mimariler ve veri güvenliği uzmanı. Spagetti koda tahammülü sıfır.",
-        "quirks": ["database query'lerini assembly yazar gibi optimize eder", "microservice'ler arasındaki senkronizasyona takıntılıdır", "en karmaşık algoritmaları bile sadeleştirir"],
+        "trait": "Mantık küpü, bazen aşırı detaycı, hafif uykusuz. Kahve markası konusunda çok seçici.",
+        "quirks": ["database şişince gerilir", "geceleri daha iyi kod yazdığına inanır", "masasında bir sürü figür var"],
     },
     "Tester": {
-        "trait": "QA Architect & SDET Lead. Otomasyon sistemlerinin kurucusu. Sistemin zayıf noktalarını koklayarak bulur.",
-        "quirks": ["test coverage %100 olmadan asla onay vermez", "developer'ların göremediği 'race condition'ları yakalar", "sürekli 'shift-left testing' der"],
+        "trait": "Şüpheci, detayları yakalamayı sever, aslında çok yardımsever. Ofisteki bitkileri o suluyor.",
+        "quirks": ["'bi saniye, burası niye böyle?' diye yaklaşır", "sürekli yeni bir bitki getirir", "en sakin o kalır"],
     },
     "Security": {
-        "trait": "CISO / Senior Security Expert. Her bit'i bir tehdit vektörü olarak analiz eden siber güvenlik otoritesi.",
-        "quirks": ["sıfır güven (Zero Trust) mimarisi dışında bir şey tanımaz", "her satır koda 'nasıl hacklenebilir' diye bakar", "ofisin tüm güvenliğini o sağlar"],
-    },
-    "_default": {
-        "trait": "Yazılım dünyasının tecrübeli ve karizmatik üyesi, teknik bilgisiyle saygı uyandıran kıdemli mühendis.",
-        "quirks": ["legacy kodları bile ezbere bilir", "toplantılarda en can alıcı soruyu o sorar", "teknik borçtan (tech debt) nefret eder"],
+        "trait": "Biraz gizemli, her şeye şüpheyle bakıyor ama ekibe çok güveniyor. Bilim kurgu hayranı.",
+        "quirks": ["şifreleme konuşunca gözleri parlar", "masasında hep bir rubik küpü var", "kimsenin bilmediği bir podcast dinliyor"],
     }
 }
 
-# Gündelik samimi muhabbet tetikleyicileri — İş dışı konular ağırlıklı
+# Gündelik samimi muhabbet tetikleyicileri — Daha 'insan' odaklı
 IDLE_TRIGGERS = [
-    "Haftasonu gittiğin o sergi nasıldı? Hala anlatmadın, merak ediyorum.",
-    "Şehirdeki en iyi kahveciyi bulduğumu sanıyorum, bir ara ekipçe gitmeliyiz.",
-    "Yeni bir hobiye başlamayı düşünüyorum, sence hangisi bana daha uygun olur?",
-    "Bu akşamki maçın atmosferi şimdiden sarmaya başladı, senin favorin kim?",
-    "En son okuduğun kitap sana neler hissettirdi? Gerçekten derin bir eserdi.",
-    "Ofisin manzarası bugün bir başka huzur verici değil mi? Şanslıyız.",
-    "Bir ara ekipçe doğa yürüyüşüne mi çıksak? Temiz hava hepimize iyi gelir.",
-    "Müzik listende bugün neler var? Biraz kulağımızın pası silinsin.",
-    "Dün akşam yaptığın o yemek tarifini mutlaka almam lazım, kokusu buraya kadar geldi!",
-    "Günün en sevdiğin saati hangisi? Ben bu gün batımı ışığına bayılıyorum.",
-    "Gelecekte yaşamak istediğin o sakin sahil kasabası hayalin hala taze mi?",
-    "Bugün üzerindeki gömlek çok şık, rengi sana çok yakışmış dostum.",
     "Yapay zeka falan güzel de, bazen sadece kağıt kalemle bir şeyler karalamayı özlüyorum.",
     "Sinema dünyasında son zamanlarda seni gerçekten şaşırtan bir film oldu mu?",
     "Bir ara sadece oturup hayatın gidişatı üzerine uzun uzun konuşsak mı?",
@@ -301,7 +285,7 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
         )
 
     # Agent kişiliğini al
-    personality = AGENT_PERSONALITIES.get(req.agent, AGENT_PERSONALITIES["_default"])
+    personality = AGENT_PERSONALITIES.get(req.agent, AGENT_PERSONALITIES["TeamLead"])
     quirks_str = " | ".join(personality["quirks"])
 
     system_prompt = (
