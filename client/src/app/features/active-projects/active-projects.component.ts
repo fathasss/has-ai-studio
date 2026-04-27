@@ -299,6 +299,8 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
              // Add tiny jitter so they aren't completely static if alone
              agent.x += (Math.random() * 10 - 5);
              agent.y += (Math.random() * 10 - 5);
+             // Set direction based on movement only when no occupant
+             agent.isFlipped = agent.x < prevX;
           }
 
           if (locationName) {
@@ -315,13 +317,11 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
                   isVirtual: false
                 });
               },
-              error: () => agent.idleMessage = '*sigh*'
+              error: () => agent.idleMessage = undefined
             });
           }
         }
       }
-
-      agent.isFlipped = agent.x < prevX;
     });
   }
 

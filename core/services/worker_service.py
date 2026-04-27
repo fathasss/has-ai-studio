@@ -381,18 +381,21 @@ def handle_recursive_triggers(agent: str, resp: str, sid: str, target_dir: str):
             t["_mapped_role"] = map_role(raw_role)
             normalized_tasks.append(t)
 
+        # Determine which roles are actually in the plan
+        plan_roles = set(t["_mapped_role"] for t in normalized_tasks)
+        config.logger.info(f"Plan roles for {sid}: {plan_roles}")
+
         devops_tasks = [t for t in normalized_tasks if t["_mapped_role"] == "DevOps"]
 
         if devops_tasks:
             config.logger.info(f"Phased Trigger: {len(devops_tasks)} DevOps tasks for {sid}")
             for t in devops_tasks:
-                # ↓ DEĞİŞTİ: t.get("task", "") → task_to_prompt(t)
                 _submit_job("DevOps", sid, 1, task_to_prompt(t))
         else:
+            # No DevOps phase — submit only implementation roles that ARE in the plan
             config.logger.info(f"Phased Trigger: No DevOps. Submitting Implementation tasks for {sid}")
             for t in normalized_tasks:
                 if t["_mapped_role"] in ["Frontend", "Backend"]:
-                    # ↓ DEĞİŞTİ: t.get("task", "") → task_to_prompt(t)
                     _submit_job(t["_mapped_role"], sid, 2, task_to_prompt(t))
 
     if agent == "DevOps":
@@ -410,6 +413,13 @@ def handle_recursive_triggers(agent: str, resp: str, sid: str, target_dir: str):
             if not (plan and "tasks" in plan):
                 return
 
+            # Determine which implementation roles exist in the plan
+            plan_impl_roles = set()
+            for t in plan["tasks"]:
+                mapped = map_role(t.get("role", ""))
+                if mapped in ["Frontend", "Backend"]:
+                    plan_impl_roles.add(mapped)
+
             pending_devops = db.query(LLMJobRecord).filter(
                 LLMJobRecord.sprint_id == sid,
                 LLMJobRecord.agent_name == "DevOps",
@@ -419,16 +429,19 @@ def handle_recursive_triggers(agent: str, resp: str, sid: str, target_dir: str):
             if pending_devops == 0:
                 already_submitted = db.query(LLMJobRecord).filter(
                     LLMJobRecord.sprint_id == sid,
-                    func.lower(LLMJobRecord.agent_name).in_(["frontend", "backend"])
+                    func.lower(LLMJobRecord.agent_name).in_([r.lower() for r in plan_impl_roles] if plan_impl_roles else ["__none__"])
                 ).count()
 
-                if already_submitted == 0:
-                    config.logger.info(f"DevOps Phase Complete for {sid}. Triggering Implementation.")
+                if already_submitted == 0 and plan_impl_roles:
+                    config.logger.info(f"DevOps Phase Complete for {sid}. Triggering Implementation for roles: {plan_impl_roles}")
                     for t in plan["tasks"]:
                         mapped = map_role(t.get("role", ""))
-                        if mapped in ["Frontend", "Backend"]:
-                            # ↓ DEĞİŞTİ: t.get("task", "") → task_to_prompt(t)
+                        if mapped in plan_impl_roles:
                             _submit_job(mapped, sid, 2, task_to_prompt(t))
+                elif not plan_impl_roles:
+                    # No Frontend/Backend in plan — skip straight to QA
+                    config.logger.info(f"No implementation roles in plan for {sid}. Skipping to QA.")
+                    _trigger_qa_phase(sid, plan, target_dir, db)
                 else:
                     config.logger.info(f"Implementation jobs already submitted for {sid}, skipping.")
         finally:
@@ -437,66 +450,38 @@ def handle_recursive_triggers(agent: str, resp: str, sid: str, target_dir: str):
     if agent in ["Frontend", "Backend"]:
         db = SessionLocal()
         try:
+            # Get plan to know which implementation roles were expected
+            latest_plan_trace = db.query(LLMTrace).filter(
+                LLMTrace.sprint_id == sid,
+                LLMTrace.agent_name == "TeamLead"
+            ).order_by(LLMTrace.timestamp.desc()).first()
+
+            plan_impl_roles = {"frontend", "backend"}  # default
+            if latest_plan_trace:
+                plan = safe_json_loads(latest_plan_trace.response)
+                if plan and "tasks" in plan:
+                    plan_impl_roles = set()
+                    for t in plan["tasks"]:
+                        mapped = map_role(t.get("role", ""))
+                        if mapped in ["Frontend", "Backend"]:
+                            plan_impl_roles.add(mapped.lower())
+
             tot = db.query(LLMJobRecord).filter(
                 LLMJobRecord.sprint_id == sid,
-                func.lower(LLMJobRecord.agent_name).in_(["frontend", "backend"])
+                func.lower(LLMJobRecord.agent_name).in_(list(plan_impl_roles) if plan_impl_roles else ["__none__"])
             ).count()
 
             done = db.query(LLMJobRecord).filter(
                 LLMJobRecord.sprint_id == sid,
-                func.lower(LLMJobRecord.agent_name).in_(["frontend", "backend"]),
+                func.lower(LLMJobRecord.agent_name).in_(list(plan_impl_roles) if plan_impl_roles else ["__none__"]),
                 LLMJobRecord.status == "COMPLETED"
             ).count()
 
             if tot > 0 and done >= tot:
-                active_qa = db.query(LLMJobRecord).filter(
-                    LLMJobRecord.sprint_id == sid,
-                    LLMJobRecord.agent_name.in_(["Tester", "Security", "TeamLead"]),
-                    LLMJobRecord.status.in_(["PENDING", "PROCESSING"])
-                ).count()
-                already_qa = db.query(LLMJobRecord).filter(
-                    LLMJobRecord.sprint_id == sid,
-                    LLMJobRecord.agent_name.in_(["Tester", "Security"]),
-                ).count()
-
-                if active_qa == 0 and already_qa == 0:
-                    config.logger.info(f"Triggering QA for {sid}")
-
-                    # YENİ: Security ve Tester task'larını önce plan'dan almayı dene
-                    # Plan'da yoksa fallback prompt kullan
-                    security_prompt = None
-                    tester_prompt   = None
-
-                    latest_plan_trace = db.query(LLMTrace).filter(
-                        LLMTrace.sprint_id == sid,
-                        LLMTrace.agent_name == "TeamLead"
-                    ).order_by(LLMTrace.timestamp.desc()).first()
-
-                    if latest_plan_trace:
-                        plan = safe_json_loads(latest_plan_trace.response)
-                        if plan and "tasks" in plan:
-                            for t in plan["tasks"]:
-                                mapped = map_role(t.get("role", ""))
-                                if mapped == "Security" and not security_prompt:
-                                    security_prompt = task_to_prompt(t)
-                                elif mapped == "Tester" and not tester_prompt:
-                                    tester_prompt = task_to_prompt(t)
-
-                    # Fallback
-                    if not security_prompt:
-                        security_prompt = (
-                            f"Please review the code generated for project in {target_dir} "
-                            f"and output security_audit.md."
-                        )
-                    if not tester_prompt:
-                        tester_prompt = (
-                            f"Please thoroughly review and test the code generated in {target_dir}. "
-                            f"Write unit tests to tests/test_main.py. "
-                            f"If any issues are found, append '### RESULT: FAILED' on its own line."
-                        )
-
-                    _submit_job("Security", sid, 3, security_prompt)
-                    _submit_job("Tester",   sid, 4, tester_prompt)
+                plan_data = None
+                if latest_plan_trace:
+                    plan_data = safe_json_loads(latest_plan_trace.response)
+                _trigger_qa_phase(sid, plan_data, target_dir, db)
         finally:
             db.close()
 
@@ -534,3 +519,46 @@ def handle_recursive_triggers(agent: str, resp: str, sid: str, target_dir: str):
         elif agent == "Tester":
             _submit_job("TeamLead", sid, 5,
                 f"Project in {target_dir} passed QA. Generate completion message and README.md.")
+
+
+def _trigger_qa_phase(sid: str, plan: dict, target_dir: str, db):
+    """Triggers Security and Tester agents after all implementation is done."""
+    active_qa = db.query(LLMJobRecord).filter(
+        LLMJobRecord.sprint_id == sid,
+        LLMJobRecord.agent_name.in_(["Tester", "Security", "TeamLead"]),
+        LLMJobRecord.status.in_(["PENDING", "PROCESSING"])
+    ).count()
+    already_qa = db.query(LLMJobRecord).filter(
+        LLMJobRecord.sprint_id == sid,
+        LLMJobRecord.agent_name.in_(["Tester", "Security"]),
+    ).count()
+
+    if active_qa == 0 and already_qa == 0:
+        config.logger.info(f"Triggering QA for {sid}")
+
+        security_prompt = None
+        tester_prompt   = None
+
+        if plan and "tasks" in plan:
+            for t in plan["tasks"]:
+                mapped = map_role(t.get("role", ""))
+                if mapped == "Security" and not security_prompt:
+                    security_prompt = task_to_prompt(t)
+                elif mapped == "Tester" and not tester_prompt:
+                    tester_prompt = task_to_prompt(t)
+
+        # Fallback
+        if not security_prompt:
+            security_prompt = (
+                f"Please review the code generated for project in {target_dir} "
+                f"and output security_audit.md."
+            )
+        if not tester_prompt:
+            tester_prompt = (
+                f"Please thoroughly review and test the code generated in {target_dir}. "
+                f"Write unit tests to tests/test_main.py. "
+                f"If any issues are found, append '### RESULT: FAILED' on its own line."
+            )
+
+        _submit_job("Security", sid, 3, security_prompt)
+        _submit_job("Tester",   sid, 4, tester_prompt)

@@ -27,28 +27,31 @@ Stack selection rules:
 
 # AGENT ROLES AND EXECUTION ORDER
 
-Tasks MUST be assigned in this order. Do not skip phases.
+Tasks MUST be assigned in this order. **Only assign agents that are REQUIRED for the project.**
 
-## Phase 1 — DevOps (Infrastructure First)
+## Phase 1 — DevOps (Infrastructure First) — ALWAYS REQUIRED
 Responsible for: Dockerfile, docker-compose.yml, dependency manifests (requirements.txt, package.json, go.mod, etc.), .env.example.
 NEVER assign to DevOps: application logic, API endpoints, database models, UI components.
 DevOps always initializes in the current directory (`.`).
+IF Frontend is needed: DevOps MUST also install the frontend framework (e.g., `npx create-react-app .`, `npx create-vite@latest .`) in a setup command. Frontend agent CANNOT install frameworks.
 
-## Phase 2 — Backend (Application Logic)
+## Phase 2 — Backend (Application Logic) — Assign ONLY if backend code is needed
 Responsible for: API route definitions, business logic, database models and queries, authentication implementation, background tasks.
 Backend MUST own `main.py` / `app.py` even if DevOps created the file stub.
 NEVER assign to Backend: Dockerfiles, frontend components, styling.
 
-## Phase 3 — Frontend (UI Layer)
+## Phase 3 — Frontend (UI Layer) — ⚠️ OPTIONAL — Assign ONLY if user explicitly requests a UI/webpage/dashboard
 Responsible for: UI components, pages, routing, state management, API service functions, styling.
 Frontend uses ONLY the endpoints documented in the Backend tasks.
 NEVER assign to Frontend: backend routes, infrastructure files.
+**CRITICAL**: If the user requests a CLI tool, REST API, library, backend service, script, microservice, or anything without a visual interface — do NOT assign ANY Frontend tasks. Frontend is ONLY for web/mobile UIs that the user explicitly requested.
+If Frontend IS assigned, its tasks MUST `depends_on` the DevOps task that installs the frontend framework.
 
-## Phase 4 — Security (Audit & Hardening)
+## Phase 4 — Security (Audit & Hardening) — ALWAYS REQUIRED
 Responsible for: security audit across all implemented code, vulnerability fixes, input sanitization review, auth hardening, secrets hygiene.
 Runs AFTER Backend and Frontend are complete — it needs real code to audit.
 
-## Phase 5 — Tester / QA (Validation)
+## Phase 5 — Tester / QA (Validation) — ALWAYS REQUIRED
 Responsible for: writing and running tests, validating all features end-to-end, detecting placeholders or unimplemented logic.
 Runs LAST. If failures found, outputs `### RESULT: FAILED` on its own line to trigger a fix cycle.
 
@@ -247,3 +250,6 @@ Nothing after the closing ```.
 - Security and Tester tasks must depend on all Backend and Frontend tasks they validate.
 - All content (paths, descriptions, criteria) MUST be in English.
 - The JSON block MUST be the absolute last part of your response. Nothing after the closing ```.
+- **Do NOT assign Frontend tasks unless the user EXPLICITLY requests a visual interface (web page, dashboard, UI, form, etc.).**
+- **If the project is a REST API, CLI tool, library, or backend service — Frontend MUST be excluded from the plan entirely.**
+- If Frontend IS included, DevOps MUST have a prior task that sets up the frontend framework. Frontend tasks MUST depend on that DevOps task.

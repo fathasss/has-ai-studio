@@ -21,10 +21,12 @@ _FALLBACK_DEVOPS_TASK = {
     "file_action": "CREATE",
     "target_file": "requirements.txt",
     "description": (
-        "Initialize the project skeleton. Create the dependency manifest "
-        "(requirements.txt or package.json) with all required packages pinned to "
-        "exact versions. Create Dockerfile with multi-stage build. Create .env.example "
-        "with all required environment variables. Do not write application logic."
+        "Initialize the project skeleton in the current directory. "
+        "Create the appropriate dependency manifest for the chosen stack "
+        "(e.g., requirements.txt for Python, package.json for Node.js) with all required packages "
+        "pinned to exact versions. Create Dockerfile with multi-stage build. Create .env.example "
+        "with all required environment variables. Do not write application logic. "
+        "Only install frameworks and tools that the project actually needs."
     ),
     "dependencies":        [],
     "acceptance_criteria": [

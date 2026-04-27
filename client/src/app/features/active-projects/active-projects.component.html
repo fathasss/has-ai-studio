@@ -168,11 +168,14 @@
             </div>
             
             <!-- Dynamic Idle Chat Bubble -->
-            <div class="speech-bubble" *ngIf="(getJobStatus(agent.id) === 'IDLE' || getJobStatus(agent.id) === 'COMPLETED') && agent.idleMessage">
+            <div class="speech-bubble" *ngIf="agent.idleMessage && agent.idleMessage !== '...' && getJobStatus(agent.id) !== 'WORKING'">
               <span class="cloud-text">{{ agent.idleMessage }}</span>
             </div>
             
             <img [src]="agent.avatar" class="agent-sprite" [alt]="agent.name" />
+            
+            <!-- Agent Name Tag -->
+            <span class="agent-name-tag" [style.color]="agent.color">{{ agent.name }}</span>
             
             <!-- Selected Indicator -->
             <div class="selected-ring" *ngIf="selectedAgent === agent.id" [style.border-color]="agent.color"></div>
