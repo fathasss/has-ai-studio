@@ -30,9 +30,9 @@
         <div *ngIf="systemTraces.length === 0" class="text-center text-gray-500 py-10">No system execution traces available...</div>
         
         <div class="flex flex-col gap-6">
-            <div *ngFor="let t of systemTraces; let i = index" 
+            <div *ngFor="let t of systemTraces" 
                  class="bg-black/60 border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all cursor-pointer group"
-                 (click)="toggleLog(i)">
+                 (click)="toggleLog(t.id)">
                 <div class="flex justify-between items-center p-4 border-b border-white/10 bg-white/5">
                     <div class="flex items-center gap-3">
                         <span class="inline-block px-2 py-1 bg-blue-500/10 text-blue-400 text-xs font-bold uppercase rounded border border-blue-500/20">
@@ -42,18 +42,18 @@
                     </div>
                     <div class="flex items-center gap-4">
                         <span class="text-[0.65rem] font-bold text-gray-600 uppercase tracking-widest group-hover:text-blue-400 transition-colors">
-                          {{ isExpanded(i) ? 'Click to collapse' : 'Click to expand' }}
+                          {{ isExpanded(t.id) ? 'Click to collapse' : 'Click to expand' }}
                         </span>
                         <span class="text-xs text-gray-500">{{t.timestamp | date:'medium'}}</span>
                     </div>
                 </div>
                 <div class="p-4">
                    <div class="relative transition-all duration-300 overflow-hidden"
-                        [ngClass]="isExpanded(i) ? 'max-h-[5000px]' : 'max-h-40'">
+                        [ngClass]="isExpanded(t.id) ? 'max-h-[5000px]' : 'max-h-40'">
                       <pre class="text-[0.85rem] text-gray-300 font-mono whitespace-pre-wrap">{{t.response}}</pre>
                       
                       <!-- Fading effect for collapsed log -->
-                      <div *ngIf="!isExpanded(i)" class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
+                      <div *ngIf="!isExpanded(t.id)" class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
                    </div>
                    
                    <div class="mt-4 text-xs text-gray-500 font-mono text-right border-t border-white/5 pt-2">
@@ -65,35 +65,87 @@
       </div>
 
       <!-- Tab Content: AGENT -->
-      <div *ngIf="activeTab === 'AGENT'" class="flex-1 bg-black/40 border border-white/10 rounded-xl overflow-y-auto p-6 scroll-smooth">
-        <div *ngIf="agentTraces.length === 0" class="text-center text-gray-500 py-10">No agent conversations available...</div>
+      <div *ngIf="activeTab === 'AGENT'" class="flex-1 bg-black/40 border border-white/10 rounded-xl overflow-y-auto p-4 md:p-8 scroll-smooth">
+        <div *ngIf="agentTraces.length === 0" class="text-center text-gray-500 py-20">
+          <div class="text-4xl mb-4 opacity-20">💬</div>
+          No agent conversations recorded in this cycle...
+        </div>
         
-        <div class="flex flex-col gap-6">
-            <div *ngFor="let t of agentTraces; let i = index" 
-                 class="bg-black/60 border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all cursor-pointer group"
-                 (click)="toggleLog(i)">
-                <div class="flex justify-between items-center p-4 border-b border-white/10 bg-white/5">
-                    <div class="flex items-center gap-3">
-                        <span class="inline-block px-2 py-1 bg-green-500/10 text-green-400 text-xs font-bold uppercase rounded border border-green-500/20">
-                            {{t.agent_name || t.agent}}
-                        </span>
-                        <span class="text-sm font-mono text-gray-400">Idle Conversation</span>
+        <div class="flex flex-col gap-3">
+            <div *ngFor="let group of groupedAgentTraces | keyvalue" 
+                 class="flex flex-col group/agent-section">
+                
+                <!-- Premium Agent Header Card -->
+                <div class="sticky top-0 z-20 bg-[#050505]/90 backdrop-blur-xl border border-white/5 rounded-2xl p-3 flex items-center justify-between cursor-pointer hover:border-white/20 transition-all shadow-2xl"
+                     [style.border-left-color]="getAgentMeta(group.key).color"
+                     [style.border-left-width]="'4px'"
+                     (click)="toggleGroup(group.key)">
+                    
+                    <div class="flex items-center gap-5">
+                        <div class="relative">
+                            <img [src]="getAgentMeta(group.key).avatar" 
+                                 class="w-12 h-12 rounded-full border-2 bg-black/40 object-cover p-0.5"
+                                 [style.border-color]="getAgentMeta(group.key).color">
+                            <div class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-black"
+                                 [style.background-color]="getAgentMeta(group.key).color"></div>
+                        </div>
+                        <div class="flex flex-col">
+                            <div class="flex items-center gap-3">
+                                <span class="text-lg font-black text-white uppercase tracking-tighter">{{group.key}}</span>
+                                <span class="px-2 py-0.5 rounded text-[0.6rem] font-bold bg-white/5 text-gray-400 border border-white/10 uppercase tracking-widest">
+                                    {{group.value.length}} MESSAGES
+                                </span>
+                            </div>
+                            <span class="text-[0.65rem] font-bold tracking-widest uppercase opacity-40" [style.color]="getAgentMeta(group.key).color">
+                                {{getAgentMeta(group.key).role}}
+                            </span>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-4">
-                        <span class="text-[0.65rem] font-bold text-gray-600 uppercase tracking-widest group-hover:text-green-400 transition-colors">
-                          {{ isExpanded(i) ? 'Click to collapse' : 'Click to expand' }}
+
+                    <div class="flex items-center gap-4 px-4">
+                        <span class="text-[0.6rem] font-bold text-gray-500 uppercase tracking-widest hidden md:block">
+                            {{ isGroupCollapsed(group.key) ? 'Show Logs' : 'Hide Logs' }}
                         </span>
-                        <span class="text-xs text-gray-500">{{t.timestamp | date:'medium'}}</span>
+                        <div class="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center transition-transform duration-300"
+                             [class.rotate-180]="isGroupCollapsed(group.key)">
+                            <span class="text-[0.6rem] opacity-30">▼</span>
+                        </div>
                     </div>
                 </div>
-                <div class="p-4">
-                   <div class="relative transition-all duration-300 overflow-hidden"
-                        [ngClass]="isExpanded(i) ? 'max-h-[5000px]' : 'max-h-40'">
-                      <pre class="text-[0.85rem] text-gray-300 font-mono whitespace-pre-wrap">{{t.response}}</pre>
-                      
-                      <!-- Fading effect for collapsed log -->
-                      <div *ngIf="!isExpanded(i)" class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
-                   </div>
+
+                <!-- Messages Grid (Collapsible) -->
+                <div *ngIf="!isGroupCollapsed(group.key)" 
+                     class="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4 mb-10 transition-all duration-500 animate-in fade-in slide-in-from-top-2 px-2">
+                    <div *ngFor="let t of group.value" 
+                         class="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden hover:border-white/20 hover:bg-white/[0.04] transition-all cursor-pointer group/msg relative"
+                         (click)="toggleLog(t.id)">
+                        
+                        <!-- Accent Line -->
+                        <div class="absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/msg:opacity-100 transition-opacity"
+                             [style.background-color]="getAgentMeta(group.key).color"></div>
+
+                        <div class="flex justify-between items-center p-4 border-b border-white/5 bg-white/[0.01]">
+                            <div class="flex items-center gap-3">
+                                <div class="w-1.5 h-1.5 rounded-full" [style.background-color]="getAgentMeta(group.key).color"></div>
+                                <span class="text-[0.7rem] text-gray-400 font-mono font-bold">{{t.timestamp | date:'medium'}}</span>
+                            </div>
+                            <span class="text-[0.55rem] font-black text-gray-600 uppercase tracking-widest group-hover/msg:text-white transition-colors">
+                              {{ isExpanded(t.id) ? 'Collapse' : 'Expand' }}
+                            </span>
+                        </div>
+
+                        <div class="p-5">
+                           <div class="relative transition-all duration-500 ease-out overflow-hidden"
+                                [ngClass]="isExpanded(t.id) ? 'max-h-[2000px]' : 'max-h-24'">
+                              <pre class="text-[0.8rem] text-gray-300 font-mono whitespace-pre-wrap leading-relaxed tracking-wide">{{t.response}}</pre>
+                              
+                              <!-- Premium Fade for collapsed view -->
+                              <div *ngIf="!isExpanded(t.id)" 
+                                   class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent pointer-events-none">
+                              </div>
+                           </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

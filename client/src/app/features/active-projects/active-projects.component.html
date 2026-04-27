@@ -174,8 +174,18 @@
             
             <img [src]="agent.avatar" class="agent-sprite" [alt]="agent.name" />
             
-            <!-- Agent Name Tag -->
-            <span class="agent-name-tag" [style.color]="agent.color">{{ agent.name }}</span>
+            <span class="agent-name-tag" [style.color]="agent.color">
+              {{ agent.name }}
+              <div class="agent-status-pill" 
+                   [class.status-working]="getJobStatus(agent.id) === 'WORKING'"
+                   [class.status-completed]="getJobStatus(agent.id) === 'COMPLETED'"
+                   [class.status-pending]="getJobStatus(agent.id) === 'PENDING'"
+                   [class.status-standby]="getJobStatus(agent.id) === 'STANDBY'"
+                   [class.status-awaiting]="getJobStatus(agent.id) === 'AWAITING'"
+                   [class.status-idle]="getJobStatus(agent.id) === 'IDLE'">
+                {{ getAgentStatusLabel(getJobStatus(agent.id)) }}
+              </div> 
+            </span>
             
             <!-- Selected Indicator -->
             <div class="selected-ring" *ngIf="selectedAgent === agent.id" [style.border-color]="agent.color"></div>

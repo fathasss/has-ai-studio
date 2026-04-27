@@ -14,34 +14,77 @@ $text-dim: #71717a;
 
 // ── Animations ──
 @keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 @keyframes typing {
-  0% { width: 0; }
-  50% { width: 100%; }
-  100% { width: 0; }
+  0% {
+    width: 0;
+  }
+
+  50% {
+    width: 100%;
+  }
+
+  100% {
+    width: 0;
+  }
 }
 
 @keyframes cloud-bob {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-4px) scale(1.03); }
+
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-4px) scale(1.03);
+  }
 }
 
 @keyframes screen-flicker {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 @keyframes slide-in {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 // ── Container ──
@@ -120,19 +163,38 @@ $text-dim: #71717a;
   transition: all 0.3s ease;
   background: rgba(255, 255, 255, 0.02);
 
-  &:hover { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.15); }
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
   &.active {
     background: rgba(250, 204, 21, 0.08);
     border-color: rgba(250, 204, 21, 0.4);
     box-shadow: 0 0 20px rgba(250, 204, 21, 0.1);
   }
 
-  .sprint-icon { font-size: 1.2rem; }
+  .sprint-icon {
+    font-size: 1.2rem;
+  }
+
   .sprint-info {
     display: flex;
     flex-direction: column;
-    .sprint-id { font-weight: 700; font-size: 0.75rem; color: $text; letter-spacing: 0.05em; }
-    .sprint-label { font-size: 0.6rem; color: $text-dim; letter-spacing: 0.1em; text-transform: uppercase; }
+
+    .sprint-id {
+      font-weight: 700;
+      font-size: 0.75rem;
+      color: $text;
+      letter-spacing: 0.05em;
+    }
+
+    .sprint-label {
+      font-size: 0.6rem;
+      color: $text-dim;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
   }
 }
 
@@ -158,8 +220,18 @@ $text-dim: #71717a;
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    .office-icon { font-size: 1.5rem; }
-    h2 { font-size: 0.85rem; letter-spacing: 0.2em; color: $text; font-weight: 900; margin: 0; }
+
+    .office-icon {
+      font-size: 1.5rem;
+    }
+
+    h2 {
+      font-size: 0.85rem;
+      letter-spacing: 0.2em;
+      color: $text;
+      font-weight: 900;
+      margin: 0;
+    }
   }
 
   .office-meta {
@@ -177,7 +249,7 @@ $text-dim: #71717a;
     font-size: 0.65rem;
     font-weight: 700;
     letter-spacing: 0.1em;
-    
+
     &.status-idle {
       background: rgba(255, 255, 255, 0.05);
       border-color: rgba(255, 255, 255, 0.2);
@@ -204,8 +276,16 @@ $text-dim: #71717a;
   justify-content: center;
   color: $text-dim;
 
-  .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.3; }
-  p { font-size: 0.85rem; letter-spacing: 0.05em; }
+  .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.3;
+  }
+
+  p {
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+  }
 }
 
 // ── Isometric Office Floor ──
@@ -253,13 +333,13 @@ $text-dim: #71717a;
   border-radius: 12px;
   border: 1px dashed rgba(255, 255, 255, 0.15);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(15, 15, 15, 0.8) 100%);
-  
+
   .zone-icon {
     position: absolute;
     top: -15px;
     right: -15px;
     font-size: 1.2rem;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
   }
 
   .room-tag {
@@ -293,11 +373,14 @@ $text-dim: #71717a;
     border: 1px solid #333;
     border-radius: 4px;
     position: relative;
+
     &::after {
       content: '';
       position: absolute;
-      top: 5px; right: -5px;
-      width: 5px; height: 10px;
+      top: 5px;
+      right: -5px;
+      width: 5px;
+      height: 10px;
       background: #444;
     }
   }
@@ -328,15 +411,28 @@ $text-dim: #71717a;
     display: flex;
     flex-direction: column;
     gap: 4px;
+
     span {
       width: 30px;
       height: 4px;
       background: #333;
       border-radius: 2px;
       animation: screen-flicker 1s infinite alternate;
-      &:nth-child(1) { background: $success; animation-delay: 0.1s; }
-      &:nth-child(2) { background: $success; animation-delay: 0.4s; }
-      &:nth-child(3) { background: $danger; animation-delay: 0.7s; }
+
+      &:nth-child(1) {
+        background: $success;
+        animation-delay: 0.1s;
+      }
+
+      &:nth-child(2) {
+        background: $success;
+        animation-delay: 0.4s;
+      }
+
+      &:nth-child(3) {
+        background: $danger;
+        animation-delay: 0.7s;
+      }
     }
   }
 }
@@ -359,6 +455,7 @@ $text-dim: #71717a;
     border-radius: 10px 10px 4px 4px;
     margin-bottom: 2px;
   }
+
   .cooler-base {
     width: 34px;
     height: 35px;
@@ -388,6 +485,7 @@ $text-dim: #71717a;
     border-radius: 4px;
     animation: screen-flicker 0.5s infinite;
   }
+
   .arcade-controls {
     margin-top: 5px;
     width: 50px;
@@ -414,15 +512,19 @@ $text-dim: #71717a;
     border: 2px solid #ccc;
     border-radius: 4px;
     position: relative;
+
     &::after {
       content: '';
       position: absolute;
-      top: 10px; left: 10px;
-      width: 60px; height: 2px;
+      top: 10px;
+      left: 10px;
+      width: 60px;
+      height: 2px;
       background: $danger;
       box-shadow: 0 5px 0 $success, 0 10px 0 $accent;
     }
   }
+
   .whiteboard-stand {
     width: 80px;
     height: 20px;
@@ -440,7 +542,7 @@ $text-dim: #71717a;
   background: #3e2723;
   border: 2px solid #2e1d1a;
   border-radius: 4px;
-  
+
   .bookshelf {
     width: 100%;
     height: 100%;
@@ -461,8 +563,8 @@ $text-dim: #71717a;
 // ── Meeting Room ──
 .meeting-room {
   position: absolute;
-  left: 250px;
-  top: 200px;
+  left: 275px;
+  top: 240px;
   width: 350px;
   padding: 1.5rem;
   border: 2px solid rgba(250, 204, 21, 0.2);
@@ -496,6 +598,7 @@ $text-dim: #71717a;
       color: $accent;
       margin-bottom: 0.25rem;
     }
+
     .board-lines {
       font-size: 0.6rem;
       color: $text-dim;
@@ -583,6 +686,7 @@ $text-dim: #71717a;
         background: rgba(34, 197, 94, 0.08);
         box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
       }
+
       &.screen-done {
         border-color: rgba(34, 197, 94, 0.3);
         background: rgba(34, 197, 94, 0.05);
@@ -600,8 +704,16 @@ $text-dim: #71717a;
           background: $success;
           border-radius: 1px;
           animation: typing 2s ease-in-out infinite;
-          &:nth-child(2) { animation-delay: 0.3s; width: 70%; }
-          &:nth-child(3) { animation-delay: 0.6s; width: 50%; }
+
+          &:nth-child(2) {
+            animation-delay: 0.3s;
+            width: 70%;
+          }
+
+          &:nth-child(3) {
+            animation-delay: 0.6s;
+            width: 50%;
+          }
         }
       }
 
@@ -648,6 +760,7 @@ $text-dim: #71717a;
       font-weight: 800;
       letter-spacing: 0.1em;
     }
+
     .label-status {
       font-size: 0.45rem;
       color: $text-dim;
@@ -678,6 +791,7 @@ $text-dim: #71717a;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  overflow: visible !important;
 
   &.flipped .agent-sprite {
     transform: scaleX(-1);
@@ -688,7 +802,7 @@ $text-dim: #71717a;
     height: 48px;
     image-rendering: pixelated;
     transition: filter 0.3s, transform 0.3s;
-    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
   }
 
   &.working .agent-sprite {
@@ -701,15 +815,82 @@ $text-dim: #71717a;
 
   .agent-name-tag {
     position: absolute;
-    bottom: -14px;
+    top: 44px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 0.5rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
+    font-size: 0.7rem;
+    font-weight: 900;
+    letter-spacing: 0.05em;
     white-space: nowrap;
     pointer-events: none;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    z-index: 1000;
+
+    .agent-status-pill {
+      background: #1e293b;
+      padding: 2px 10px;
+      border-radius: 4px;
+      font-size: 0.55rem;
+      font-weight: 900;
+      color: #fff !important;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      transition: all 0.4s ease;
+      margin-top: 4px;
+
+      // Default / IDLE
+      &.status-idle {
+        background: #334155;
+        border-color: #64748b;
+        color: #cbd5e1 !important;
+        animation: pill-idle-pulse 4s infinite ease-in-out;
+      }
+
+      // WORKING
+      &.status-working {
+        background: rgba(234, 179, 8, 0.4);
+        border-color: #facc15;
+        color: #fff !important;
+        box-shadow: 0 0 20px rgba(234, 179, 8, 0.6);
+        animation: pill-pulse 1.5s infinite ease-in-out;
+      }
+
+      // COMPLETED
+      &.status-completed {
+        background: rgba(34, 197, 94, 0.4);
+        border-color: #22c55e;
+        color: #fff !important;
+        box-shadow: 0 0 20px rgba(34, 197, 94, 0.6);
+      }
+
+      // PENDING
+      &.status-pending {
+        background: rgba(249, 115, 22, 0.3);
+        border-color: #f97316;
+        color: #ffedd5 !important;
+        animation: pill-idle-pulse 2s infinite ease-in-out;
+      }
+
+      // STANDBY
+      &.status-standby {
+        background: rgba(168, 85, 247, 0.3);
+        border-color: #a855f7;
+        color: #f3e8ff !important;
+      }
+
+      // AWAITING
+      &.status-awaiting {
+        background: rgba(6, 182, 212, 0.3);
+        border-color: #06b6d4;
+        color: #ecfeff !important;
+      }
+    }
   }
 
   .selected-ring {
@@ -775,14 +956,14 @@ $text-dim: #71717a;
   text-align: center;
   border: 1px solid rgba(200, 200, 200, 0.6);
   z-index: 15;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
   animation: cloud-bob 3s ease-in-out infinite;
   pointer-events: none;
-  
+
   .cloud-text {
     display: inline;
   }
-  
+
   &::after {
     content: '';
     position: absolute;
@@ -849,8 +1030,15 @@ $text-dim: #71717a;
   }
 
   &.step-completed {
-    .step-dot { background: rgba(34, 197, 94, 0.2); border-color: $success; color: $success; }
-    .step-name { color: $success; }
+    .step-dot {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: $success;
+      color: $success;
+    }
+
+    .step-name {
+      color: $success;
+    }
   }
 
   &.step-working {
@@ -861,7 +1049,11 @@ $text-dim: #71717a;
       box-shadow: 0 0 15px rgba(34, 197, 94, 0.6);
       animation: pulse-glow 1.5s infinite;
     }
-    .step-name { color: $success; font-weight: 800; }
+
+    .step-name {
+      color: $success;
+      font-weight: 800;
+    }
   }
 
   .step-pulse {
@@ -952,7 +1144,10 @@ $text-dim: #71717a;
     justify-content: center;
     transition: all 0.2s;
 
-    &:hover { border-color: $danger; color: $danger; }
+    &:hover {
+      border-color: $danger;
+      color: $danger;
+    }
   }
 }
 
@@ -973,11 +1168,13 @@ $text-dim: #71717a;
       color: $success;
       border: 1px solid rgba(34, 197, 94, 0.3);
     }
+
     &.status-completed {
       background: rgba(59, 130, 246, 0.15);
       color: #60a5fa;
       border: 1px solid rgba(59, 130, 246, 0.3);
     }
+
     &.status-idle {
       background: rgba(255, 255, 255, 0.05);
       color: $text-dim;
@@ -1013,7 +1210,7 @@ $text-dim: #71717a;
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  
+
   button {
     flex: 1;
     padding: 0.5rem;
@@ -1025,10 +1222,11 @@ $text-dim: #71717a;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s;
-    
+
     &:hover {
       background: rgba(255, 255, 255, 0.1);
     }
+
     &.active {
       background: rgba(59, 130, 246, 0.15);
       border-color: rgba(59, 130, 246, 0.5);
@@ -1045,7 +1243,9 @@ $text-dim: #71717a;
   transition: all 0.2s;
   overflow: hidden;
 
-  &:hover { border-color: rgba(255, 255, 255, 0.15); }
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
 
   &.virtual {
     border-color: rgba(34, 197, 94, 0.3);
@@ -1065,6 +1265,7 @@ $text-dim: #71717a;
       font-weight: 600;
       font-family: 'Courier New', monospace;
     }
+
     .trace-toggle {
       font-size: 0.5rem;
       color: $text-dim;
@@ -1076,7 +1277,9 @@ $text-dim: #71717a;
     overflow: hidden;
     transition: max-height 0.4s ease;
 
-    &.expanded { max-height: 600px; }
+    &.expanded {
+      max-height: 600px;
+    }
 
     pre {
       padding: 0.75rem;
