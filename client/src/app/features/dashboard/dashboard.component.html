@@ -122,7 +122,7 @@
            Failed to parse plan: {{planError}}
         </div>
         
-        <div *ngIf="renderedPlanMd && !isLoadingPlan">
+        <div *ngIf="parsedPlan && !isLoadingPlan">
           <!-- TeamLead latest message in modal -->
           <div *ngIf="latestTeamLeadMessage" class="mb-8 pb-8 border-b border-white/10">
             <h5 class="text-xs text-yellow-500 uppercase tracking-widest mb-4 font-semibold flex items-center gap-2">
@@ -132,15 +132,16 @@
             <div class="bg-yellow-400/5 border border-yellow-400/20 p-5 rounded-xl text-yellow-100/90 text-[0.9rem] leading-relaxed markdown-body" [innerHTML]="latestTeamLeadMessage"></div>
           </div>
 
-          <div class="prose prose-invert max-w-none">
+          <div *ngIf="renderedPlanMd" class="prose prose-invert max-w-none mb-8 pb-8 border-b border-white/10">
             <h5 class="text-xs text-blue-500 uppercase tracking-widest mb-4 font-semibold flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-              Core implementation Strategy
+              Core Implementation Strategy
             </h5>
             <!-- Rendered Markdown Plan -->
             <div [innerHTML]="renderedPlanMd" class="markdown-body"></div>
+          </div>
 
-          <div class="mt-8 pt-8 border-t border-white/10">
+          <div>
             <h5 class="text-xs text-gray-500 uppercase tracking-widest mb-4 font-semibold flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-blue-500"></span>
               Execution Pipeline (Ajan Görevleri)
@@ -152,14 +153,19 @@
                           [ngClass]="{
                             'bg-blue-500/20 text-blue-400': t.role === 'Frontend',
                             'bg-green-500/20 text-green-400': t.role === 'Backend',
+                            'bg-teal-500/20 text-teal-400': t.role === 'Database',
                             'bg-red-500/20 text-red-400': t.role === 'Tester',
                             'bg-orange-500/20 text-orange-400': t.role === 'Security',
                             'bg-indigo-500/20 text-indigo-400': t.role === 'DevOps',
-                            'bg-gray-500/20 text-gray-300': !['Frontend', 'Backend', 'Tester', 'Security', 'DevOps'].includes(t.role)
+                            'bg-sky-500/20 text-sky-400': t.role === 'Documenter',
+                            'bg-gray-500/20 text-gray-300': !['Frontend', 'Backend', 'Database', 'Tester', 'Security', 'DevOps', 'Documenter'].includes(t.role)
                           }">{{t.role}}</span>
                     <span class="text-[0.6rem] text-gray-500 font-mono">{{t.phase}}</span>
                   </div>
-                  <p class="text-xs text-gray-300 leading-relaxed line-clamp-3">{{t.task}}</p>
+                  <div *ngIf="t.target_file" class="text-[0.65rem] font-mono text-yellow-400/80 mb-1 truncate">
+                    {{t.file_action || 'CREATE'}} • {{t.target_file}}
+                  </div>
+                  <p class="text-xs text-gray-300 leading-relaxed line-clamp-3">{{t.description || t.task}}</p>
                </div>
             </div>
           </div>

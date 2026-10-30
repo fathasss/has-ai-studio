@@ -1,5 +1,5 @@
 """
-Ollama model management router.
+Ollama & OpenAI-compatible model management router.
 
 Provides endpoints for listing available models and pulling new models
 from an Ollama instance with real-time progress via WebSocket.
@@ -43,6 +43,7 @@ class LLMProvider(str, Enum):
     """Supported LLM provider backends."""
     OLLAMA = "ollama"
     OLLAMA_CLOUD = "ollama-cloud"
+    OPENAI = "openai"
 
 
 # ---------------------------------------------------------------------------
@@ -89,10 +90,10 @@ class PullStartedResponse(BaseModel):
 
 def validate_ollama_url(url: str) -> str:
     """
-    Validate and sanitize an Ollama server URL.
+    Validate and sanitize a provider server URL.
 
-    Prevents SSRF by enforcing scheme whitelist and requiring a valid hostname.
-    Returns a clean base URL without trailing slashes or paths.
+    Prevents invalid schemes and preserves valid path prefixes
+    (e.g. '/v1' or '/api/v1' for OpenAI-compatible gateways).
     """
     url = url.strip().rstrip("/")
     parsed = urlparse(url)
@@ -106,7 +107,8 @@ def validate_ollama_url(url: str) -> str:
     if not parsed.hostname:
         raise HTTPException(status_code=400, detail="Invalid URL: missing hostname")
 
-    return f"{parsed.scheme}://{parsed.netloc}"
+    clean_path = parsed.path.rstrip("/")
+    return f"{parsed.scheme}://{parsed.netloc}{clean_path}"
 
 
 def normalize_model_name(name: str) -> str:
@@ -117,7 +119,7 @@ def normalize_model_name(name: str) -> str:
 def _build_auth_headers(provider: str | None, api_key: str | None) -> dict[str, str]:
     """Build authorization headers if the provider requires them."""
     headers: dict[str, str] = {}
-    if provider == LLMProvider.OLLAMA_CLOUD and api_key:
+    if provider in (LLMProvider.OLLAMA_CLOUD, LLMProvider.OPENAI, "ollama-cloud", "openai") and api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     return headers
 
@@ -141,19 +143,19 @@ async def is_model_installed(
 ) -> bool:
     """
     Check whether a model is currently installed in an Ollama instance.
-
-    Args:
-        model_name: The model identifier to look for.
-        ollama_url: Optional override for the Ollama server URL.
-        headers: Optional HTTP headers (e.g. for auth).
-
-    Returns:
-        True if the model (or its ':latest' variant) is installed.
+    For cloud/OpenAI providers, returns True when a model name is configured.
     """
-    target_url = ollama_url or config.OLLAMA_URL
+    if not model_name or not model_name.strip():
+        return False
+
+    if config.LLM_PROVIDER in ("openai", "ollama-cloud"):
+        return True
+
+    target_url = (ollama_url or config.OLLAMA_URL).rstrip("/")
+    req_headers = headers if headers is not None else _build_auth_headers(config.LLM_PROVIDER, config.LLM_API_KEY)
     try:
         async with httpx.AsyncClient(timeout=OllamaTimeouts.QUICK_CHECK) as client:
-            resp = await client.get(f"{target_url}/api/tags", headers=headers or {})
+            resp = await client.get(f"{target_url}/api/tags", headers=req_headers)
             if resp.status_code != 200:
                 config.logger.debug(
                     f"Model install check: non-200 from {target_url} ({resp.status_code})"
@@ -164,6 +166,7 @@ async def is_model_installed(
             installed_names: set[str] = {
                 normalize_model_name(m["name"])
                 for m in data.get("models", [])
+                if "name" in m
             }
             return normalize_model_name(model_name) in installed_names
 
@@ -191,7 +194,7 @@ async def pull_stream_worker(
         async with httpx.AsyncClient(timeout=OllamaTimeouts.MODEL_PULL) as client:
             async with client.stream(
                 "POST",
-                f"{target_url}/api/pull",
+                f"{target_url.rstrip('/')}/api/pull",
                 headers=headers,
                 json={"name": model_name, "stream": True},
             ) as response:
@@ -293,28 +296,37 @@ async def _guarded_pull_worker(
 
 @router.get("/ollama/models", response_model=ModelListResponse)
 async def list_models(
-    url: str = Query(None, description="Custom Ollama server URL"),
+    url: str = Query(None, description="Custom LLM server URL"),
     provider: LLMProvider = Query(None, description="LLM provider type"),
     x_api_key: str = Header(None, alias="X-API-Key"),
 ):
     """
-    List available models from an Ollama instance.
-
-    Queries the ``/api/tags`` endpoint of the target Ollama server.
-    Falls back to the globally configured ``OLLAMA_URL`` when no custom
-    URL is provided. Returns an empty list on connection failure
-    (graceful degradation).
+    List available models from an Ollama or OpenAI-compatible instance.
     """
     try:
-        target_url = validate_ollama_url(url) if url else config.OLLAMA_URL
+        target_url = validate_ollama_url(url) if url else config.OLLAMA_URL.rstrip("/")
         target_provider = provider.value if provider else config.LLM_PROVIDER
-        target_api_key = x_api_key or config.LLM_API_KEY
+        target_api_key = x_api_key if x_api_key is not None else config.LLM_API_KEY
 
         config.logger.info(f"Model list request: url='{target_url}', provider='{target_provider}'")
 
         headers = _build_auth_headers(target_provider, target_api_key)
 
         async with httpx.AsyncClient(timeout=OllamaTimeouts.API_CALL) as client:
+            if target_provider == LLMProvider.OPENAI.value:
+                models_endpoint = config.build_openai_url(target_url, "/v1/models")
+                resp = await client.get(models_endpoint, headers=headers)
+                if resp.status_code != 200:
+                    config.logger.warning(
+                        f"OpenAI model list: non-200 from {models_endpoint} ({resp.status_code})"
+                    )
+                    return ModelListResponse(models=[])
+                data = resp.json()
+                model_names = sorted(
+                    m["id"] for m in data.get("data", []) if isinstance(m, dict) and "id" in m
+                )
+                return ModelListResponse(models=model_names)
+
             resp = await client.get(f"{target_url}/api/tags", headers=headers)
 
             if resp.status_code != 200:
@@ -324,7 +336,7 @@ async def list_models(
                 return ModelListResponse(models=[])
 
             data = resp.json()
-            model_names = [m["name"] for m in data.get("models", [])]
+            model_names = [m["name"] for m in data.get("models", []) if "name" in m]
             config.logger.info(f"Fetched {len(model_names)} models from {target_url}")
             return ModelListResponse(models=model_names)
 

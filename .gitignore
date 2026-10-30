@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Environment & Secrets
+.env
+.env.local
+
+# Runtime Data & Databases
+*.db
+*.db-wal
+*.db-shm
+*.log
+data/traceability.db*
+data/config.json.tmp
+
+# Generated Workspaces & Projects
+apps/*
+!apps/.gitkeep
+workspace/*
+!workspace/.gitkeep
+
+# Frontend
+node_modules/
+client/node_modules/
+client/dist/
+client/.angular/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+

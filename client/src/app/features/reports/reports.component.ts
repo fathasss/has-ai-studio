@@ -114,9 +114,7 @@ export class ReportsComponent implements OnInit {
 
   formatAgentName(path: string): string {
     if (path.includes('/')) {
-      const parts = path.split('/');
-      const filename = parts[parts.length - 1];
-      return filename.replace('report_', '').replace('.md', '').split('_')[0];
+      return path.split('/')[0];
     }
     return path.replace('report_', '').replace('.md', '').split('_')[0];
   }
@@ -124,7 +122,7 @@ export class ReportsComponent implements OnInit {
   formatDate(path: string): string {
     const filename = path.includes('/') ? path.split('/').pop() || '' : path;
     const parts = filename.split('_');
-    if (parts.length >= 3) {
+    if (parts.length >= 3 && parts[1].length === 8) {
       const datePart = parts[1]; // 20260303
       const timePart = parts[2].split('.')[0]; // 112203
       
@@ -134,9 +132,10 @@ export class ReportsComponent implements OnInit {
       
       const hh = timePart.substring(0, 2);
       const mm = timePart.substring(2, 4);
+      const ss = timePart.length >= 6 ? ':' + timePart.substring(4, 6) : '';
       
-      return `${d}/${m}/${y} ${hh}:${mm}`;
+      return `${d}/${m}/${y} ${hh}:${mm}${ss}`;
     }
-    return 'Unknown';
+    return filename;
   }
 }

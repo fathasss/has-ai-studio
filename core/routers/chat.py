@@ -4,13 +4,18 @@ import httpx
 import json
 import re
 import random
+import time
+import uuid
+import datetime
+from sqlalchemy import desc
 from ..database import get_db
-from ..models import ChatMessageRecord
-from ..schemas import ChatRequest, ChatMessageSchema
+from ..models import ChatMessageRecord, LLMTrace, LLMJobRecord, GlobalLock
+from ..schemas import ChatRequest, ChatMessageSchema, IdleChatRequest
 from .. import config
-from ..utils import safe_json_loads, map_role
+from ..utils import safe_json_loads
 from ..prompts import load_prompt
 from ..app_instance import sio
+from .sprint import _inject_missing_roles
 
 router = APIRouter(tags=["Chat"])
 
@@ -59,10 +64,12 @@ async def _call_llm(messages: list, model: str) -> str:
     headers = {}
     provider = config.LLM_PROVIDER
 
+    num_ctx = getattr(config, "LLM_NUM_CTX", 8192)
+
     # --- Build endpoint and payload based on provider ---
     if provider == "openai":
-        # OpenAI-compatible API (OpenRouter, Azure, etc.)
-        endpoint = f"{config.OLLAMA_URL}/v1/chat/completions"
+        # OpenAI-compatible API (OpenRouter, Azure, vLLM, etc.) — avoids /v1/v1 duplication
+        endpoint = config.build_openai_url(config.OLLAMA_URL, "/v1/chat/completions")
         if config.LLM_API_KEY:
             headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
         headers["Content-Type"] = "application/json"
@@ -70,16 +77,21 @@ async def _call_llm(messages: list, model: str) -> str:
             "model": model,
             "messages": messages,
             "stream": False,
+            "temperature": 0.2,
         }
     else:
         # Ollama native API (local or cloud)
-        endpoint = f"{config.OLLAMA_URL}/api/chat"
+        endpoint = f"{config.OLLAMA_URL.rstrip('/')}/api/chat"
         if provider == "ollama-cloud" and config.LLM_API_KEY:
             headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
         payload = {
             "model": model,
             "messages": messages,
             "stream": False,
+            "options": {
+                "num_ctx": num_ctx,
+                "temperature": 0.2,
+            },
         }
 
     config.logger.info(
@@ -108,7 +120,6 @@ async def _call_llm(messages: list, model: str) -> str:
 
         # --- Extract response based on provider format ---
         if provider == "openai":
-            # OpenAI format: {"choices": [{"message": {"content": "..."}}]}
             choices = data.get("choices", [])
             raw_response = (
                 choices[0].get("message", {}).get("content", "")
@@ -116,11 +127,10 @@ async def _call_llm(messages: list, model: str) -> str:
                 else ""
             )
         else:
-            # Ollama /api/chat format: {"message": {"content": "..."}}
             raw_response = data.get("message", {}).get("content", "")
 
         # --- Empty response guard ---
-        if not raw_response.strip():
+        if not raw_response or not raw_response.strip():
             config.logger.error(
                 f"LLM returned empty response. Provider={provider}, "
                 f"Model={model}, Raw data keys={list(data.keys())}"
@@ -175,23 +185,23 @@ async def chat_preview(req: ChatRequest):
         raw_response = await _call_llm(messages, config.TEAMLEAD_MODEL)
         config.logger.info(f"LLM Preview Response: {raw_response[:500]}...")
 
-        # Injection logic (Security/Tester) if missing in JSON
+        # Injection logic (DevOps/Security/Tester) using v2 structured tasks
         try:
             plan = safe_json_loads(raw_response)
-            if plan and "tasks" in plan:
-                tasks = plan["tasks"]
-                roles = [map_role(t.get("role", "")) for t in tasks]
-
-                if "DevOps" not in roles:
-                    tasks.insert(0, {"role": "DevOps", "phase": "Setup", "task": "Initialise project skeleton in current directory."})
-                if "Security" not in roles:
-                    tasks.append({"role": "Security", "phase": "Audit", "task": "Security audit and hardening."})
-                if "Tester" not in roles:
-                    tasks.append({"role": "Tester", "phase": "Validation", "task": "Functional verification and bug fixing."})
-
-                plan.pop("implementation_plan_md", None)
+            if plan and "tasks" in plan and isinstance(plan["tasks"], list):
+                plan["tasks"] = _inject_missing_roles(list(plan["tasks"]))
                 json_str = json.dumps(plan, indent=2, ensure_ascii=False)
-                raw_response = re.sub(r"```json[\s\S]*?```", f"```json\n{json_str}\n```", raw_response, count=1, flags=re.IGNORECASE)
+                fence_pattern = r"```(?:json)?[\s\S]*?```"
+                if re.search(fence_pattern, raw_response, flags=re.IGNORECASE):
+                    raw_response = re.sub(
+                        fence_pattern,
+                        f"```json\n{json_str}\n```",
+                        raw_response,
+                        count=1,
+                        flags=re.IGNORECASE,
+                    )
+                else:
+                    raw_response = f"{raw_response.strip()}\n\n```json\n{json_str}\n```"
         except Exception as e:
             config.logger.warning(f"Preview correction failed: {e}")
 
@@ -204,17 +214,9 @@ async def chat_preview(req: ChatRequest):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Chat History Endpoints (unchanged)
+# Idle Chat & Chat History Endpoints
 # ═══════════════════════════════════════════════════════════════════
 
-import time
-import uuid
-import datetime
-from sqlalchemy import desc
-from ..schemas import IdleChatRequest
-from ..models import LLMTrace
-
-# Her agent için karakter profili — Hepsi Senior/Lead seviyesinde uzmanlar
 AGENT_PERSONALITIES = {
     "TeamLead": {
         "trait": "Vizyoner Senior Tech Lead. Mükemmeliyetçi, mimari bütünlüğe takıntılı ve ekibi teknik olarak domine eden bir lider. Coffee addict.",
@@ -232,6 +234,10 @@ AGENT_PERSONALITIES = {
         "trait": "Mantık küpü, bazen aşırı detaycı, hafif uykusuz. Kahve markası konusunda çok seçici.",
         "quirks": ["database şişince gerilir", "geceleri daha iyi kod yazdığına inanır", "masasında bir sürü figür var"],
     },
+    "Database": {
+        "trait": "Senior Data Architect & DBA. Veri bütünlüğü, normalizasyon ve yüksek performanslı sorgu optimizasyonu uzmanı.",
+        "quirks": ["indekssiz foreign key görünce gözü seğirir", "ACID prensiplerini kutsal kabul eder", "karmaşık SQL sorgularını akıldan çözer"],
+    },
     "Tester": {
         "trait": "Şüpheci, detayları yakalamayı sever, aslında çok yardımsever. Ofisteki bitkileri o suluyor.",
         "quirks": ["'bi saniye, burası niye böyle?' diye yaklaşır", "sürekli yeni bir bitki getirir", "en sakin o kalır"],
@@ -239,10 +245,13 @@ AGENT_PERSONALITIES = {
     "Security": {
         "trait": "Biraz gizemli, her şeye şüpheyle bakıyor ama ekibe çok güveniyor. Bilim kurgu hayranı.",
         "quirks": ["şifreleme konuşunca gözleri parlar", "masasında hep bir rubik küpü var", "kimsenin bilmediği bir podcast dinliyor"],
+    },
+    "Documenter": {
+        "trait": "Baş Teknik Yazar ve Sistem Mimarı. Bilginin berraklığına, temiz OpenAPI kontratlarına ve görsel mimari diyagramlarına aşık.",
+        "quirks": ["dokümansız kodu yazılmamış sayar", "Mermaid diyagramlarını bir sanat eseri gibi çizer", "yeni bir ekip üyesinin sıfırdan projeyi ayağa kaldırmasından mutluluk duyar"],
     }
 }
 
-# Gündelik samimi muhabbet tetikleyicileri — Daha 'insan' odaklı
 IDLE_TRIGGERS = [
     "Yapay zeka falan güzel de, bazen sadece kağıt kalemle bir şeyler karalamayı özlüyorum.",
     "Sinema dünyasında son zamanlarda seni gerçekten şaşırtan bir film oldu mu?",
@@ -250,8 +259,25 @@ IDLE_TRIGGERS = [
     "En son ne zaman gerçekten hiçbir şey yapmadan sadece gökyüzünü izledin?",
 ]
 
+BUSY_IDLE_FALLBACKS = [
+    "Sıradaki fazın teslimatını bekliyorum, kahvemi tazeledim.",
+    "Pipeline akıyor, birazdan sıra bana gelecek.",
+    "Diğer ajanların handover notlarını inceliyorum.",
+    "Sessizlik güzel, sistem tam kapasite sprint üzerinde çalışıyor.",
+    "Biraz nefes alayım, birazdan yoğun mesai başlıyor.",
+]
+
 @router.post("/chat/idle")
 async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
+    # STABİLİTE KORUMASI: Gerçek bir sprint işi çalışırken veya kuyrukta beklerken
+    # GPU / Ollama kaynağını idle sohbet istekleriyle meşgul etme.
+    has_active_work = (
+        db.query(GlobalLock).count() > 0
+        or db.query(LLMJobRecord).filter(LLMJobRecord.status.in_(["PENDING", "PROCESSING"])).count() > 0
+    )
+    if has_active_work:
+        return {"response": random.choice(BUSY_IDLE_FALLBACKS)}
+
     start_time = time.time()
 
     # Son 5 mesajı çek — kim ne dedi net görünsün
@@ -261,10 +287,8 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
         LLMTrace.timestamp > datetime.datetime.utcnow() - datetime.timedelta(minutes=5)
     ).order_by(desc(LLMTrace.timestamp)).limit(5).all()
 
-    # Kronolojik sıraya al
     recent_traces = list(reversed(recent_traces))
 
-    # Context oluştur
     if recent_traces:
         conversation_lines = "\n".join(
             [f"  {t.agent_name}: {t.response}" for t in recent_traces]
@@ -276,7 +300,6 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
             f"konuyu değiştirebilir ya da tamamen başka bir şey başlatabilirsin."
         )
     else:
-        # Context yoksa random bir muhabbet tetikleyici ver
         trigger = random.choice(IDLE_TRIGGERS)
         context_str = (
             f"Ortam sakin, kimse bir şey konuşmuyor. "
@@ -284,7 +307,6 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
             f"tamamen başka bir şey söyle, sen bilirsin."
         )
 
-    # Agent kişiliğini al
     personality = AGENT_PERSONALITIES.get(req.agent, AGENT_PERSONALITIES["TeamLead"])
     quirks_str = " | ".join(personality["quirks"])
 
@@ -316,20 +338,18 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
     try:
         raw_response = await _call_llm(messages, config.AGENT_MODEL)
 
-        # 40 kelime sınırı
         words = raw_response.split()
         if len(words) > 40:
-            # Cümle ortasında kesme — noktalama varsa oraya kadar al
             truncated = " ".join(words[:40])
             last_punct = max(truncated.rfind("."), truncated.rfind("!"), truncated.rfind("?"))
             raw_response = truncated[:last_punct + 1] if last_punct > 20 else truncated + "..."
 
-        # Baştaki gereksiz tırnakları / isim prefixlerini temizle
         raw_response = raw_response.strip('"\'').strip()
         if raw_response.lower().startswith(f"{req.agent.lower()}:"):
             raw_response = raw_response[len(req.agent) + 1:].strip()
 
         duration_ms = (time.time() - start_time) * 1000
+        est_tokens = int((len(user_prompt) + len(raw_response)) / 4)
         trace = LLMTrace(
             id=str(uuid.uuid4()),
             job_id="idle",
@@ -340,6 +360,9 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
             priority=0,
             prompt=f"[{req.location}] {user_prompt}",
             response=raw_response,
+            prompt_tokens=int(len(user_prompt) / 4),
+            completion_tokens=int(len(raw_response) / 4),
+            total_tokens=est_tokens,
             status="SUCCESS",
             duration_ms=duration_ms
         )
@@ -367,13 +390,14 @@ async def save_chat_message(msg: ChatMessageSchema, db: Session = Depends(get_db
 async def migrate_chat(req: dict, db: Session = Depends(get_db)):
     old_id = req.get("old_id")
     new_id = req.get("new_id")
-    if not old_id or not new_id: raise HTTPException(status_code=400)
-    db.query(ChatMessageRecord).filter(ChatMessageRecord.sprint_id == old_id).update({"sprint_id": new_id})
-    db.commit()
+    if not old_id or not new_id:
+        raise HTTPException(status_code=400, detail="old_id and new_id are required")
+    if old_id != new_id:
+        db.query(ChatMessageRecord).filter(ChatMessageRecord.sprint_id == old_id).update({"sprint_id": new_id})
+        db.commit()
     return {"status": "ok"}
 
 @router.get("/chat/sessions")
 async def get_chat_sessions(db: Session = Depends(get_db)):
-    from sqlalchemy import func
     sessions = db.query(ChatMessageRecord.sprint_id).group_by(ChatMessageRecord.sprint_id).all()
-    return {"sessions": [{"id": s[0], "name": s[0]} for s in sessions]}
+    return {"sessions": [{"id": s[0], "name": s[0]} for s in sessions if s[0]]}

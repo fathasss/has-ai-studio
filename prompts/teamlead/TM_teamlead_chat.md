@@ -117,6 +117,7 @@ The JSON must conform exactly to this schema so the worker system can parse it:
 
 ```json
 {
+  "project_name": "user-registration-service",
   "tasks": [
     {
       "task_id": "T1",
@@ -217,6 +218,7 @@ The JSON must conform exactly to this schema so the worker system can parse it:
 
 ## Field Rules
 
+- **`project_name`** — top-level kebab-case slug describing the project (e.g., `"user-registration-service"`).
 - **`task_id`** — unique string: `"T1"`, `"T2"`, etc.
 - **`depends_on`** — list of `task_id` values this task waits for. Empty `[]` means no dependencies. Only reference IDs that appear earlier in the array.
 - **`role`** — exactly one of: `DevOps`, `Backend`, `Frontend`, `Security`, `Tester`

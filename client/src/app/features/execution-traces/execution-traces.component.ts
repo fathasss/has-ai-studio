@@ -17,13 +17,15 @@ export class ExecutionTracesComponent implements OnInit {
 
   // Agent Metadata for richer UI
   AGENT_METADATA: { [key: string]: any } = {
-    'TeamLead': { color: '#facc15', avatar: 'assets/avatars/teamlead.png', role: 'Senior Tech Lead' },
-    'Frontend': { color: '#3b82f6', avatar: 'assets/avatars/frontend.png', role: 'Senior UI/UX Architect' },
-    'Backend': { color: '#10b981', avatar: 'assets/avatars/backend.png', role: 'Senior Systems Architect' },
-    'Tester': { color: '#f43f5e', avatar: 'assets/avatars/tester.png', role: 'QA Lead Architect' },
-    'Security': { color: '#a855f7', avatar: 'assets/avatars/security.png', role: 'CISO / Security Guru' },
-    'DevOps': { color: '#06b6d4', avatar: 'assets/avatars/devops.png', role: 'SRE & DevOps Architect' },
-    '_default': { color: '#71717a', avatar: 'assets/avatars/default.png', role: 'Senior Engineer' }
+    'TeamLead':   { color: '#facc15', avatar: 'assets/avatars/teamlead.png', role: 'Senior Tech Lead' },
+    'DevOps':     { color: '#06b6d4', avatar: 'assets/avatars/devops.png', role: 'SRE & DevOps Architect' },
+    'Database':   { color: '#14b8a6', avatar: 'assets/avatars/backend.png', role: 'Data Architect & DBA' },
+    'Backend':    { color: '#10b981', avatar: 'assets/avatars/backend.png', role: 'Senior Systems Architect' },
+    'Frontend':   { color: '#3b82f6', avatar: 'assets/avatars/frontend.png', role: 'Senior UI/UX Architect' },
+    'Security':   { color: '#a855f7', avatar: 'assets/avatars/security.png', role: 'CISO / Security Guru' },
+    'Tester':     { color: '#f43f5e', avatar: 'assets/avatars/tester.png', role: 'QA Lead Architect' },
+    'Documenter': { color: '#38bdf8', avatar: 'assets/avatars/teamlead.png', role: 'Lead Technical Writer' },
+    '_default':   { color: '#71717a', avatar: 'assets/has_ai_studio_logo.png', role: 'Senior Engineer' }
   };
 
   constructor(private orchestratorService: OrchestratorService) {}

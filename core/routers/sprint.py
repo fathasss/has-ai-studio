@@ -1,5 +1,6 @@
 import uuid
 import json
+import copy
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
@@ -77,10 +78,14 @@ _FALLBACK_TESTER_TASK = {
 
 
 def _get_priority(role: str) -> int:
-    if role == "DevOps":                    return 1
-    if role in ["Frontend", "Backend"]:     return 2
-    if role in ["Security", "Tester"]:      return 3
-    return 2
+    if role == "DevOps":     return 1
+    if role == "Database":   return 2
+    if role == "Backend":    return 3
+    if role == "Frontend":   return 4
+    if role == "Security":   return 5
+    if role == "Tester":     return 6
+    if role == "Documenter": return 7
+    return 3
 
 
 def _inject_missing_roles(tasks: list) -> list:
@@ -91,11 +96,11 @@ def _inject_missing_roles(tasks: list) -> list:
     existing_roles = {map_role(t.get("role", "")) for t in tasks}
 
     if "DevOps" not in existing_roles:
-        tasks.insert(0, _FALLBACK_DEVOPS_TASK)
+        tasks.insert(0, copy.deepcopy(_FALLBACK_DEVOPS_TASK))
     if "Security" not in existing_roles:
-        tasks.append(_FALLBACK_SECURITY_TASK)
+        tasks.append(copy.deepcopy(_FALLBACK_SECURITY_TASK))
     if "Tester" not in existing_roles:
-        tasks.append(_FALLBACK_TESTER_TASK)
+        tasks.append(copy.deepcopy(_FALLBACK_TESTER_TASK))
 
     return tasks
 
@@ -106,13 +111,14 @@ async def execute_sprint(req: ExecuteRequest, db: Session = Depends(get_db)):
     plan = req.plan
 
     # DÜZELTME 5: None guard — plan yoksa erken dön
-    if not plan or "tasks" not in plan:
+    if not plan or "tasks" not in plan or not isinstance(plan["tasks"], list):
         raise HTTPException(status_code=400, detail="Plan must contain a 'tasks' array.")
 
-    tasks = plan["tasks"]
+    tasks = list(plan["tasks"])
+    if not tasks:
+        raise HTTPException(status_code=400, detail="Plan 'tasks' array cannot be empty.")
 
-    # DÜZELTME 2 & 7: map_role tek yerde import edildi (dosya üstünde).
-    # Duplicate role injection önlendi.
+    # DÜZELTME 2 & 7: Duplicate role injection önlendi.
     tasks = _inject_missing_roles(tasks)
     plan["tasks"] = tasks
 
@@ -127,23 +133,44 @@ async def execute_sprint(req: ExecuteRequest, db: Session = Depends(get_db)):
         prompt         = "Generated from UI Preview",
         response       = f"```json\n{json.dumps(plan, indent=2, ensure_ascii=False)}\n```",
         status         = "SUCCESS",
+        duration_ms    = 0.0,
     ))
     db.commit()
 
-    # Job'ları sıraya al
+    # Phased Execution: Sadece ilk fazın işlerini (DevOps -> yoksa Database -> yoksa Backend -> yoksa Frontend -> yoksa QA)
+    # kuyruğa ekle. Sonraki fazlar worker_service.handle_recursive_triggers() tarafından
+    # önceki faz başarıyla tamamlandığında tetiklenir.
+    devops_tasks   = [t for t in tasks if map_role(t.get("role", "")) == "DevOps"]
+    database_tasks = [t for t in tasks if map_role(t.get("role", "")) == "Database"]
+    backend_tasks  = [t for t in tasks if map_role(t.get("role", "")) == "Backend"]
+    frontend_tasks = [t for t in tasks if map_role(t.get("role", "")) == "Frontend"]
+
+    if devops_tasks:
+        initial_tasks = devops_tasks
+    elif database_tasks:
+        initial_tasks = database_tasks
+    elif backend_tasks:
+        initial_tasks = backend_tasks
+    elif frontend_tasks:
+        initial_tasks = frontend_tasks
+    else:
+        initial_tasks = tasks
+
     queued_jobs = []
-    for t in tasks:
+    for t in initial_tasks:
         role     = map_role(t.get("role", ""))
         priority = _get_priority(role)
-
-        # DÜZELTME 3: Yeni schema desteği — task_to_prompt() helper'ı kullan
-        prompt = task_to_prompt(t)
-        await internal_submit_job(role, sid, priority, prompt)
+        prompt   = task_to_prompt(t)
+        job_id   = await internal_submit_job(role, sid, priority, prompt)
         queued_jobs.append(role)
+        await sio.emit("job_update", {
+            "job_id":     job_id,
+            "status":     "PENDING",
+            "sprint_id":  sid,
+            "agent":      role,
+            "agent_name": role,
+        })
 
-    # DÜZELTME 1: COMPLETED eventi kaldırıldı.
-    # Job'lar background worker'da işlendiği için sprint henüz bitmedi.
-    # Frontend, bireysel job_update eventlerini dinleyerek ilerlemeyi takip eder.
     await sio.emit("job_update", {
         "job_id":    "system",
         "status":    "STARTED",

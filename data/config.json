@@ -4,9 +4,10 @@
       "id": "default-edge",
       "name": "Local Edge (Ollama)",
       "provider": "ollama",
-      "url": "http://ollama:11434",
+      "url": "http://has-ai-ollama:11434",
       "apiKey": "",
-      "model": "llama3.1:latest"
+      "model": "llama3.1:latest",
+      "teamleadModel": "llama3.1:latest"
     }
   ],
   "ACTIVE_NODE_ID": "default-edge"

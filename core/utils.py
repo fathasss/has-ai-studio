@@ -14,14 +14,14 @@ from .config import logger
 # çalışmıyordu).
 # ═══════════════════════════════════════════════════════════════════
 DEPENDENCY_REGISTRY = [
-    {"trigger": "package.json",     "command": "npm install",                        "mode": "exact"},
-    {"trigger": "requirements.txt", "command": None,                                  "mode": "exact",  "type": "pip"},
-    {"trigger": ".csproj",          "command": "dotnet restore",                      "mode": "suffix"},
-    {"trigger": ".sln",             "command": "dotnet restore",                      "mode": "suffix"},
-    {"trigger": "go.mod",           "command": "go mod download",                     "mode": "exact"},
+    {"trigger": "package.json",     "command": "npm install",                          "mode": "exact"},
+    {"trigger": "requirements.txt", "command": None,                                    "mode": "exact",  "type": "pip"},
+    {"trigger": ".csproj",          "command": "dotnet restore",                        "mode": "suffix"},
+    {"trigger": ".sln",             "command": "dotnet restore",                        "mode": "suffix"},
+    {"trigger": "go.mod",           "command": "go mod download",                       "mode": "exact"},
     {"trigger": "build.gradle",     "command": "chmod +x ./gradlew && ./gradlew build", "mode": "exact"},
-    {"trigger": "pom.xml",          "command": "mvn install",                         "mode": "exact"},
-    {"trigger": "Cargo.toml",       "command": "cargo build",                         "mode": "exact"},
+    {"trigger": "pom.xml",          "command": "mvn install",                           "mode": "exact"},
+    {"trigger": "Cargo.toml",       "command": "cargo build",                           "mode": "exact"},
 ]
 
 
@@ -58,6 +58,12 @@ LANGUAGE_MISMATCH_RULES = {
     ],
     '.ts': [
         (r'^\s*def\s+\w+\s*\(', "Python function found in TS file"),
+    ],
+    '.rs': [
+        (r'^\s*from\s+\w+\s+import\s+', "Python import found in Rust file"),
+        (r'^\s*def\s+\w+\s*\(', "Python function found in Rust file"),
+        (r'^\s*package\s+\w+', "Go package found in Rust file"),
+        (r'^\s*using\s+System', "C# using found in Rust file"),
     ],
 }
 
@@ -114,7 +120,7 @@ def detect_project_framework(project_dir: str) -> Optional[str]:
 
 
 def get_project_language(project_dir: str) -> Optional[str]:
-    """Reads the anchored project language from .project_meta if exists."""
+    """Reads the anchored backend language from .project_meta if exists."""
     meta_path = os.path.join(project_dir, ".project_meta")
     if os.path.exists(meta_path):
         try:
@@ -127,7 +133,7 @@ def get_project_language(project_dir: str) -> Optional[str]:
 
 
 def set_project_language(project_dir: str, lang: str):
-    """Anchors the project to a specific language."""
+    """Anchors the project backend to a specific language."""
     if not os.path.exists(project_dir):
         os.makedirs(project_dir, exist_ok=True)
     meta_path = os.path.join(project_dir, ".project_meta")
@@ -141,7 +147,7 @@ def set_project_language(project_dir: str, lang: str):
             data["language"] = lang
             with open(meta_path, "w", encoding="utf-8") as f:
                 json.dump(data, f)
-            logger.info(f"Project anchored to language: {lang}")
+            logger.info(f"Project backend anchored to language: {lang}")
     except Exception as e:
         logger.error(f"Failed to set project language: {e}")
 
@@ -151,17 +157,14 @@ def repair_truncated_json(text: str) -> str:
     text = text.strip()
     if not text: return text
     
-    # Sayaclar
     open_braces = text.count('{')
     close_braces = text.count('}')
     open_brackets = text.count('[')
     close_brackets = text.count(']')
     
-    # Basit onarım: Eğer tırnaklar orantısızsa ve sonu tırnakla bitmiyorsa tırnak kapat
     if text.count('"') % 2 != 0:
         text += '"'
         
-    # Brackets/Braces kapat
     while open_brackets > close_brackets:
         text += ']'
         close_brackets += 1
@@ -178,15 +181,16 @@ def repair_truncated_json(text: str) -> str:
 
 def validate_python_local_imports(content: str, rel_path: str, project_dir: str, planned_files: List[str]) -> Tuple[bool, str]:
     """Ensures that local imports (starts with src. or current root modules) exist."""
-    # Sadece 'src' ile başlayan veya projedeki klasör isimleriyle başlayanları yakala
-    project_subdirs = {d for d in os.listdir(project_dir) if os.path.isdir(os.path.join(project_dir, d))}
-    # Planned files'lardan da klasör isimlerini çıkar (belki henüz klasör yok diskte)
-    for pf in planned_files:
+    project_subdirs = (
+        {d for d in os.listdir(project_dir) if os.path.isdir(os.path.join(project_dir, d))}
+        if project_dir and os.path.exists(project_dir)
+        else set()
+    )
+    for pf in (planned_files or []):
         parts = pf.split('/')
-        if len(parts) > 1: project_subdirs.add(parts[0])
+        if len(parts) > 1:
+            project_subdirs.add(parts[0])
 
-    # from x.y import z
-    # import x.y
     from_imports = re.findall(r'(?m)^\s*from\s+([a-zA-Z0-9_\.]+)\s+import', content)
     direct_imports = re.findall(r'(?m)^\s*import\s+([a-zA-Z0-9_\.]+)', content)
     
@@ -195,15 +199,13 @@ def validate_python_local_imports(content: str, rel_path: str, project_dir: str,
     for imp in all_imports:
         parts = imp.split('.')
         root_mod = parts[0]
+        if not root_mod:
+            continue
         
-        # Eğer root module bir proje klasörü ise, bu bir local import kabul edilir
         if root_mod in project_subdirs or root_mod == 'src':
-            # Dosya yolunu oluştur: src.db.database -> src/db/database.py
             target_rel_path = "/".join(parts) + ".py"
             target_rel_path_alt = "/".join(parts) + "/__init__.py"
             
-            # 1. Diskte var mı?
-            # 2. Şu anki extraction listesinde (planned_files) var mı?
             if target_rel_path not in planned_files and \
                target_rel_path_alt not in planned_files and \
                not os.path.exists(os.path.join(project_dir, target_rel_path)) and \
@@ -216,11 +218,9 @@ def validate_python_local_imports(content: str, rel_path: str, project_dir: str,
 def validate_docker_compose_consistency(content: str) -> Tuple[bool, str]:
     """Checks if database URLs in environment match services in the same file."""
     try:
-        # Hallucination check: sqlite:latest image'ı uydurma bir pattern
         if re.search(r'image:\s*sqlite(?::latest)?', content, re.IGNORECASE):
             return False, "Docker-Compose error: 'sqlite:latest' is not a valid server image. SQLite is file-based."
 
-        # DB URL'leri bul
         db_urls = re.findall(r'(postgresql|postgres|mysql|redis|mongodb)://', content, re.IGNORECASE)
         if not db_urls:
             return True, ""
@@ -234,38 +234,29 @@ def validate_docker_compose_consistency(content: str) -> Tuple[bool, str]:
             if any(kw in " ".join(services).lower() for kw in search_keywords):
                 found_service = True
             
-            # Hardening Phase 2: Artık uyarı değil, HATA.
             if not found_service:
                 return False, f"Docker-Compose Error: Found '{db_type}' URL but no corresponding service (e.g., 'db' or '{db_type}') in services."
                 
         return True, ""
-    except Exception as e:
+    except Exception:
         return True, ""
 
 
 def validate_dockerfile_paths(content: str, project_dir: str, planned_files: List[str]) -> Tuple[bool, str]:
     """Ensures that CMD/ENTRYPOINT refers to existing files."""
-    # CMD ["uvicorn", "main:app", ...]
-    # CMD ["python", "main.py"]
-    # CMD python src/main.py
-    
     cmd_match = re.search(r'(?m)^\s*(?:CMD|ENTRYPOINT)\s+(.*)', content)
     if not cmd_match:
         return True, ""
         
     cmd_val = cmd_match.group(1).strip()
     
-    # Python + main.py senaryosu
     if "python" in cmd_val.lower() and (".py" in cmd_val.lower()):
-        # main.py veya src/main.py gibi bir string ara
         file_matches = re.findall(r'([a-zA-Z0-9_\-\/]+\.py)', cmd_val)
         for f in file_matches:
             if f not in planned_files and not os.path.exists(os.path.join(project_dir, f)):
                 return False, f"Dockerfile error: CMD targets '{f}' but file is missing or in a different directory."
 
-    # Uvicorn: main:app
     if "uvicorn" in cmd_val.lower():
-        # "main:app" veya "src.main:app"
         uv_match = re.search(r'["\']?([a-zA-Z0-9_\.]+):[a-zA-Z0-9_]+["\']?', cmd_val)
         if uv_match:
             mod_path = uv_match.group(1)
@@ -284,14 +275,21 @@ def map_role(role: str) -> str:
     r = role.lower().strip()
 
     EXACT_MAP = {
-        "devops":    "DevOps",
-        "backend":   "Backend",
-        "frontend":  "Frontend",
-        "tester":    "Tester",
-        "security":  "Security",
-        "teamlead":  "TeamLead",
-        "team lead": "TeamLead",
-        "qa":        "Tester",
+        "devops":        "DevOps",
+        "database":      "Database",
+        "dba":           "Database",
+        "db":            "Database",
+        "backend":       "Backend",
+        "frontend":      "Frontend",
+        "tester":        "Tester",
+        "security":      "Security",
+        "documenter":    "Documenter",
+        "docwriter":     "Documenter",
+        "techwriter":    "Documenter",
+        "documentation": "Documenter",
+        "teamlead":      "TeamLead",
+        "team lead":     "TeamLead",
+        "qa":            "Tester",
     }
     if r in EXACT_MAP:
         return EXACT_MAP[r]
@@ -301,6 +299,10 @@ def map_role(role: str) -> str:
 
     if has_word(r, "devops", "infrastructure", "pipeline", "ci", "cd", "deploy"):
         return "DevOps"
+    if has_word(r, "database", "dba", "db", "migration", "migrations", "schema", "entity", "orm", "seed"):
+        return "Database"
+    if has_word(r, "documenter", "docwriter", "techwriter", "docs", "documentation", "technical writer", "openapi", "swagger", "diagram"):
+        return "Documenter"
     if has_word(r, "tester", "qa", "test", "bug", "quality"):
         return "Tester"
     if has_word(r, "security", "audit", "pentest", "vulnerability"):
@@ -309,15 +311,15 @@ def map_role(role: str) -> str:
         if has_word(r, "api", "server", "service", "backend"):
             return "Backend"
         return "Security"
-    if has_word(r, "frontend", "ui", "ux", "css", "html", "react", "vue", "angular"):
+    if has_word(r, "frontend", "ui", "ux", "css", "html", "react", "vue", "angular", "nextjs", "next.js"):
         return "Frontend"
-    if has_word(r, "backend", "api", "server", "database", "db", "microservice"):
+    if has_word(r, "backend", "api", "server", "microservice", "controller", "endpoint"):
         return "Backend"
-    if has_word(r, "devops", "setup", "provision", "infra"):
+    if has_word(r, "setup", "provision", "infra"):
         return "DevOps"
     if has_word(r, "init", "initialize", "bootstrap"):
         if has_word(r, "database", "db", "migration", "schema"):
-            return "Backend"
+            return "Database"
         return "DevOps"
     if has_word(r, "lead", "manager", "architect", "coordinator"):
         return "TeamLead"
@@ -347,7 +349,7 @@ def safe_json_loads(text: str) -> Optional[dict]:
                 if char == '\\':
                     if i + 1 < len(s):
                         next_char = s[i + 1]
-                        if next_char in '"\/bfnrt':
+                        if next_char in '"\\/bfnrt':
                             cleaned += char + next_char
                             i += 2
                             continue
@@ -399,7 +401,6 @@ def safe_json_loads(text: str) -> Optional[dict]:
             try:
                 parsed = json.loads(cleaned)
             except json.JSONDecodeError:
-                # Truncated repair denemesi
                 repaired = repair_truncated_json(cleaned)
                 parsed = json.loads(repaired)
             candidates.append(parsed)
@@ -412,7 +413,6 @@ def safe_json_loads(text: str) -> Optional[dict]:
                 return c
         return candidates[0]
 
-    # Parantez sayacı ile doğru JSON bloğunu bul
     best_candidate = None
     i = 0
     while i < len(text):
@@ -466,7 +466,7 @@ def extract_setup_commands(text: str, project_dir: str) -> List[str]:
 
     for cmd in raw_commands:
         cmd = cmd.strip()
-        if not cmd or cmd.startswith("#"):
+        if not cmd or cmd.startswith("#") or cmd.startswith("```"):
             continue
 
         prefix_pat = (
@@ -532,32 +532,35 @@ def extract_setup_commands(text: str, project_dir: str) -> List[str]:
 def validate_content(filename: str, content: str, project_framework: str = None, project_dir: str = None, planned_files: List[str] = None) -> Tuple[bool, str]:
     ext = os.path.splitext(filename)[1].lower()
 
-    # Hardening Phase 2: Project Language Anchor Check
-    if project_dir and ext in ['.py', '.go', '.cs', '.java', '.js', '.ts']:
+    # Backend Language Anchor Check:
+    # Sadece backend dilleri (.py, .go, .cs, .java, .rs) kendi aralarında sabitlenir.
+    # Böylece Full-Stack projelerde (örn. Python FastAPI + TypeScript/React veya .ts + .js config)
+    # frontend ve config dosyaları haksız yere engellenmez.
+    BACKEND_LANG_MAP = {'.py': 'python', '.go': 'go', '.cs': 'csharp', '.java': 'java', '.rs': 'rust'}
+    if project_dir and ext in BACKEND_LANG_MAP:
         anchored_lang = get_project_language(project_dir)
-        
-        # Eğer henüz dil sabitlenmemişse, bu dosyanın dilini proje dili yapalım
-        current_lang_map = {'.py': 'python', '.go': 'go', '.cs': 'csharp', '.java': 'java', '.js': 'javascript', '.ts': 'typescript'}
-        current_lang = current_lang_map.get(ext)
-        
-        if not anchored_lang and current_lang:
+        current_lang = BACKEND_LANG_MAP[ext]
+
+        if not anchored_lang:
             set_project_language(project_dir, current_lang)
             anchored_lang = current_lang
-            
-        if anchored_lang and current_lang and anchored_lang != current_lang:
-            return False, f"Language Hybridization ERROR: Project is anchored to '{anchored_lang}' but file is '{current_lang}'. Mixing languages is forbidden."
 
-    MARKDOWN_LEAKAGE_MARKERS = ["```", "### FILE:", "[TARGET FILE]:"]
-    for marker in MARKDOWN_LEAKAGE_MARKERS:
+        if anchored_lang and anchored_lang != current_lang:
+            return False, f"Language Hybridization ERROR: Backend is anchored to '{anchored_lang}' but file is '{current_lang}'. Mixing backend languages is forbidden."
+
+    # Markdown dosyalarında (README.md, security_audit.md vb.) kod blokları (```) doğaldır.
+    # Diğer kaynak kod dosyalarında ise ``` ham LLM çıktısı sızıntısıdır.
+    leakage_markers = ["### FILE:", "[TARGET FILE]:"] if ext == ".md" else ["```", "### FILE:", "[TARGET FILE]:"]
+    for marker in leakage_markers:
         if marker in content:
             return False, f"Content appears to contain raw LLM markdown: '{marker}' found"
 
     first_line = content.lstrip().splitlines()[0] if content.strip() else ""
-    if first_line.startswith("Note:") or first_line.startswith("NOTE:"):
+    if ext != ".md" and (first_line.startswith("Note:") or first_line.startswith("NOTE:")):
         return False, "Content appears to be a note/explanation, not code"
 
     # Project-Aware Validations (Requires project_dir and planned_files)
-    if project_dir and planned_files:
+    if project_dir and planned_files is not None:
         if ext == '.py':
             is_ok, err = validate_python_local_imports(content, filename, project_dir, planned_files)
             if not is_ok: return False, err
@@ -622,9 +625,6 @@ def validate_content(filename: str, content: str, project_framework: str = None,
 
 
 def extract_files(text: str, project_dir: str, sprint_id: str = None, agent_name: str = None):
-    from .models import ProjectException
-    from .database import SessionLocal
-
     if agent_name == "TeamLead":
         # DÜZELTME: Sadece 'saf' plan ise atla. Eğer içerisinde dosya marker'ı varsa çıkart.
         is_plan = '"tasks":' in text and '"role":' in text
@@ -636,8 +636,6 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None, agent_name
     os.makedirs(project_dir, exist_ok=True)
     files_created = []
 
-    # Proje içindeki mevcut dosyalardan dominant framework'ü tespit et.
-    # Bu bilgi validate_content'e geçirilerek framework karışıklığı yakalanır.
     project_framework = detect_project_framework(project_dir)
     if project_framework:
         logger.info(f"Detected project framework: {project_framework}")
@@ -652,17 +650,18 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None, agent_name
         text, re.IGNORECASE
     ))
 
-    # Pre-parse: Hangi dosyalar üretilecek? (Validation için gerekli)
     planned_files = []
     for m in file_markers:
         raw_p = m.group(1).strip().replace("\\", "/").lstrip("/")
-        # Path temizleme mantığını burada da işlet ki tam liste olsun
         p_parts = raw_p.split("/")
         while p_parts:
             fst = p_parts[0].lower()
-            if fst in ["apps", os.path.basename(project_dir).lower(), "workspace", ".", ""]: p_parts.pop(0)
-            elif fst.startswith("sprint-"): p_parts.pop(0)
-            else: break
+            if fst in ["apps", os.path.basename(project_dir).lower(), "workspace", ".", ""]:
+                p_parts.pop(0)
+            elif fst.startswith("sprint-"):
+                p_parts.pop(0)
+            else:
+                break
         planned_files.append("/".join(p_parts).rstrip("/"))
 
     for i, marker in enumerate(file_markers):
@@ -676,19 +675,41 @@ def extract_files(text: str, project_dir: str, sprint_id: str = None, agent_name
         end_pos = file_markers[i+1].start() if i + 1 < len(file_markers) else len(text)
         search_area = text[start_pos:end_pos]
 
-        code_block_match = re.search(r"```(?:\w+)?\n(.*?)\n```", search_area, re.DOTALL)
-        if code_block_match:
-            content = code_block_match.group(1).strip()
-        else:
-            content = search_area.strip()
+        # Son dosyadan sonra gelebilecek ### TECHNICAL_HANDOVER:, ### RESULT:, ### STATUS: bölümlerini ayır
+        trailing_section = re.search(
+            r"(?m)^\s*###\s*(?:TECHNICAL_HANDOVER|RESULT|STATUS)\s*:",
+            search_area,
+            re.IGNORECASE,
+        )
+        if trailing_section:
+            search_area = search_area[:trailing_section.start()]
 
-        content = re.sub(r"^```(?:\w+)?\n", "", content).strip()
-        content = re.sub(r"```$", "", content).strip()
-        content = content.lstrip("`").rstrip("`").strip()
+        is_md = rel_path.lower().endswith(".md")
+        if is_md:
+            # Markdown dosyaları kendi içinde ```bash ... ``` blokları barındırabileceği için
+            # dıştaki sarmalayıcı fence'i greedy eşleştir.
+            outer_md = re.search(r"```(?:markdown|md|text)?\r?\n([\s\S]*)\r?\n```", search_area, re.IGNORECASE)
+            if outer_md:
+                content = outer_md.group(1).strip()
+            else:
+                content = search_area.strip()
+        else:
+            code_block_match = re.search(r"```(?:[a-zA-Z0-9_+\-#.]*)?\r?\n(.*?)\r?\n```", search_area, re.DOTALL)
+            if code_block_match:
+                content = code_block_match.group(1).strip()
+            else:
+                content = search_area.strip()
+                content = re.sub(r"^```(?:[a-zA-Z0-9_+\-#.]*)?\r?\n", "", content).strip()
+                content = re.sub(r"\r?\n?```$", "", content).strip()
+                content = content.lstrip("`").rstrip("`").strip()
 
         full_path = os.path.join(project_dir, rel_path)
 
-        if not os.path.abspath(full_path).startswith(os.path.abspath(project_dir)):
+        try:
+            if os.path.commonpath([os.path.abspath(project_dir), os.path.abspath(full_path)]) != os.path.abspath(project_dir):
+                logger.warning(f"Malicious path detected and blocked: {rel_path}")
+                continue
+        except ValueError:
             logger.warning(f"Malicious path detected and blocked: {rel_path}")
             continue
 
@@ -744,19 +765,24 @@ def install_dependencies(project_dir: str, sprint_id: str = None):
             if not match_found:
                 continue
 
-            # DÜZELTME 1 (devam): "type": "pip" artık DEPENDENCY_REGISTRY'de mevcut,
-            # bu yüzden kind == "pip" koşulu artık gerçekten tetikleniyor.
             if kind == "pip":
                 venv_pip = None
                 for venv_name in ("venv", ".venv"):
-                    candidate = os.path.join(root, venv_name, "bin", "pip")
-                    if os.path.isfile(candidate):
-                        venv_pip = candidate
+                    for bin_dir in ("bin", "Scripts"):
+                        candidate = os.path.join(root, venv_name, bin_dir, "pip")
+                        candidate_exe = candidate + ".exe"
+                        if os.path.isfile(candidate):
+                            venv_pip = f'"{candidate}"'
+                            break
+                        if os.path.isfile(candidate_exe):
+                            venv_pip = f'"{candidate_exe}"'
+                            break
+                    if venv_pip:
                         break
                 command = (
                     f"{venv_pip} install -r requirements.txt"
                     if venv_pip
-                    else "pip3 install --user -r requirements.txt"
+                    else "pip install --user -r requirements.txt"
                 )
 
             registry_key = f"{root}:{command}"
@@ -767,6 +793,24 @@ def install_dependencies(project_dir: str, sprint_id: str = None):
             logger.info(f"Trigger '{trigger}' found in {root}. Executing: {command}")
             execute_setup_commands([command], root, sprint_id)
             executed_commands.add(registry_key)
+
+
+DANGEROUS_COMMAND_PATTERNS = [
+    (r"\b(rm|rmdir|del)\s+.*[/\\](?:$|\s)", "Root or filesystem-wide deletion blocked"),
+    (r"\b(mkfs|fdisk|parted|format)\b", "Disk formatting command blocked"),
+    (r"\b(shutdown|reboot|poweroff|init\s+0)\b", "System shutdown command blocked"),
+    (r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:", "Fork bomb pattern blocked"),
+    (r"\b(curl|wget)\s+[^|]+\|\s*(sh|bash|zsh|powershell|cmd)\b", "Piped remote script execution blocked"),
+    (r"\b(sudo|su|runas)\b", "Privilege escalation command blocked"),
+]
+
+
+def is_safe_command(cmd: str) -> Tuple[bool, str]:
+    """Validates that a shell command does not contain destructive or privilege escalation patterns."""
+    for pattern, reason in DANGEROUS_COMMAND_PATTERNS:
+        if re.search(pattern, cmd, re.IGNORECASE):
+            return False, reason
+    return True, ""
 
 
 def execute_setup_commands(commands: List[str], project_dir: str, sprint_id: str = None):
@@ -788,7 +832,7 @@ def execute_setup_commands(commands: List[str], project_dir: str, sprint_id: str
     added_count = 0
     for p in paths_to_add:
         if os.path.exists(p) and p not in current_path:
-            current_path = f"{p}:{current_path}"
+            current_path = f"{p}{os.pathsep}{current_path}"
             added_count += 1
 
     if added_count > 0:
@@ -796,29 +840,39 @@ def execute_setup_commands(commands: List[str], project_dir: str, sprint_id: str
         logger.info(f"Dynamically added {added_count} SDK paths.")
 
     for cmd in commands:
-        if not cmd.strip():
+        cmd_str = cmd.strip()
+        if not cmd_str:
             continue
+
+        safe, reason = is_safe_command(cmd_str)
+        if not safe:
+            logger.warning(f"Security: Blocked dangerous setup command '{cmd_str}': {reason}")
+            if sprint_id:
+                log_project_exception(sprint_id, "execute_setup_commands", cmd_str, f"Blocked: {reason}")
+            continue
+
         try:
-            logger.info(f"Executing: {cmd} in {project_dir}")
+            logger.info(f"Executing: {cmd_str} in {project_dir}")
             process = subprocess.run(
-                cmd, shell=True, cwd=project_dir,
+                cmd_str, shell=True, cwd=project_dir,
                 capture_output=True, text=True,
                 timeout=1200, env=custom_env
             )
             if process.returncode != 0:
                 err_msg = process.stderr or process.stdout
-                logger.warning(f"Command failed: {cmd}. Error: {err_msg}")
+                logger.warning(f"Command failed: {cmd_str}. Error: {err_msg}")
                 if sprint_id:
-                    # DÜZELTME 2: Mevcut log_project_exception helper'ı kullanılıyor.
-                    # Önceden burada inline DB session açılıyordu ve finally yoktu
-                    # → connection leak riski. Helper zaten try/finally kullanıyor.
-                    log_project_exception(sprint_id, "execute_setup_commands", cmd, err_msg)
+                    log_project_exception(sprint_id, "execute_setup_commands", cmd_str, err_msg)
             else:
-                logger.info(f"Command success: {cmd}")
-        except Exception as e:
-            logger.error(f"Command execution error: {cmd}. Error: {e}")
+                logger.info(f"Command success: {cmd_str}")
+        except subprocess.TimeoutExpired:
+            logger.error(f"Command timed out after 1200s: {cmd_str}")
             if sprint_id:
-                log_project_exception(sprint_id, "execute_setup_commands", cmd, str(e))
+                log_project_exception(sprint_id, "execute_setup_commands", cmd_str, "Command execution timed out (1200s)")
+        except Exception as e:
+            logger.error(f"Command execution error: {cmd_str}. Error: {e}")
+            if sprint_id:
+                log_project_exception(sprint_id, "execute_setup_commands", cmd_str, str(e))
 
 
 def get_latest_reports(sprint_id: str) -> str:
@@ -838,11 +892,10 @@ def get_latest_reports(sprint_id: str) -> str:
         if not files:
             continue
 
-        # DÜZELTME 4: Alfabetik sort sayısal sıralamayı bozar (report_9 > report_10).
-        # Dosya adındaki sayıyı çıkararak sayısal sırala.
-        def report_sort_key(fname: str) -> int:
-            m = re.search(r'(\d+)', fname)
-            return int(m.group(1)) if m else 0
+        def report_sort_key(fname: str) -> Tuple[int, str]:
+            nums = re.findall(r'(\d+)', fname)
+            joined = int("".join(nums)) if nums else 0
+            return (joined, fname)
 
         latest_report = sorted(files, key=report_sort_key)[-1]
 
@@ -898,7 +951,6 @@ def get_project_context(project_dir: str, sprint_id: str = None) -> str:
 
     readme_path = os.path.join(project_dir, "README.md")
     if os.path.exists(readme_path):
-        # DÜZELTME 3: Bare except kaldırıldı, hata loglanıyor.
         try:
             with open(readme_path, "r", encoding="utf-8") as f:
                 context.append("\n# PROJECT OVERVIEW (README)\n" + f.read().strip())
@@ -932,8 +984,7 @@ def task_to_prompt(t: dict) -> str:
     Converts a task dict to an agent prompt string.
     Supports both old schema (task string) and new schema (structured fields).
     """
-    # Geriye dönük uyumluluk: eski schema
-    if "task" in t and isinstance(t["task"], str):
+    if "task" in t and isinstance(t["task"], str) and not t.get("description"):
         return t["task"]
 
     parts = []
@@ -945,7 +996,7 @@ def task_to_prompt(t: dict) -> str:
     file_action = t.get("file_action", "CREATE")
     parts.append(f"[ACTION]: {file_action}")
 
-    description = t.get("description", "")
+    description = t.get("description") or t.get("task", "")
     if description:
         parts.append(f"[LOGIC]: {description}")
 

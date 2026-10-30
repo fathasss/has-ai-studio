@@ -12,15 +12,17 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import config
 from ..app_instance import sio
 from ..config import logger
 from ..database import get_db
-from ..models import GlobalLock, LLMJobRecord, LLMTrace
+from ..models import GlobalLock, LLMJobRecord, LLMTrace, ProjectException
 from ..schemas import LLMJobRequest, LLMTraceSchema
 from ..services.job_service import job_queue_service
+from ..utils import map_role
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -28,7 +30,7 @@ from ..services.job_service import job_queue_service
 
 router = APIRouter(tags=["LLM"])
 
-LOCK_TIMEOUT_MINUTES = int(os.getenv("LOCK_TIMEOUT_MINUTES", "10"))
+LOCK_TIMEOUT_MINUTES = int(os.getenv("LOCK_TIMEOUT_MINUTES", "12"))
 LOCK_RESOURCE_NAME = "llm_unit"
 
 
@@ -38,6 +40,13 @@ LOCK_RESOURCE_NAME = "llm_unit"
 
 class SubmitJobResponse(BaseModel):
     job_id: str
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    agent_name: str
+    sprint_id: str | None = None
 
 
 class AcquireLockRequest(BaseModel):
@@ -65,6 +74,13 @@ class LockReleaseResponse(BaseModel):
 class TraceResponse(BaseModel):
     status: str
     job_status: str
+
+
+class ProjectExceptionCreate(BaseModel):
+    sprint_id: str
+    source: str
+    command: str | None = None
+    error_message: str
 
 
 # ---------------------------------------------------------------------------
@@ -102,11 +118,11 @@ async def _clear_stale_locks(db: Session) -> int:
     stale_worker_ids = {lock.worker_id for lock in stale_locks}
     stale_job_ids = {lock.job_id for lock in stale_locks if lock.job_id}
 
-    # Fetch sprint_ids for these jobs for frontend notification
-    job_info = {}
+    # Fetch sprint_ids and agent_names for these jobs for frontend notification
+    job_info: dict[str, tuple[str | None, str]] = {}
     if stale_job_ids:
         jobs = db.query(LLMJobRecord).filter(LLMJobRecord.id.in_(stale_job_ids)).all()
-        job_info = {j.id: j.sprint_id for j in jobs}
+        job_info = {j.id: (j.sprint_id, j.agent_name) for j in jobs}
 
     # Delete stale locks
     db.query(GlobalLock).filter(
@@ -114,6 +130,7 @@ async def _clear_stale_locks(db: Session) -> int:
     ).delete(synchronize_session="fetch")
 
     # Reset orphaned PROCESSING jobs back to PENDING
+    reset_count = 0
     if stale_job_ids:
         reset_count = db.query(LLMJobRecord).filter(
             LLMJobRecord.id.in_(stale_job_ids),
@@ -122,28 +139,31 @@ async def _clear_stale_locks(db: Session) -> int:
             {"status": "PENDING", "worker_id": None, "locked_at": None},
             synchronize_session="fetch",
         )
-        
-        db.commit() # Commit now so the status change is visible
 
-        # Emit updates for reset jobs
-        for jid in stale_job_ids:
-            await safe_emit("job_update", {
-                "job_id": jid,
-                "status": "PENDING",
-                "sprint_id": job_info.get(jid)
-            })
+    db.commit()  # Commit now so lock removal and status change are visible
 
-        logger.warning(
-            f"Cleared {len(stale_locks)} stale lock(s), "
-            f"reset {reset_count} orphaned job(s). "
-            f"Workers: {stale_worker_ids}"
-        )
+    # Emit updates for reset jobs
+    for jid in stale_job_ids:
+        sprint_id, agent_name = job_info.get(jid, (None, ""))
+        await safe_emit("job_update", {
+            "job_id": jid,
+            "status": "PENDING",
+            "sprint_id": sprint_id,
+            "agent": agent_name,
+            "agent_name": agent_name,
+        })
+
+    logger.warning(
+        f"Cleared {len(stale_locks)} stale lock(s), "
+        f"reset {reset_count} orphaned job(s). "
+        f"Workers: {stale_worker_ids}"
+    )
 
     return len(stale_locks)
 
 
 # ---------------------------------------------------------------------------
-# Routes — Job Submission
+# Routes — Job Submission & Status
 # ---------------------------------------------------------------------------
 
 @router.post("/llm/submit", response_model=SubmitJobResponse)
@@ -154,6 +174,7 @@ async def submit_job(req: LLMJobRequest):
     The job will be queued with PENDING status and picked up by
     the next available worker via the lock/acquire endpoint.
     """
+    req.agent_name = map_role(req.agent_name)
     try:
         job_id = job_queue_service.submit(req)
     except Exception as e:
@@ -164,9 +185,25 @@ async def submit_job(req: LLMJobRequest):
         "job_id": job_id,
         "status": "PENDING",
         "sprint_id": req.sprint_id,
+        "agent": req.agent_name,
+        "agent_name": req.agent_name,
     })
 
     return SubmitJobResponse(job_id=job_id)
+
+
+@router.get("/llm/status/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(job_id: str, db: Session = Depends(get_db)):
+    """Retrieve the current status of a specific LLM job."""
+    job = db.query(LLMJobRecord).filter(LLMJobRecord.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    return JobStatusResponse(
+        job_id=job.id,
+        status=job.status,
+        agent_name=job.agent_name,
+        sprint_id=job.sprint_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -180,9 +217,6 @@ async def acquire_lock(
 ):
     """
     Atomically acquire the LLM processing lock and claim the next pending job.
-
-    Uses SELECT ... FOR UPDATE SKIP LOCKED to prevent race conditions
-    when multiple workers compete for the same job.
 
     Returns 404 if no pending jobs exist.
     Returns 423 if the LLM unit is already locked by another worker.
@@ -205,8 +239,7 @@ async def acquire_lock(
                 ),
             )
 
-        # 3. Atomically claim next pending job
-        #    FOR UPDATE SKIP LOCKED prevents two workers from grabbing the same row
+        # 3. Claim next pending job ordered by priority then FIFO creation time
         job = (
             db.query(LLMJobRecord)
             .filter(LLMJobRecord.status == "PENDING")
@@ -214,7 +247,6 @@ async def acquire_lock(
                 LLMJobRecord.priority.asc(),
                 LLMJobRecord.created_at.asc(),
             )
-            .with_for_update(skip_locked=True)
             .first()
         )
 
@@ -234,7 +266,14 @@ async def acquire_lock(
         job.worker_id = req.worker_id
         job.locked_at = now
 
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(
+                status_code=423,
+                detail="LLM unit was concurrently locked by another worker",
+            )
 
         logger.info(
             f"Lock acquired: worker='{req.worker_id}', "
@@ -245,6 +284,8 @@ async def acquire_lock(
             "job_id": job.id,
             "status": "PROCESSING",
             "sprint_id": job.sprint_id,
+            "agent": job.agent_name,
+            "agent_name": job.agent_name,
         })
 
         return AcquireLockResponse(
@@ -287,7 +328,13 @@ async def release_lock(
                 f"No active lock found for worker '{req.worker_id}'",
             )
 
-        # Reset any incomplete PROCESSING jobs owned by this worker
+        # Find incomplete PROCESSING jobs owned by this worker before resetting
+        incomplete_jobs = db.query(LLMJobRecord).filter(
+            LLMJobRecord.worker_id == req.worker_id,
+            LLMJobRecord.status == "PROCESSING",
+        ).all()
+        incomplete_info = [(j.id, j.sprint_id, j.agent_name) for j in incomplete_jobs]
+
         reset_count = db.query(LLMJobRecord).filter(
             LLMJobRecord.worker_id == req.worker_id,
             LLMJobRecord.status == "PROCESSING",
@@ -297,6 +344,15 @@ async def release_lock(
         )
 
         db.commit()
+
+        for jid, sid, aname in incomplete_info:
+            await safe_emit("job_update", {
+                "job_id": jid,
+                "status": "PENDING",
+                "sprint_id": sid,
+                "agent": aname,
+                "agent_name": aname,
+            })
 
         if reset_count > 0:
             logger.warning(
@@ -321,7 +377,7 @@ async def release_lock(
 
 
 # ---------------------------------------------------------------------------
-# Routes — Trace Recording
+# Routes — Trace & Exception Recording
 # ---------------------------------------------------------------------------
 
 @router.post("/llm/trace", response_model=TraceResponse)
@@ -357,7 +413,6 @@ async def log_trace(
         db.add(new_trace)
 
         # 3. Determine final job status from trace outcome
-        # DÜZELTME: Case-insensitive ve 'COMPLETED' / 'SUCCESS' desteği
         status_norm = trace.status.upper()
         final_status = "COMPLETED" if status_norm in ("SUCCESS", "COMPLETED") else "FAILED"
         job.status = final_status
@@ -387,6 +442,8 @@ async def log_trace(
             "job_id": trace.job_id,
             "status": final_status,
             "sprint_id": trace.sprint_id,
+            "agent": job.agent_name,
+            "agent_name": job.agent_name,
         })
 
         return TraceResponse(status="ok", job_status=final_status)
@@ -397,3 +454,34 @@ async def log_trace(
         db.rollback()
         logger.error(f"Trace recording failed: {e}", exc_info=True)
         raise HTTPException(500, "Failed to record trace")
+
+
+@router.post("/exceptions")
+async def record_project_exception(
+    req: ProjectExceptionCreate,
+    db: Session = Depends(get_db),
+):
+    """Record a project exception from workers and notify UI clients via Socket.IO."""
+    try:
+        exc = ProjectException(
+            sprint_id=req.sprint_id,
+            source=req.source,
+            command=req.command,
+            error_message=req.error_message,
+        )
+        db.add(exc)
+        db.commit()
+        db.refresh(exc)
+        await safe_emit("project_exception", {
+            "id": exc.id,
+            "sprint_id": exc.sprint_id,
+            "source": exc.source,
+            "command": exc.command,
+            "error_message": exc.error_message,
+            "timestamp": exc.timestamp.isoformat() if exc.timestamp else None,
+        })
+        return {"status": "ok", "id": exc.id}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to record exception: {e}")
+        raise HTTPException(500, "Failed to record exception")

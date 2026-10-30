@@ -6,8 +6,8 @@ from .database import Base
 class LLMTrace(Base):
     __tablename__ = "llm_traces"
     id = Column(String, primary_key=True)
-    job_id = Column(String, nullable=True)
-    sprint_id = Column(String)
+    job_id = Column(String, nullable=True, index=True)
+    sprint_id = Column(String, index=True)
     agent_name = Column(String)
     worker_id = Column(String)
     execution_node = Column(String)
@@ -20,19 +20,20 @@ class LLMTrace(Base):
     status = Column(String)
     project_name = Column(String, nullable=True)
     duration_ms = Column(Float)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
 class LLMJobRecord(Base):
     __tablename__ = "llm_jobs"
     id = Column(String, primary_key=True)
-    sprint_id = Column(String)
+    sprint_id = Column(String, index=True)
     agent_name = Column(String)
     priority = Column(Integer)
     prompt = Column(Text)
     params = Column(Text)
-    status = Column(String, default="PENDING")
+    status = Column(String, default="PENDING", index=True)
     worker_id = Column(String, nullable=True)
     locked_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class GlobalLock(Base):

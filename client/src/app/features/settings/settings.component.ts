@@ -67,6 +67,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   selectModel(model: string) {
     if (this.selectedNode) {
       this.selectedNode.model = model;
+      this.selectedNode.teamleadModel = model;
     }
     this.closeModelDropdown();
   }
@@ -97,6 +98,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   pullMsgColor: string = 'text-zinc-400';
   pullProgress: number = 0;
   private pullSub: Subscription | null = null;
+  private statusTimer: any;
 
   saveSuccess: boolean = false;
   isAddingNode: boolean = false;
@@ -111,7 +113,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.refreshSystemStatus();
     
     // Periodically refresh status to check installation progress
-    setInterval(() => this.refreshSystemStatus(), 10000);
+    this.statusTimer = setInterval(() => this.refreshSystemStatus(), 10000);
     
     // Sync initial state from central service
     this.isPulling = this.socketService.pullState.isPulling;
@@ -178,7 +180,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     if (this.selectedNode) {
       if (this.selectedNode.provider === 'ollama-cloud') {
         this.selectedNode.url = 'https://ollama.com';
-      } else if (this.selectedNode.provider === 'ollama') {
+      } else if (this.selectedNode.provider === 'ollama' && (!this.selectedNode.url || this.selectedNode.url.includes('openai') || this.selectedNode.url === 'https://ollama.com')) {
         this.selectedNode.url = 'http://has-ai-ollama:11434';
       } else if (this.selectedNode.provider === 'openai' && (!this.selectedNode.url || this.selectedNode.url.includes('ollama'))) {
         this.selectedNode.url = 'https://api.openai.com/v1';
@@ -209,15 +211,15 @@ export class SettingsComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: (res) => {
         this.models = res.models || [];
-        console.log("Fetched models:", this.models);
         this.isLoadingModels = false;
         
         // If we have models but none selected, pick the first one as default
         if (this.models.length > 0 && !this.selectedNode?.model) {
           this.selectedNode!.model = this.models[0];
+          this.selectedNode!.teamleadModel = this.models[0];
         } else if (selectedModel && this.models.includes(selectedModel)) {
-          console.log("Maintaining selected model:", selectedModel);
           this.selectedNode!.model = selectedModel;
+          this.selectedNode!.teamleadModel = selectedModel;
         }
       },
       error: (err: any) => {
@@ -235,6 +237,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       provider: 'ollama',
       url: 'http://has-ai-ollama:11434',
       model: '',
+      teamleadModel: '',
       apiKey: ''
     };
     this.config.NODES.push(newNode);
@@ -250,6 +253,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
     }
     this.config.NODES = this.config.NODES.filter(n => n.id !== node.id);
     if (this.config.ACTIVE_NODE_ID === node.id) {
+      this.config.ACTIVE_NODE_ID = this.config.NODES[0].id;
+    }
+    if (this.selectedNode?.id === node.id) {
       this.setActiveNodeDetails();
     }
   }
@@ -260,6 +266,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
     if (this.selectedNode.provider === 'ollama-cloud') {
       this.selectedNode.model = modelToPull;
+      this.selectedNode.teamleadModel = modelToPull;
       this.pullMsg = `Cloud model '${modelToPull}' registered.`;
       this.pullMsgColor = 'text-green-400';
       this.saveConfig();
@@ -288,9 +295,13 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   saveConfig() {
+    if (this.selectedNode && this.selectedNode.model) {
+      this.selectedNode.teamleadModel = this.selectedNode.model;
+    }
     this.orchestratorService.saveConfig(this.config).subscribe({
       next: () => {
         this.saveSuccess = true;
+        this.refreshSystemStatus();
         setTimeout(() => this.saveSuccess = false, 3000);
       },
       error: (err: any) => {
@@ -301,6 +312,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.statusTimer) {
+      clearInterval(this.statusTimer);
+    }
     if (this.pullSub) {
       this.pullSub.unsubscribe();
     }

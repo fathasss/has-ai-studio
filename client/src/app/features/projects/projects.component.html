@@ -44,8 +44,8 @@
             <div *ngFor="let node of nodes" class="space-y-0.5">
               <div (click)="toggleNode(node, pname, $event)"
                    [ngClass]="{
-                     'bg-blue-500/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.1)]': !node.isDirectory && selectedFile === node.path,
-                     'border-transparent hover:bg-white/5': node.isDirectory || selectedFile !== node.path
+                     'bg-blue-500/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.1)]': !node.isDirectory && selectedProject === pname && selectedFile === node.path,
+                     'border-transparent hover:bg-white/5': node.isDirectory || selectedProject !== pname || selectedFile !== node.path
                    }"
                    class="flex items-center gap-2.5 p-2 rounded-lg border cursor-pointer transition-all duration-200 group">
                 
@@ -61,7 +61,7 @@
                 </div>
 
                 <span class="text-[11px] truncate flex-1" 
-                      [ngClass]="node.isDirectory ? 'text-gray-400 font-medium' : (selectedFile === node.path ? 'text-blue-300 font-bold' : 'text-gray-500')">
+                      [ngClass]="node.isDirectory ? 'text-gray-400 font-medium' : (selectedProject === pname && selectedFile === node.path ? 'text-blue-300 font-bold' : 'text-gray-500')">
                     {{ node.name }}
                 </span>
               </div>

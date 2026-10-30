@@ -9,6 +9,7 @@ export interface ProviderNode {
   url: string;
   apiKey?: string;
   model: string;
+  teamleadModel?: string;
 }
 
 export interface DefaultConfig {

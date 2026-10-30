@@ -18,11 +18,13 @@ interface AgentStatus {
 export class RightPanelComponent implements OnInit, OnDestroy {
   agents: AgentStatus[] = [
     { name: 'TeamLead', status: 'DOWN' },
-    { name: 'Frontend', status: 'DOWN' },
+    { name: 'DevOps', status: 'DOWN' },
+    { name: 'Database', status: 'DOWN' },
     { name: 'Backend', status: 'DOWN' },
-    { name: 'Tester', status: 'DOWN' },
+    { name: 'Frontend', status: 'DOWN' },
     { name: 'Security', status: 'DOWN' },
-    { name: 'DevOps', status: 'DOWN' }
+    { name: 'Tester', status: 'DOWN' },
+    { name: 'Documenter', status: 'DOWN' }
   ];
 
   private subJob: Subscription | undefined;
@@ -33,15 +35,14 @@ export class RightPanelComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     // Listen for real-time orchestrator updates
     this.subJob = this.socketService.jobUpdate$.subscribe((update: any) => {
-      const agentName = update.agent;
+      const agentName = update.agent || update.agent_name;
       const rawStatus = update.status;
       
       const idx = this.agents.findIndex(a => a.name === agentName);
       if (idx !== -1) {
-        // Map PROCESSING/RUNNING to WORKING
-        if (rawStatus === 'PROCESSING' || rawStatus === 'RUNNING') {
+        if (rawStatus === 'WORKING' || rawStatus === 'PROCESSING' || rawStatus === 'RUNNING') {
           this.agents[idx].status = 'WORKING';
-        } else if (rawStatus === 'COMPLETED' || rawStatus === 'FAILED' || rawStatus === 'IDLE' || rawStatus === 'PENDING') {
+        } else if (rawStatus === 'COMPLETED' || rawStatus === 'SUCCESS' || rawStatus === 'FAILED' || rawStatus === 'IDLE' || rawStatus === 'PENDING') {
           this.agents[idx].status = 'AVAIL';
         }
       }
@@ -53,7 +54,7 @@ export class RightPanelComponent implements OnInit, OnDestroy {
         this.agents.forEach(agent => {
           const backendState = update.agent_states[agent.name];
           if (backendState) {
-            if (backendState === 'PROCESSING' || backendState === 'RUNNING') {
+            if (backendState === 'WORKING' || backendState === 'PROCESSING' || backendState === 'RUNNING') {
               agent.status = 'WORKING';
             } else {
               agent.status = 'AVAIL';

@@ -65,12 +65,12 @@
 
                     <div class="grid grid-cols-2 gap-8">
                         <div class="space-y-3"><label class="text-[10px] text-zinc-500 font-black uppercase tracking-widest pl-1">Display Alias</label><input type="text" [(ngModel)]="selectedNode.name" placeholder="Name" class="registry-input"></div>
-                        <div class="space-y-3"><label class="text-[10px] text-zinc-500 font-black uppercase tracking-widest pl-1">Transfer Protocol</label><select [(ngModel)]="selectedNode.provider" (ngModelChange)="onProviderChange()" class="registry-select"><option value="ollama">Ollama (Local)</option><option value="ollama-cloud">Ollama Cloud</option><option value="openai">OpenAI</option></select></div>
+                        <div class="space-y-3"><label class="text-[10px] text-zinc-500 font-black uppercase tracking-widest pl-1">Transfer Protocol</label><select [(ngModel)]="selectedNode.provider" (ngModelChange)="onProviderChange()" class="registry-select"><option value="ollama">Ollama (Local / Remote)</option><option value="ollama-cloud">Ollama Cloud</option><option value="openai">OpenAI Compatible</option></select></div>
                         <div class="col-span-2 space-y-3">
                             <label class="text-[10px] text-zinc-500 font-black uppercase tracking-widest pl-1">Network Gateway (URL)</label>
                             <div class="relative group/input">
-                                <input type="text" [(ngModel)]="selectedNode.url" [disabled]="selectedNode.provider === 'ollama' || selectedNode.provider === 'ollama-cloud'" placeholder="http://..." class="registry-input font-mono disabled:opacity-50">
-                                <div *ngIf="selectedNode.provider === 'ollama' || selectedNode.provider === 'ollama-cloud'" class="absolute right-4 top-1/2 -translate-y-1/2"><svg class="w-4 h-4 text-zinc-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div>
+                                <input type="text" [(ngModel)]="selectedNode.url" [disabled]="selectedNode.provider === 'ollama-cloud'" placeholder="http://has-ai-ollama:11434" class="registry-input font-mono disabled:opacity-50">
+                                <div *ngIf="selectedNode.provider === 'ollama-cloud'" class="absolute right-4 top-1/2 -translate-y-1/2"><svg class="w-4 h-4 text-zinc-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div>
                             </div>
                         </div>
                         <div *ngIf="selectedNode.provider !== 'ollama'" class="col-span-2 space-y-3">

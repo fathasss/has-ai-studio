@@ -45,7 +45,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   public isLoadingPlan: boolean = false;
   public parsedPlan: any = null;
   public planError: string = '';
-  public renderedPlanMd: SafeHtml = '';
+  public renderedPlanMd: SafeHtml | '' = '';
   public refreshingPlan: boolean = false;
   public executionStatus: string = '';
   public latestTeamLeadMessage: SafeHtml | null = null;
@@ -145,12 +145,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.selectedSession = sid;
     this.currentSprintId = sid;
     this.orchestratorService.getChatHistory(sid).subscribe(msgs => {
-      this.chatHistory = msgs.length > 0 ? msgs : [
-        { role: 'TeamLead', content: `Loading history for project: ${sid}...` }
-      ];
+      if (msgs.length > 0) {
+        this.chatHistory = msgs.map(m => {
+          const isTL = m.role === 'TeamLead' || m.role === 'assistant';
+          const rawContent = m.content || '';
+          const cleanContent = isTL ? (rawContent.replace(/```json[\s\S]*?```/i, '').trim() || rawContent) : rawContent;
+          return {
+            role: isTL ? 'TeamLead' : 'PO',
+            content: cleanContent
+          };
+        });
+      } else {
+        this.chatHistory = [
+          { role: 'TeamLead', content: `Loading history for project: ${sid}...` }
+        ];
+      }
       
       // Modal için son mesajı yakala
-      const lastTL = [...msgs].reverse().find(m => m.role === 'TeamLead');
+      const lastTL = [...this.chatHistory].reverse().find(m => m.role === 'TeamLead');
       if (lastTL) {
         this.latestTeamLeadMessage = this.renderMarkdown(lastTL.content);
       } else {
@@ -159,7 +171,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
       // Sync rawAgentHistory for next LLM calls
       this.rawAgentHistory = msgs.map(m => ({
-        role: m.role === 'TeamLead' ? 'assistant' : 'user',
+        role: (m.role === 'TeamLead' || m.role === 'assistant') ? 'assistant' : 'user',
         content: m.content
       }));
       this.syncState();
@@ -175,6 +187,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.chatHistory = [{ role: 'TeamLead', content: 'Environment Reset. Awaiting your project requirements, PO.' }];
     this.rawAgentHistory = [];
     this.hasPendingPlan = false;
+    this.parsedPlan = null;
+    this.renderedPlanMd = '';
     this.selectedSession = null;
     this.generateSprintId();
     this.loadSessions();
@@ -208,15 +222,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.orchestratorService.saveChatMessage(this.currentSprintId, 'user', userText).subscribe();
 
     this.isTyping = true;
-    // this.hasPendingPlan = false; // REMOVED: Keep the state so refinements can happen silently
 
     this.orchestratorService.chatTeamLead(this.rawAgentHistory).subscribe({
       next: (res) => {
         const rawResponse = res.response;
-        
-        // DÜZELTME: Artık mesajı burada chatHistory'e pushlamıyoruz.
-        // Backend saveChatMessage() çağırdığında Socket.IO üzerinden gelecek.
-        // Bu sayede mükerrer mesaj sorununu kökten çözüyoruz.
         
         // Sadece asistanın yanıtını kaydet (Socket tetiklenecek)
         this.orchestratorService.saveChatMessage(this.currentSprintId, 'TeamLead', rawResponse).subscribe(() => {
@@ -274,6 +283,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
           if (mdContent) {
             const htmlValue = marked.parse(mdContent) as string;
             this.renderedPlanMd = this.sanitizer.bypassSecurityTrustHtml(htmlValue);
+          } else {
+            this.renderedPlanMd = '';
           }
 
           this.isLoadingPlan = false;
@@ -337,7 +348,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     
     const oldId = this.currentSprintId;
     if (this.parsedPlan.project_name) {
-      this.currentSprintId = this.slugify(this.parsedPlan.project_name);
+      const slug = this.slugify(this.parsedPlan.project_name);
+      if (slug) {
+        this.currentSprintId = slug;
+      }
     }
 
     this.executionStatus = 'Migrating session...';
@@ -453,8 +467,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
         try {
           parsed = JSON.parse(cleaned);
         } catch (e) {
-          // If direct parse fails, the candidate might have trailing text (like a tree)
-          // Look for the last matching '}' for the first '{'
           const sIdx = cleaned.indexOf('{');
           if (sIdx !== -1) {
              let balance = 0;

@@ -23,6 +23,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
   private clockTimer: any;
   private uptimeTimer: any;
   private sub: Subscription | null = null;
+  private routerSub: Subscription | null = null;
   private lastUptimeSeconds: number = 0;
 
   constructor(
@@ -31,7 +32,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
     private socketService: SocketService,
     private datePipe: DatePipe
   ) {
-    this.router.events.pipe(
+    this.routerSub = this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe((event: any) => {
       this.updateTitle(event.urlAfterRedirects);
@@ -39,6 +40,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.updateTitle(this.router.url);
     this.updateClock();
     this.clockTimer = setInterval(() => this.updateClock(), 1000);
 
@@ -76,8 +78,11 @@ export class HeaderComponent implements OnInit, OnDestroy {
   }
 
   updateTitle(url: string) {
-    if (url.includes('active-projects')) this.pageTitle = 'Active Projects';
+    if (url.includes('active-projects')) this.pageTitle = 'AI Development Office';
+    else if (url.includes('projects')) this.pageTitle = 'Project Archive';
+    else if (url.includes('reports')) this.pageTitle = 'Team Reports';
     else if (url.includes('execution-traces')) this.pageTitle = 'Logs & Traces';
+    else if (url.includes('exceptions')) this.pageTitle = 'Exception Handle';
     else if (url.includes('settings')) this.pageTitle = 'Factory Configuration';
     else this.pageTitle = 'Dashboard';
   }
@@ -90,5 +95,6 @@ export class HeaderComponent implements OnInit, OnDestroy {
     if (this.clockTimer) clearInterval(this.clockTimer);
     if (this.uptimeTimer) clearInterval(this.uptimeTimer);
     if (this.sub) this.sub.unsubscribe();
+    if (this.routerSub) this.routerSub.unsubscribe();
   }
 }

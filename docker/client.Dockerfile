@@ -4,13 +4,13 @@ FROM node:20-alpine AS build
 WORKDIR /app
 # Sadece bağımlılık dosyalarını kopyala ve yükle
 COPY client/package*.json ./
-RUN npm install
+RUN npm ci
 
 # Kalan client kaynak kodlarını kopyala
 COPY client/ .
 
 # Angular uygulamasını Production modunda derle
-RUN npm run build --configuration=production
+RUN npm run build -- --configuration=production
 
 # --- Stage 2: Serve with Nginx ---
 FROM nginx:alpine

@@ -57,7 +57,7 @@
                    </div>
                    
                    <div class="mt-4 text-xs text-gray-500 font-mono text-right border-t border-white/5 pt-2">
-                       Duration: {{t.duration_ms | number:'1.0-0'}} ms | Status: <span [ngClass]="t.status === 'SUCCESS' ? 'text-green-500' : 'text-red-500'">{{t.status}}</span>
+                       Duration: {{t.duration_ms | number:'1.0-0'}} ms | Status: <span [ngClass]="(t.status === 'SUCCESS' || t.status === 'COMPLETED') ? 'text-green-500' : 'text-red-500'">{{t.status}}</span>
                    </div>
                 </div>
             </div>

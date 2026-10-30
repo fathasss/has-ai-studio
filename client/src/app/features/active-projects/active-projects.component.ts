@@ -44,16 +44,19 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
   private sub: Subscription | null = null;
   private sysSub: Subscription | null = null;
   private movementTimer: any;
+  private initTimer: any;
 
   // Floor layout configuration (pixels relative to .iso-office)
   // Desks aligned on the right side
   agents: AgentConfig[] = [
-    { id: 'TeamLead',  name: 'Team Lead',  avatar: 'assets/avatars/teamlead.png',  color: '#facc15', glowColor: 'rgba(250,204,21,0.4)',  role: 'Planlama',  deskX: 750, deskY: 50,  meetingX: 350, meetingY: 250, x: 750, y: 50,  isFlipped: false },
-    { id: 'DevOps',    name: 'DevOps',     avatar: 'assets/avatars/devops.png',    color: '#f97316', glowColor: 'rgba(249,115,22,0.4)',  role: 'Altyapı',   deskX: 750, deskY: 150, meetingX: 450, meetingY: 250, x: 750, y: 150, isFlipped: false },
-    { id: 'Frontend',  name: 'Frontend',   avatar: 'assets/avatars/frontend.png',  color: '#06b6d4', glowColor: 'rgba(6,182,212,0.4)',   role: 'UI/UX',     deskX: 750, deskY: 250, meetingX: 520, meetingY: 330, x: 750, y: 250, isFlipped: false },
-    { id: 'Backend',   name: 'Backend',    avatar: 'assets/avatars/backend.png',   color: '#10b981', glowColor: 'rgba(16,185,129,0.4)',  role: 'API',       deskX: 750, deskY: 350, meetingX: 450, meetingY: 400, x: 750, y: 350, isFlipped: false },
-    { id: 'Security',  name: 'Security',   avatar: 'assets/avatars/security.png',  color: '#ef4444', glowColor: 'rgba(239,68,68,0.4)',   role: 'Güvenlik',  deskX: 750, deskY: 450, meetingX: 350, meetingY: 400, x: 750, y: 450, isFlipped: false },
-    { id: 'Tester',    name: 'Tester',     avatar: 'assets/avatars/tester.png',    color: '#a855f7', glowColor: 'rgba(168,85,247,0.4)',  role: 'Test',      deskX: 750, deskY: 550, meetingX: 280, meetingY: 330, x: 750, y: 550, isFlipped: false },
+    { id: 'TeamLead',   name: 'Team Lead',   avatar: 'assets/avatars/teamlead.png',  color: '#facc15', glowColor: 'rgba(250,204,21,0.4)',  role: 'Planlama',   deskX: 750, deskY: 50,  meetingX: 350, meetingY: 250, x: 750, y: 50,  isFlipped: false },
+    { id: 'DevOps',     name: 'DevOps',      avatar: 'assets/avatars/devops.png',    color: '#f97316', glowColor: 'rgba(249,115,22,0.4)',  role: 'Altyapı',    deskX: 750, deskY: 150, meetingX: 450, meetingY: 250, x: 750, y: 150, isFlipped: false },
+    { id: 'Database',   name: 'Database',    avatar: 'assets/avatars/backend.png',   color: '#14b8a6', glowColor: 'rgba(20,184,166,0.4)',  role: 'Veritabanı', deskX: 850, deskY: 150, meetingX: 400, meetingY: 200, x: 850, y: 150, isFlipped: false },
+    { id: 'Frontend',   name: 'Frontend',    avatar: 'assets/avatars/frontend.png',  color: '#06b6d4', glowColor: 'rgba(6,182,212,0.4)',   role: 'UI/UX',      deskX: 750, deskY: 250, meetingX: 520, meetingY: 330, x: 750, y: 250, isFlipped: false },
+    { id: 'Backend',    name: 'Backend',     avatar: 'assets/avatars/backend.png',   color: '#10b981', glowColor: 'rgba(16,185,129,0.4)',  role: 'API',        deskX: 750, deskY: 350, meetingX: 450, meetingY: 400, x: 750, y: 350, isFlipped: false },
+    { id: 'Security',   name: 'Security',    avatar: 'assets/avatars/security.png',  color: '#ef4444', glowColor: 'rgba(239,68,68,0.4)',   role: 'Güvenlik',   deskX: 750, deskY: 450, meetingX: 350, meetingY: 400, x: 750, y: 450, isFlipped: false },
+    { id: 'Tester',     name: 'Tester',      avatar: 'assets/avatars/tester.png',    color: '#a855f7', glowColor: 'rgba(168,85,247,0.4)',  role: 'Test',       deskX: 750, deskY: 550, meetingX: 280, meetingY: 330, x: 750, y: 550, isFlipped: false },
+    { id: 'Documenter', name: 'Documenter',  avatar: 'assets/avatars/teamlead.png',  color: '#38bdf8', glowColor: 'rgba(56,189,248,0.4)',  role: 'Döküman',    deskX: 850, deskY: 350, meetingX: 300, meetingY: 250, x: 850, y: 350, isFlipped: false },
   ];
 
   constructor(
@@ -70,16 +73,17 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
       }
 
       if (this.activeSprint === data.sprint_id && this.activeSprint !== null) {
-        const existingJob = this.jobs.find(j => j.id === data.job_id || (j.agent_name === (data.agent_name || data.agent) && j.status === 'PENDING'));
+        const agentName = data.agent_name || data.agent;
+        const existingJob = this.jobs.find(j => j.id === data.job_id || (j.agent_name === agentName && j.status === 'PENDING'));
 
         if (existingJob) {
           existingJob.status = data.status === 'PROCESSING' ? 'WORKING' : data.status;
-          if (data.status === 'COMPLETED') existingJob.status = 'COMPLETED';
+          if (data.status === 'COMPLETED' || data.status === 'SUCCESS') existingJob.status = 'COMPLETED';
         } else {
           this.jobs.push({
             id: data.job_id,
-            agent_name: data.agent_name || data.agent,
-            agent: data.agent_name || data.agent,
+            agent_name: agentName,
+            agent: agentName,
             status: data.status === 'PROCESSING' ? 'WORKING' : data.status,
             sprint_id: data.sprint_id
           });
@@ -92,10 +96,9 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
     this.sysSub = this.socketService.systemUpdate$.subscribe((_data: any) => {});
 
     // Movement Loop for dynamic avatar positioning
-    // Increased to 25 seconds so they realistically spend time and talk
     this.movementTimer = setInterval(() => this.updateAgentPositions(), 25000);
     // Initial call
-    setTimeout(() => this.updateAgentPositions(), 1000);
+    this.initTimer = setTimeout(() => this.updateAgentPositions(), 1000);
   }
 
   loadSprints() {
@@ -125,10 +128,13 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
   }
 
   getJobStatus(role: string): string {
-    const job = this.jobs.find(j => j.agent === role || j.agent_name === role);
-    if (job) {
-      if (job.status === 'PROCESSING') return 'WORKING';
-      return job.status;
+    const roleJobs = this.jobs.filter(j => j.agent === role || j.agent_name === role);
+    if (roleJobs.length > 0) {
+      if (roleJobs.some(j => j.status === 'PROCESSING' || j.status === 'WORKING')) return 'WORKING';
+      if (roleJobs.some(j => j.status === 'PENDING')) return 'PENDING';
+      if (roleJobs.some(j => j.status === 'FAILED')) return 'FAILED';
+      if (roleJobs.every(j => j.status === 'COMPLETED' || j.status === 'SUCCESS')) return 'COMPLETED';
+      return roleJobs[0].status;
     }
     if (['Security', 'Tester'].includes(role)) return 'STANDBY';
     if (['Frontend', 'Backend'].includes(role)) return 'AWAITING';
@@ -139,6 +145,7 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
     switch (status) {
       case 'WORKING': return '⚡ WORKING...';
       case 'COMPLETED': return '✅ COMPLETED';
+      case 'FAILED': return '❌ FAILED';
       case 'PENDING': return '⏳ PENDING';
       case 'STANDBY': return '💤 STANDBY';
       case 'AWAITING': return '📋 AWAITING';
@@ -153,7 +160,7 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
     let list = this.traces.filter(t => (t.agent === this.selectedAgent || t.agent_name === this.selectedAgent) && t.sprint_id !== 'idle');
 
     const activeJobs = this.jobs.filter(j =>
-      j.status === 'PROCESSING' &&
+      (j.status === 'PROCESSING' || j.status === 'WORKING') &&
       (j.agent_name === this.selectedAgent || j.agent === this.selectedAgent)
     );
     const virtualTraces = activeJobs.map(j => ({
@@ -199,15 +206,13 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
         this.traces = tracesRes.traces || [];
 
         this.tlSummary = "";
-        const tlTrace = this.traces.find(t => t.agent === 'TeamLead');
+        const tlTrace = this.traces.find(t => (t.agent_name || t.agent) === 'TeamLead');
         if (tlTrace && tlTrace.response) {
           try {
             const match = tlTrace.response.match(/\{[\s\S]*\}/);
             if (match) {
               const plan = JSON.parse(match[0]);
-              if (plan.summary_tr) {
-                this.tlSummary = plan.summary_tr;
-              }
+              this.tlSummary = plan.summary_tr || plan.project_name || (Array.isArray(plan.tasks) ? `${plan.tasks.length} tasks planned` : '');
             }
           } catch (e) { }
         }
@@ -222,65 +227,60 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
   }
 
   updateAgentPositions() {
-    // Determine if TeamLead is working
     const isTeamLeadWorking = this.activeSprint ? this.getJobStatus('TeamLead') === 'WORKING' : false;
+    const hasActiveSprintWork = this.jobs.some(j =>
+      j.status === 'PROCESSING' || j.status === 'WORKING' || j.status === 'PENDING'
+    );
 
     this.agents.forEach(agent => {
-      // If there is no active sprint, everyone is basically idle
       const status = this.activeSprint ? this.getJobStatus(agent.id) : 'IDLE';
       let prevX = agent.x;
 
       if (isTeamLeadWorking) {
         agent.x = agent.meetingX;
         agent.y = agent.meetingY;
+        agent.idleMessage = undefined;
       } else if (status === 'WORKING') {
         agent.x = agent.deskX;
         agent.y = agent.deskY;
+        agent.idleMessage = undefined;
       } else {
         if (Math.random() > 0.3) { // 70% chance to change state
           const rand = Math.random();
           let locationName = '';
           
           if (rand < 0.3) {
-            // Wander around empty space
             agent.idleState = 'WANDERING';
             agent.x = 200 + Math.random() * 200; 
             agent.y = 350 + Math.random() * 200;
             agent.idleMessage = undefined;
           } else if (rand < 0.45) {
-            // Coffee Break (Top Left)
             agent.idleState = 'BREAK';
             agent.x = 80 + Math.random() * 30; 
             agent.y = 80 + Math.random() * 30;
             locationName = 'Coffee Stand';
           } else if (rand < 0.60) {
-            // Water Cooler (Top Center)
             agent.idleState = 'CHAT';
             agent.x = 440;
             agent.y = 95;
             locationName = 'Water Cooler (Gossip Area)';
           } else {
-            // Role specific
             if (agent.id === 'DevOps') {
-               // Server Rack (Bottom Left)
                agent.idleState = 'SERVER';
                agent.x = 95;
                agent.y = 495;
                locationName = 'Server Rack';
             } else if (agent.id === 'Frontend' || agent.id === 'TeamLead') {
-               // Whiteboard (Bottom Center)
                agent.idleState = 'WHITEBOARD';
                agent.x = 440;
                agent.y = 495;
                locationName = 'Whiteboard';
             } else if (agent.id === 'Security' || agent.id === 'Backend') {
-               // Library (Top Mid-Left)
                agent.idleState = 'LIBRARY';
                agent.x = 280;
                agent.y = 95;
                locationName = 'Library';
             } else if (agent.id === 'Tester') {
-               // Arcade (Mid Left)
                agent.idleState = 'ARCADE';
                agent.x = 95;
                agent.y = 295;
@@ -291,19 +291,18 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
           // Grouping logic: If another agent is already at this exact location, adjust position so they face each other
           const occupant = this.agents.find(a => a.id !== agent.id && Math.abs(a.x - agent.x) < 30 && Math.abs(a.y - agent.y) < 30 && a.idleState !== 'WANDERING');
           if (occupant) {
-             agent.x = occupant.x + 40; // Place right next to them
+             agent.x = occupant.x + 40;
              agent.y = occupant.y;
-             agent.isFlipped = true;    // Face them
+             agent.isFlipped = true;
              occupant.isFlipped = false;
           } else if (agent.idleState !== 'WANDERING') {
-             // Add tiny jitter so they aren't completely static if alone
              agent.x += (Math.random() * 10 - 5);
              agent.y += (Math.random() * 10 - 5);
-             // Set direction based on movement only when no occupant
              agent.isFlipped = agent.x < prevX;
           }
 
-          if (locationName) {
+          // Only call LLM idle gossip when no sprint tasks are queued/running
+          if (locationName && !hasActiveSprintWork) {
             agent.idleMessage = '...';
             this.orchestratorService.generateIdleChat(agent.id, locationName).subscribe({
               next: (res) => {
@@ -319,6 +318,8 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
               },
               error: () => agent.idleMessage = undefined
             });
+          } else if (!locationName) {
+            agent.idleMessage = undefined;
           }
         }
       }
@@ -329,5 +330,6 @@ export class ActiveProjectsComponent implements OnInit, OnDestroy {
     if (this.sub) this.sub.unsubscribe();
     if (this.sysSub) this.sysSub.unsubscribe();
     if (this.movementTimer) clearInterval(this.movementTimer);
+    if (this.initTimer) clearTimeout(this.initTimer);
   }
 }

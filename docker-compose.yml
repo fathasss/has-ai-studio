@@ -2,10 +2,13 @@ services:
   has-ai-ollama:
     image: ollama/ollama:latest
     container_name: has-ai-ollama
+    restart: unless-stopped
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - OLLAMA_GPU=1
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_KEEP_ALIVE=24h
     ports:
       - "11434:11434"
     volumes:
@@ -22,6 +25,7 @@ services:
       context: .
       dockerfile: ./docker/orchestrator.Dockerfile
     container_name: has-ai-orchestrator
+    restart: unless-stopped
     ports:
       - "${ORCHESTRATOR_PORT:-8000}:8000"
     environment:
@@ -29,6 +33,8 @@ services:
       - AGENT_MODEL=${AGENT_MODEL:-llama3.1:latest}
       - TEAMLEAD_MODEL=${TEAMLEAD_MODEL:-llama3.1:latest}
       - LLM_TIMEOUT_SEC=${LLM_TIMEOUT_SEC:-600}
+      - LLM_MAX_RETRIES=${LLM_MAX_RETRIES:-2}
+      - LLM_NUM_CTX=${LLM_NUM_CTX:-8192}
       - AGENT_ROLE=master
     volumes:
       - ./core:/app/core
@@ -39,6 +45,12 @@ services:
     depends_on:
       has-ai-ollama:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:8000/metrics" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - has_ai_net
     deploy:
@@ -54,10 +66,12 @@ services:
       context: .
       dockerfile: ./docker/client.Dockerfile
     container_name: has-ai-web-cli
+    restart: unless-stopped
     ports:
       - "4200:80"
     depends_on:
-      - has-ai-orchestrator
+      has-ai-orchestrator:
+        condition: service_healthy
     networks:
       - has_ai_net
 
@@ -66,9 +80,14 @@ services:
       context: .
       dockerfile: ./docker/agent-worker.Dockerfile
     container_name: has-ai-agent-worker
+    restart: unless-stopped
     environment:
       - OLLAMA_URL=http://has-ai-ollama:11434
       - AGENT_MODEL=${AGENT_MODEL:-llama3.1:latest}
+      - TEAMLEAD_MODEL=${TEAMLEAD_MODEL:-llama3.1:latest}
+      - LLM_TIMEOUT_SEC=${LLM_TIMEOUT_SEC:-600}
+      - LLM_MAX_RETRIES=${LLM_MAX_RETRIES:-2}
+      - LLM_NUM_CTX=${LLM_NUM_CTX:-8192}
       - ORCHESTRATOR_URL=http://has-ai-orchestrator:8000
       - AGENT_ROLE=worker
     volumes:
@@ -76,9 +95,11 @@ services:
       - ./apps:/app/apps
       - ./prompts:/app/prompts
       - ./workspace:/app/workspace
+      - orchestrator_data:/app/data
       - has_ai_sdks:/opt/sdks
     depends_on:
-      - has-ai-orchestrator
+      has-ai-orchestrator:
+        condition: service_healthy
     networks:
       - has_ai_net
     deploy:
@@ -88,7 +109,6 @@ volumes:
   ollama_data:
   orchestrator_data:
   has_ai_sdks:
-
 
 networks:
   has_ai_net:

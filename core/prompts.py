@@ -22,12 +22,16 @@ def load_prompt(agent_name: str, key: str, fallback: str) -> str:
         Prompt string (stripped), or fallback if file is missing/unreadable.
     """
     # DÜZELTME 4: Path'i normalize et — symlink ve relative cwd senaryolarını kapat.
-    md_path = os.path.normpath(
+    md_path = os.path.abspath(os.path.normpath(
         os.path.join(_PROMPTS_ROOT, agent_name, f"{key}.md")
-    )
+    ))
 
     # Güvenlik: resolved path prompts root dışına çıkmamalı
-    if not md_path.startswith(_PROMPTS_ROOT):
+    try:
+        if os.path.commonpath([_PROMPTS_ROOT, md_path]) != _PROMPTS_ROOT:
+            logger.error(f"Path traversal attempt blocked: {md_path}")
+            return fallback
+    except ValueError:
         logger.error(f"Path traversal attempt blocked: {md_path}")
         return fallback
 

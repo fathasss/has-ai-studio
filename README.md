@@ -20,6 +20,8 @@ Powered primarily by local AI models via **Ollama**, this system consists of a c
 
 ## 🏗 System Architecture
 
+For a visual breakdown of the multi-agent control center, container networking, and data flows, see the [Architecture Diagram](docs/architecture-diagram.html).
+
 The project consists of several independent modules:
 
 - **`core/`**: FastAPI Orchestrator managing the database, job queue, global locking, and Socket.IO real-time emissions.
@@ -33,7 +35,7 @@ The project consists of several independent modules:
 ## 📦 Installation & Setup
 
 ### Prerequisites
-- [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docs.com/compose/)
+- [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/)
 - Modern Web Browser
 - **NVIDIA GPU** (Optional but recommended): Ensure `nvidia-container-toolkit` is installed on the host for GPU monitoring and acceleration.
 

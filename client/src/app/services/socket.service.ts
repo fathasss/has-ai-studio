@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
-import { Subject, Observable } from 'rxjs';
+import { BehaviorSubject, Subject, Observable } from 'rxjs';
 
 export interface PullProgress {
   status: string;
@@ -37,7 +37,7 @@ export class SocketService {
   private socket: Socket;
   
   // Events
-  public connected$ = new Subject<boolean>();
+  public connected$ = new BehaviorSubject<boolean>(false);
   public jobUpdate$ = new Subject<JobUpdate>();
   public metricUpdate$ = new Subject<any>();
   public systemUpdate$ = new Subject<SystemUpdate>();
@@ -54,7 +54,11 @@ export class SocketService {
 
   constructor() {
     this.socket = io({
-      path: '/socket.io' // Proxy üzerinden gitmesi için ayarlanacak
+      path: '/socket.io',
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000
     });
 
     this.socket.on('connect', () => {
@@ -118,8 +122,9 @@ export class SocketService {
 
   onEvent(eventName: string): Observable<any> {
     return new Observable<any>((observer: any) => {
-      this.socket.on(eventName, (data: any) => observer.next(data));
-      return () => this.socket.off(eventName);
+      const handler = (data: any) => observer.next(data);
+      this.socket.on(eventName, handler);
+      return () => this.socket.off(eventName, handler);
     });
   }
 

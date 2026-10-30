@@ -3,15 +3,16 @@ import threading
 import asyncio
 import time
 from datetime import datetime, timedelta
-from fastapi import Depends, Request
+from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from .app_instance import f_app, sio_app, sio
-from .database import engine, Base, SessionLocal, get_db
+from .database import engine, Base, get_db
 from .models import LLMTrace
 from .config import logger, AGENT_ROLE
 from .routers import chat, llm, sprint, system, jobs, config, ollama
-from .routers.ollama import is_model_installed, pull_stream_worker
+from .routers.ollama import is_model_installed, _guarded_pull_worker, _active_pulls, _pull_lock
 from .services import worker_service
 
 # Include Routers
@@ -51,10 +52,24 @@ f_app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def _ensure_sqlite_migrations():
+    """Applies non-destructive column migrations for existing SQLite databases."""
+    try:
+        with engine.begin() as conn:
+            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(llm_jobs)")).fetchall()]
+            if cols and "completed_at" not in cols:
+                logger.info("Migrating llm_jobs table: adding 'completed_at' column...")
+                conn.execute(text("ALTER TABLE llm_jobs ADD COLUMN completed_at DATETIME"))
+    except Exception as e:
+        logger.warning(f"SQLite schema check skipped/failed: {e}")
+
+
 @f_app.on_event("startup")
 async def startup_event():
     logger.info("Initializing database...")
     Base.metadata.create_all(bind=engine)
+    _ensure_sqlite_migrations()
     
     logger.info(f"HAS-AI-TEAM Orchestrator starting with ROLE: {AGENT_ROLE}")
     
@@ -67,13 +82,18 @@ async def startup_event():
         logger.info("Initializing Worker tasks (LLM Worker)...")
         threading.Thread(target=worker_service.llm_worker, daemon=True).start()
         
-    # Auto-pull default model if missing
+    # Auto-pull default model if missing (only on master/both to prevent duplicate pulls)
     from .config import AGENT_MODEL, OLLAMA_URL, LLM_PROVIDER, LLM_API_KEY
-    if AGENT_ROLE in ["master", "both", "worker"]:
+    if AGENT_ROLE in ["master", "both"] and LLM_PROVIDER == "ollama":
         installed = await is_model_installed(AGENT_MODEL)
-        if not installed and LLM_PROVIDER == "ollama":
-            logger.info(f"Default model {AGENT_MODEL} is missing. Triggering auto-pull...")
-            asyncio.create_task(pull_stream_worker(AGENT_MODEL, OLLAMA_URL, LLM_PROVIDER, LLM_API_KEY))
+        if not installed:
+            async with _pull_lock:
+                already_pulling = AGENT_MODEL in _active_pulls
+                if not already_pulling:
+                    _active_pulls[AGENT_MODEL] = True
+            if not already_pulling:
+                logger.info(f"Default model {AGENT_MODEL} is missing. Triggering auto-pull...")
+                asyncio.create_task(_guarded_pull_worker(AGENT_MODEL, OLLAMA_URL, LLM_PROVIDER, LLM_API_KEY))
 
 if __name__ == "__main__":
     import uvicorn
