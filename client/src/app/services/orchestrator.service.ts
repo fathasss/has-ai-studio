@@ -159,20 +159,21 @@ export class OrchestratorService {
     return this.http.post(`${this.apiUrl}/ollama/pull`, { model: modelName });
   }
 
-  chatTeamLead(history: any[]): Observable<any> {
-    return this.http.post(`${this.apiUrl}/chat/teamlead`, { history });
+  chatTeamLead(history: any[], lang: string = 'tr'): Observable<any> {
+    return this.http.post(`${this.apiUrl}/chat/teamlead`, { history, lang });
   }
 
-  previewSprint(history: any[]): Observable<any> {
-    return this.http.post(`${this.apiUrl}/chat/preview`, { history });
+  previewSprint(history: any[], lang: string = 'tr'): Observable<any> {
+    return this.http.post(`${this.apiUrl}/chat/preview`, { history, lang });
   }
 
-  generateIdleChat(agent: string, location: string, partner?: string, messageToReply?: string): Observable<any> {
+  generateIdleChat(agent: string, location: string, partner?: string, messageToReply?: string, lang: string = 'tr'): Observable<any> {
     return this.http.post(`${this.apiUrl}/chat/idle`, {
       agent,
       location,
       partner,
-      message_to_reply: messageToReply
+      message_to_reply: messageToReply,
+      lang
     });
   }
 

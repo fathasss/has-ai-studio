@@ -2,9 +2,9 @@
     <div class="flex items-center justify-between mb-5">
       <div class="text-[10px] text-cyan-400 uppercase tracking-widest font-black flex items-center gap-2">
         <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-        Agent Deployment
+        {{ 'agentPanel.title' | translate }}
       </div>
-      <span class="text-[9px] font-mono text-gray-500 bg-[#06080d] px-2 py-0.5 rounded border border-white/5">{{agents.length}} Active</span>
+      <span class="text-[9px] font-mono text-gray-500 bg-[#06080d] px-2 py-0.5 rounded border border-white/5">{{agents.length}} {{ 'agentPanel.activeCount' | translate }}</span>
     </div>
     
     <div class="flex-1 space-y-2.5 overflow-y-auto pr-1 custom-scrollbar">
@@ -29,7 +29,7 @@
                   'text-yellow-400 bg-yellow-500/10 border-yellow-500/30': agent.status === 'AVAIL',
                   'text-red-400 bg-red-500/10 border-red-500/30': agent.status === 'DOWN'
                 }">
-            {{agent.status}}
+            {{ (agent.status === 'WORKING' ? 'agentPanel.statusWorking' : (agent.status === 'AVAIL' ? 'agentPanel.statusAvail' : 'agentPanel.statusDown')) | translate }}
           </span>
         </div>
       </div>

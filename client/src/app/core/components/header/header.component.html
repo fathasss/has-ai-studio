@@ -9,13 +9,31 @@
     </div>
     
     <div class="flex items-center gap-3 text-sm h-full">
+      <!-- Language Switcher Pill -->
+      <div class="flex items-center bg-[#0c1220]/80 border border-white/10 rounded-xl p-0.5 backdrop-blur-md">
+        <button (click)="switchLanguage('tr')" 
+                type="button"
+                [ngClass]="currentLang === 'tr' ? 'bg-cyan-500/25 text-cyan-300 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.3)]' : 'text-gray-400 hover:text-white border-transparent'"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer">
+          <span class="text-xs">🇹🇷</span>
+          <span class="font-mono">TR</span>
+        </button>
+        <button (click)="switchLanguage('en')" 
+                type="button"
+                [ngClass]="currentLang === 'en' ? 'bg-cyan-500/25 text-cyan-300 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.3)]' : 'text-gray-400 hover:text-white border-transparent'"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer">
+          <span class="text-xs">🇬🇧</span>
+          <span class="font-mono">EN</span>
+        </button>
+      </div>
+
       <!-- Uptime Metric (Cyber Cyan Glass) -->
       <div class="flex items-center gap-3 bg-[#0c1220]/80 border border-cyan-500/20 px-4 py-2 rounded-xl backdrop-blur-md hover:border-cyan-500/40 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] transition-all group">
         <div class="w-8 h-8 rounded-lg bg-cyan-500/15 flex items-center justify-center border border-cyan-500/30 group-hover:scale-110 transition-transform">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-cyan-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <div class="flex flex-col">
-          <span class="text-[0.65rem] uppercase tracking-[0.1em] text-gray-400 font-bold leading-tight">Uptime</span>
+          <span class="text-[0.65rem] uppercase tracking-[0.1em] text-gray-400 font-bold leading-tight">{{ 'header.uptime' | translate }}</span>
           <span class="font-mono text-[0.9rem] text-cyan-300 font-black leading-tight tracking-wider">{{uptime}}</span>
         </div>
       </div>
@@ -26,20 +44,20 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-yellow-400"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
         </div>
         <div class="flex flex-col">
-          <span class="text-[0.65rem] uppercase tracking-[0.1em] text-gray-400 font-bold leading-tight">Tokens/m</span>
+          <span class="text-[0.65rem] uppercase tracking-[0.1em] text-gray-400 font-bold leading-tight">{{ 'header.tokensMin' | translate }}</span>
           <span class="font-mono text-[0.9rem] text-yellow-400 font-black leading-tight tracking-wider">{{tokenRate}}</span>
         </div>
       </div>
 
       <!-- Right Panel Collapsible Toggle Button -->
       <button (click)="toggleRightPanel.emit()" 
-              class="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0c1220]/60 hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-all text-xs font-semibold text-gray-300 hover:text-white group"
-              [title]="rightPanelOpen ? 'Ajan panelini daralt' : 'Ajan panelini genişlet'">
+              class="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0c1220]/60 hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-all text-xs font-semibold text-gray-300 hover:text-white group cursor-pointer"
+              [title]="rightPanelOpen ? ('header.collapsePanel' | translate) : ('header.expandPanel' | translate)">
         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [class.rotate-180]="!rightPanelOpen" class="transition-transform duration-300 text-gray-400 group-hover:text-cyan-400">
           <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
           <line x1="15" x2="15" y1="3" y2="21"/>
         </svg>
-        <span class="hidden md:inline">{{ rightPanelOpen ? 'Paneli Daralt' : 'Ajanlar' }}</span>
+        <span class="hidden md:inline">{{ rightPanelOpen ? ('header.collapseBtn' | translate) : ('header.agentsBtn' | translate) }}</span>
       </button>
 
       <!-- User / Avatar placeholder -->

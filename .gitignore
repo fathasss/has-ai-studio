@@ -1,23 +1,38 @@
-# Python
+# Python & Bytecode
 __pycache__/
+**/__pycache__/
 *.py[cod]
-*$py.class
+*$$py.class
+*.pyc
+**/*.pyc
 .venv/
 venv/
+env/
 .pytest_cache/
 .mypy_cache/
 
-# Environment & Secrets
+# Environment, Secrets & Local Credentials
 .env
-.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
 
-# Runtime Data & Databases
+# Runtime Data, Logs & Databases
 *.db
 *.db-wal
 *.db-shm
+*.sqlite
+*.sqlite3
 *.log
-data/traceability.db*
+logs/
+data/*.db*
+data/config.json
 data/config.json.tmp
+!data/config.example.json
+!data/.gitkeep
 
 # Generated Workspaces & Projects
 apps/*
@@ -25,14 +40,22 @@ apps/*
 workspace/*
 !workspace/.gitkeep
 
-# Frontend
+# Frontend & Dependencies (Paketler)
 node_modules/
+**/node_modules/
 client/node_modules/
 client/dist/
+dist/
+build/
 client/.angular/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# IDE
+# IDE & OS Metadata
 .vscode/
+client/.vscode/
 .idea/
 .DS_Store
-
+Thumbs.db

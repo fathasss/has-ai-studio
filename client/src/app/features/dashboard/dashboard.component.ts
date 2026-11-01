@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { OrchestratorService } from '../../services/orchestrator.service';
 import { SocketService } from '../../services/socket.service';
+import { I18nService } from '../../core/services/i18n.service';
+import { TranslatePipe } from '../../core/pipes/translate.pipe';
 import { marked } from 'marked';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
@@ -16,7 +18,7 @@ interface ChatMessage {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslatePipe],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss']
 })
@@ -28,9 +30,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   public currentSprintId: string = "";
   
   public prompt: string = '';
-  public chatHistory: ChatMessage[] = [
-    { role: 'TeamLead', content: 'TeamLead devrede. Mimari orkestrasyon hattı hazır ve dinlemede.\n\nYeni proje gereksinimlerinizi bekliyorum, PO.' }
-  ];
+  public chatHistory: ChatMessage[] = [];
   
   public rawAgentHistory: any[] = []; // for backend
   
@@ -56,8 +56,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private orchestratorService: OrchestratorService, 
     private socketService: SocketService,
     private router: Router,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    public i18n: I18nService
   ) {
+    this.chatHistory = [
+      { role: 'TeamLead', content: this.i18n.t('missionHub.initialTeamLeadMessage') }
+    ];
   }
 
   ngOnInit() {
@@ -215,7 +219,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   resetEnvironment() {
-    this.chatHistory = [{ role: 'TeamLead', content: 'Ortam sıfırlandı. Yeni proje gereksinimlerinizi bekliyorum, PO.' }];
+    this.chatHistory = [{ role: 'TeamLead', content: this.i18n.t('missionHub.initialTeamLeadMessage') }];
     this.rawAgentHistory = [];
     this.hasPendingPlan = false;
     this.parsedPlan = null;
@@ -282,7 +286,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     this.isTyping = true;
 
-    this.orchestratorService.chatTeamLead(this.rawAgentHistory).subscribe({
+    this.orchestratorService.chatTeamLead(this.rawAgentHistory, this.i18n.currentLang).subscribe({
       next: (res) => {
         const rawResponse = res.response;
         const cleanContent = rawResponse.replace(/```json[\s\S]*?```/i, '').trim();
@@ -337,7 +341,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     
     this.planError = '';
     
-    this.orchestratorService.previewSprint(this.rawAgentHistory).subscribe({
+    this.orchestratorService.previewSprint(this.rawAgentHistory, this.i18n.currentLang).subscribe({
       next: (res) => {
         try {
           const jsonStr = this.extractJson(res.response);
@@ -397,9 +401,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     
     this.isLoadingPlan = true;
     this.planError = '';
-    this.executionStatus = 'Plan hazırlanıyor...';
+    this.executionStatus = this.i18n.t('missionHub.planPreparing');
     
-    this.orchestratorService.previewSprint(this.rawAgentHistory).subscribe({
+    this.orchestratorService.previewSprint(this.rawAgentHistory, this.i18n.currentLang).subscribe({
       next: (res: any) => {
         try {
           const jsonStr = this.extractJson(res.response);
@@ -442,7 +446,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.closePreviewModal();
       this.hasPendingPlan = false;
       
-      this.executionStatus = 'Ajanlar başlatılıyor...';
+      this.executionStatus = this.i18n.t('missionHub.planApprovalStarting');
       this.orchestratorService.executeSprint(this.currentSprintId, this.parsedPlan, this.rawAgentHistory).subscribe({
         next: () => {
           this.isLoadingPlan = false;
@@ -451,7 +455,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           console.error("Sprint execution failed", err);
-          this.planError = "Çalıştırma hatası: " + (err.message || "Bilinmeyen hata");
+          this.planError = this.i18n.t('missionHub.planApprovalError') + ": " + (err.message || "");
           this.isLoadingPlan = false;
           this.executionStatus = '';
           this.showPreviewModal = true;

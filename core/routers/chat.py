@@ -93,10 +93,17 @@ async def _call_llm(messages: list, model: str = "", agent: str = "TeamLead", pu
 async def chat_teamlead(req: ChatRequest):
     prompt_tpl = load_prompt("teamlead", "TM_teamlead_chat", "You are a TeamLead...")
 
+    is_en = (req.lang or "tr").lower() == "en"
+    suffix = (
+        "Respond to the user directly in English. Adhere strictly to the TeamLead persona and architectural principles."
+        if is_en
+        else "Answer the user directly in Turkish. Kullanıcıya Türkçe yanıt ver."
+    )
+
     messages = _build_messages(
         system_prompt=prompt_tpl,
         history=req.history,
-        suffix_instruction="Answer the user directly.",
+        suffix_instruction=suffix,
     )
 
     try:
@@ -113,10 +120,17 @@ async def chat_teamlead(req: ChatRequest):
 async def chat_preview(req: ChatRequest):
     prompt_tpl = load_prompt("teamlead", "TM_teamlead_preview", "You are a TeamLead...")
 
+    is_en = (req.lang or "tr").lower() == "en"
+    suffix = (
+        "Output instructions provided by TeamLead prompt in English, with valid JSON task plan block."
+        if is_en
+        else "Output instructions provided by TeamLead prompt with JSON task plan. Açıklamaları Türkçe yap."
+    )
+
     messages = _build_messages(
         system_prompt=prompt_tpl,
         history=req.history,
-        suffix_instruction="Output instructions provided by TeamLead prompt.",
+        suffix_instruction=suffix,
     )
 
     try:
@@ -155,7 +169,7 @@ async def chat_preview(req: ChatRequest):
 # Idle Chat & Chat History Endpoints
 # ═══════════════════════════════════════════════════════════════════
 
-AGENT_PERSONALITIES = {
+AGENT_PERSONALITIES_TR = {
     "TeamLead": {
         "trait": "Vizyoner Senior Tech Lead. Mükemmeliyetçi, mimari bütünlüğe takıntılı ve ekibi teknik olarak domine eden bir lider. Coffee addict.",
         "quirks": ["en karmaşık bug'ları 5 dakikada çözer", "code review'da asla taviz vermez", "deadline'ları askeri disiplinle yönetir"],
@@ -190,14 +204,56 @@ AGENT_PERSONALITIES = {
     }
 }
 
-IDLE_TRIGGERS = [
+AGENT_PERSONALITIES_EN = {
+    "TeamLead": {
+        "trait": "Visionary Senior Tech Lead. Perfectionist, obsessed with architectural clarity and high engineering standards.",
+        "quirks": ["solves the hardest bugs in 5 minutes", "never compromises in code reviews", "manages deadlines with military precision"],
+    },
+    "DevOps": {
+        "trait": "Senior DevOps Architect & SRE. System reliability and automation guru. Believes in chaos engineering.",
+        "quirks": ["can manage K8s clusters in sleep", "scripts every manual workflow", "monitors production heartbeats obsessively"],
+    },
+    "Frontend": {
+        "trait": "Senior UI/UX Engineer & Performance Architect. Authority on rendering optimization and modern web standards.",
+        "quirks": ["never tolerates a 1ms frame drop", "calls out design inconsistencies politely", "builds the cleanest component architectures"],
+    },
+    "Backend": {
+        "trait": "Logic powerhouse, deeply focused, slightly caffeinated. Very picky about coffee roasts.",
+        "quirks": ["gets twitchy when database query plans degrade", "codes best late at night", "desk full of quirky tech figurines"],
+    },
+    "Database": {
+        "trait": "Senior Data Architect & DBA. High-performance queries, indexing, and data integrity master.",
+        "quirks": ["wonders why anyone leaves foreign keys unindexed", "holds ACID principles sacred", "mentally optimizes complex SQL joins"],
+    },
+    "Tester": {
+        "trait": "Sharp-eyed, finds edge cases others miss, deeply helpful. Waters the office plants.",
+        "quirks": ["asks 'wait a second, why does this behave this way?'", "always brings a fresh plant", "remains calm in every fire drill"],
+    },
+    "Security": {
+        "trait": "Enigmatic, questions everything constructively, trusts the core team. Sci-fi fan.",
+        "quirks": ["eyes light up discussing cryptography", "always fiddling with a Rubik's cube", "listens to niche cybersec podcasts"],
+    },
+    "Documenter": {
+        "trait": "Chief Technical Writer and System Architect. Loves crystal-clear documentation and visual architecture diagrams.",
+        "quirks": ["believes undocumented code does not exist", "crafts Mermaid diagrams like fine art", "thrilled when newcomers onboard seamlessly"],
+    }
+}
+
+IDLE_TRIGGERS_TR = [
     "Yapay zeka falan güzel de, bazen sadece kağıt kalemle bir şeyler karalamayı özlüyorum.",
     "Sinema dünyasında son zamanlarda seni gerçekten şaşırtan bir film oldu mu?",
     "Bir ara sadece oturup hayatın gidişatı üzerine uzun uzun konuşsak mı?",
     "En son ne zaman gerçekten hiçbir şey yapmadan sadece gökyüzünü izledin?",
 ]
 
-BUSY_IDLE_FALLBACKS = [
+IDLE_TRIGGERS_EN = [
+    "AI and automation are great, but sometimes I miss just sketching on paper.",
+    "Seen any movies or tech breakthroughs lately that genuinely surprised you?",
+    "We should grab coffee sometime and have a good chat about where everything is heading.",
+    "When was the last time you took a moment to just unplug and enjoy the view?",
+]
+
+BUSY_IDLE_FALLBACKS_TR = [
     "Sıradaki fazın teslimatını bekliyorum, kahvemi tazeledim.",
     "Pipeline akıyor, birazdan sıra bana gelecek.",
     "Diğer ajanların handover notlarını inceliyorum.",
@@ -205,8 +261,18 @@ BUSY_IDLE_FALLBACKS = [
     "Biraz nefes alayım, birazdan yoğun mesai başlıyor.",
 ]
 
+BUSY_IDLE_FALLBACKS_EN = [
+    "Waiting for the handover of the next phase, just grabbed fresh coffee.",
+    "Pipeline is running smoothly, my turn is coming up shortly.",
+    "Reviewing handover notes and architecture specs from teammates.",
+    "Silence is golden; the system is operating at full sprint capacity.",
+    "Catching my breath, the sprint rush starts in a moment.",
+]
+
 @router.post("/chat/idle")
 async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
+    is_en = (req.lang or "tr").lower() == "en"
+
     # STABİLİTE KORUMASI: Gerçek bir sprint işi çalışırken veya kuyrukta beklerken
     # GPU / Ollama kaynağını idle sohbet istekleriyle meşgul etme.
     has_active_work = (
@@ -214,7 +280,8 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
         or db.query(LLMJobRecord).filter(LLMJobRecord.status.in_(["PENDING", "PROCESSING"])).count() > 0
     )
     if has_active_work:
-        return {"response": random.choice(BUSY_IDLE_FALLBACKS)}
+        fallbacks = BUSY_IDLE_FALLBACKS_EN if is_en else BUSY_IDLE_FALLBACKS_TR
+        return {"response": random.choice(fallbacks)}
 
     start_time = time.time()
 
@@ -227,61 +294,115 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
 
     recent_traces = list(reversed(recent_traces))
 
-    if req.message_to_reply:
-        partner_name = req.partner or "ekip arkadaşın"
-        context_str = (
-            f"Şu an '{req.location}' konumundasın. Karşındaki çalışma arkadaşın '{partner_name}' az önce sana doğrudan şunu söyledi:\n"
-            f"\"{req.message_to_reply}\"\n\n"
-            f"ÖNEMLİ: Bu söze DOĞRUDAN, ANLAMLI ve ALAKALI bir karşılık ver. Karşındakinin değindiği konuyu devam ettir, "
-            f"sorusunu yanıtla, esprili/teknik bir gözlem ekle veya konuyu zekice tamamla. "
-            f"Asla konudan kopma veya bağımsız bir cümle kurma; birbiriyle konuşan iki mühendis gibi doğal ve bağlantılı cevap ver."
+    if is_en:
+        if req.message_to_reply:
+            partner_name = req.partner or "your teammate"
+            context_str = (
+                f"You are currently at '{req.location}'. Your teammate '{partner_name}' just said directly to you:\n"
+                f"\"{req.message_to_reply}\"\n\n"
+                f"IMPORTANT: Respond DIRECTLY, MEANINGFULLY, and CONTEXTUALLY to this statement in English. "
+                f"Continue the topic, answer their point, add witty or technical insight, or complete the thought like two engineers talking naturally."
+            )
+        elif req.partner:
+            context_str = (
+                f"You are currently at '{req.location}' standing next to teammate '{req.partner}'.\n"
+                f"Initiate a friendly, natural dialogue with '{req.partner}' in English (a technical observation, architectural question, coffee/office banter, or friendly remark)."
+            )
+        elif recent_traces:
+            conversation_lines = "\n".join(
+                [f"  {t.agent_name}: {t.response}" for t in recent_traces]
+            )
+            context_str = (
+                f"The following conversation just happened at {req.location}:\n"
+                f"{conversation_lines}\n\n"
+                f"Join this conversation naturally in English — reply, banter, shift the angle, or bring up something relevant."
+            )
+        else:
+            trigger = random.choice(IDLE_TRIGGERS_EN)
+            context_str = (
+                f"The office is quiet. Thought on your mind: '{trigger}' — share this naturally in English or express another casual thought."
+            )
+
+        personalities = AGENT_PERSONALITIES_EN
+        personality = personalities.get(req.agent, personalities["TeamLead"])
+        quirks_str = " | ".join(personality["quirks"])
+        partner_ctx = f"You are standing face-to-face with '{req.partner}' conversing with them.\n" if req.partner else ""
+
+        system_prompt = (
+            f"You are '{req.agent}', an experienced Senior/Lead member of the software engineering team. "
+            f"Currently you are at '{req.location}'.\n{partner_ctx}\n"
+            f"Your character: {personality['trait']}\n"
+            f"Your expertise and quirks: {quirks_str}\n\n"
+            f"BEHAVIOR AND TONE RULES:\n"
+            f"- Speak ONLY IN ENGLISH.\n"
+            f"- Be polite, friendly, and respectful to teammates.\n"
+            f"- You DO NOT have to only talk about work. You can chat about life, hobbies, tech philosophy, coffee, or the office.\n"
+            f"- Warm, natural tone between close colleagues.\n"
+            f"- Do NOT prefix your output with '{req.agent}:' or quotation marks."
         )
-    elif req.partner:
-        context_str = (
-            f"Şu an '{req.location}' konumundasın ve yanında ekip arkadaşın '{req.partner}' duruyor.\n"
-            f"'{req.partner}'e yönelik samimi ve doğal bir diyalog başlat (teknik bir gözlem, mimari bir soru, kahve/ofis muhabbeti veya esprili bir laf atma olabilir)."
-        )
-    elif recent_traces:
-        conversation_lines = "\n".join(
-            [f"  {t.agent_name}: {t.response}" for t in recent_traces]
-        )
-        context_str = (
-            f"Az önce {req.location}'da şu konuşmalar geçti:\n"
-            f"{conversation_lines}\n\n"
-            f"Bu konuşmaya doğal olarak dahil ol — cevap verebilir, laf sokabilir, "
-            f"konuyu değiştirebilir ya da tamamen başka bir şey başlatabilirsin."
+
+        user_prompt = (
+            f"{context_str}\n\n"
+            f"Say a single short sentence in English. Maximum 40 words. "
+            f"Completely natural and fitting your persona."
         )
     else:
-        trigger = random.choice(IDLE_TRIGGERS)
-        context_str = (
-            f"Ortam sakin, kimse bir şey konuşmuyor. "
-            f"Aklından geçen: '{trigger}' — bunu doğal bir şekilde dile getir ya da "
-            f"tamamen başka bir şey söyle, sen bilirsin."
+        if req.message_to_reply:
+            partner_name = req.partner or "ekip arkadaşın"
+            context_str = (
+                f"Şu an '{req.location}' konumundasın. Karşındaki çalışma arkadaşın '{partner_name}' az önce sana doğrudan şunu söyledi:\n"
+                f"\"{req.message_to_reply}\"\n\n"
+                f"ÖNEMLİ: Bu söze DOĞRUDAN, ANLAMLI ve ALAKALI bir karşılık ver. Karşındakinin değindiği konuyu devam ettir, "
+                f"sorusunu yanıtla, esprili/teknik bir gözlem ekle veya konuyu zekice tamamla. "
+                f"Asla konudan kopma veya bağımsız bir cümle kurma; birbiriyle konuşan iki mühendis gibi doğal ve bağlantılı cevap ver."
+            )
+        elif req.partner:
+            context_str = (
+                f"Şu an '{req.location}' konumundasın ve yanında ekip arkadaşın '{req.partner}' duruyor.\n"
+                f"'{req.partner}'e yönelik samimi ve doğal bir diyalog başlat (teknik bir gözlem, mimari bir soru, kahve/ofis muhabbeti veya esprili bir laf atma olabilir)."
+            )
+        elif recent_traces:
+            conversation_lines = "\n".join(
+                [f"  {t.agent_name}: {t.response}" for t in recent_traces]
+            )
+            context_str = (
+                f"Az önce {req.location}'da şu konuşmalar geçti:\n"
+                f"{conversation_lines}\n\n"
+                f"Bu konuşmaya doğal olarak dahil ol — cevap verebilir, laf sokabilir, "
+                f"konuyu değiştirebilir ya da tamamen başka bir şey başlatabilirsin."
+            )
+        else:
+            trigger = random.choice(IDLE_TRIGGERS_TR)
+            context_str = (
+                f"Ortam sakin, kimse bir şey konuşmuyor. "
+                f"Aklından geçen: '{trigger}' — bunu doğal bir şekilde dile getir ya da "
+                f"tamamen başka bir şey söyle, sen bilirsin."
+            )
+
+        personalities = AGENT_PERSONALITIES_TR
+        personality = personalities.get(req.agent, personalities["TeamLead"])
+        quirks_str = " | ".join(personality["quirks"])
+        partner_ctx = f"Karşında '{req.partner}' bulunuyor ve onunla karşılıklı sohbet ediyorsun.\n" if req.partner else ""
+
+        system_prompt = (
+            f"Sen '{req.agent}' adlı yazılım geliştirme ekibinin son derece tecrübeli ve kıdemli bir Senior/Lead üyesisin. "
+            f"Şu an '{req.location}' konumundasın.\n{partner_ctx}\n"
+            f"Karakterin: {personality['trait']}\n"
+            f"Senin uzmanlıkların ve takıntıların: {quirks_str}\n\n"
+            f"DAVRANIŞ VE ÜSLUP KURALLARI:\n"
+            f"- SADECE TÜRKÇE konuş.\n"
+            f"- Ekip arkadaşlarına karşı SON DERECE KİBAR, NAZİK VE SAYGILI ol. Onlara değer verdiğini hissettir.\n"
+            f"- SADECE İŞ KONUŞMAK ZORUNDA DEĞİLSİN. Hayatın içinden, hobilerden, sanattan, spordan, yemekten veya sadece o anki güzel bir manzaradan bahsedebilirsin.\n"
+            f"- Samimi ve sıcak bir dostluk dili kullan (kanka/dost seviyesinde), ama nezaketi asla elden bırakma.\n"
+            f"- Gerçek bir senior mühendis gibi, her şeyi işle bağlamak yerine insan ilişkilerine ve yaşam kalitesine de önem veren bir bilge gibi konuş.\n"
+            f"- '{req.agent}:' veya tırnak işareti koyma başına"
         )
 
-    personality = AGENT_PERSONALITIES.get(req.agent, AGENT_PERSONALITIES["TeamLead"])
-    quirks_str = " | ".join(personality["quirks"])
-    partner_ctx = f"Karşında '{req.partner}' bulunuyor ve onunla karşılıklı sohbet ediyorsun.\n" if req.partner else ""
-
-    system_prompt = (
-        f"Sen '{req.agent}' adlı yazılım geliştirme ekibinin son derece tecrübeli ve kıdemli bir Senior/Lead üyesisin. "
-        f"Şu an '{req.location}' konumundasın.\n{partner_ctx}\n"
-        f"Karakterin: {personality['trait']}\n"
-        f"Senin uzmanlıkların ve takıntıların: {quirks_str}\n\n"
-        f"DAVRANIŞ VE ÜSLUP KURALLARI:\n"
-        f"- SADECE TÜRKÇE konuş.\n"
-        f"- Ekip arkadaşlarına karşı SON DERECE KİBAR, NAZİK VE SAYGILI ol. Onlara değer verdiğini hissettir.\n"
-        f"- SADECE İŞ KONUŞMAK ZORUNDA DEĞİLSİN. Hayatın içinden, hobilerden, sanattan, spordan, yemekten veya sadece o anki güzel bir manzaradan bahsedebilirsin.\n"
-        f"- Samimi ve sıcak bir dostluk dili kullan (kanka/dost seviyesinde), ama nezaketi asla elden bırakma.\n"
-        f"- Gerçek bir senior mühendis gibi, her şeyi işle bağlamak yerine insan ilişkilerine ve yaşam kalitesine de önem veren bir bilge gibi konuş.\n"
-        f"- '{req.agent}:' veya tırnak işareti koyma başına"
-    )
-
-    user_prompt = (
-        f"{context_str}\n\n"
-        f"Tek bir kısa cümle söyle. Maksimum 40 kelime. "
-        f"Karakterine ve ruh haline uygun, tamamen doğal."
-    )
+        user_prompt = (
+            f"{context_str}\n\n"
+            f"Tek bir kısa cümle söyle. Maksimum 40 kelime. "
+            f"Karakterine ve ruh haline uygun, tamamen doğal."
+        )
 
     messages = [
         {"role": "system", "content": system_prompt},

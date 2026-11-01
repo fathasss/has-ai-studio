@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SocketService, SystemUpdate } from '../../../services/socket.service';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 import { Subscription } from 'rxjs';
 
 interface AgentStatus {
@@ -12,7 +13,7 @@ interface AgentStatus {
 @Component({
   selector: 'app-right-panel',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslatePipe],
   templateUrl: './right-panel.component.html',
   styleUrls: ['./right-panel.component.scss']
 })

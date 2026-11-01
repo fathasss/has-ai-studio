@@ -1,13 +1,14 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { OrchestratorService } from '../../services/orchestrator.service';
+import { TranslatePipe } from '../../core/pipes/translate.pipe';
 import { marked } from 'marked';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 @Component({
   selector: 'app-reports',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslatePipe],
   templateUrl: './reports.component.html',
   styleUrls: ['./reports.component.scss']
 })

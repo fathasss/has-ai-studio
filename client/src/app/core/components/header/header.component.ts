@@ -3,13 +3,15 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { NavigationEnd, Router } from '@angular/router';
 import { OrchestratorService } from '../../../services/orchestrator.service';
 import { SocketService } from '../../../services/socket.service';
+import { I18nService, AppLang } from '../../services/i18n.service';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-header',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslatePipe],
   providers: [DatePipe],
   templateUrl: './header.component.html',
   styleUrls: ['./header.component.scss']
@@ -22,24 +24,37 @@ export class HeaderComponent implements OnInit, OnDestroy {
   currentTime: string = '';
   uptime: string = '00:00:00';
   tokenRate: string = '0';
+  currentLang: AppLang = 'tr';
   
   private clockTimer: any;
   private uptimeTimer: any;
   private sub: Subscription | null = null;
   private routerSub: Subscription | null = null;
+  private langSub: Subscription | null = null;
   private lastUptimeSeconds: number = 0;
 
   constructor(
     private router: Router, 
     private orchestratorService: OrchestratorService,
     private socketService: SocketService,
-    private datePipe: DatePipe
+    private datePipe: DatePipe,
+    public i18n: I18nService
   ) {
+    this.currentLang = this.i18n.currentLang;
     this.routerSub = this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe((event: any) => {
       this.updateTitle(event.urlAfterRedirects);
     });
+
+    this.langSub = this.i18n.lang$.subscribe((lang) => {
+      this.currentLang = lang;
+      this.updateTitle(this.router.url);
+    });
+  }
+
+  public switchLanguage(lang: AppLang): void {
+    this.i18n.setLanguage(lang);
   }
 
   ngOnInit() {
@@ -81,14 +96,14 @@ export class HeaderComponent implements OnInit, OnDestroy {
   }
 
   updateTitle(url: string) {
-    if (url.includes('active-projects')) this.pageTitle = 'AI Development Office';
-    else if (url.includes('dashboard')) this.pageTitle = 'Mission Hub (TeamLead)';
-    else if (url.includes('projects')) this.pageTitle = 'Project Archive';
-    else if (url.includes('reports')) this.pageTitle = 'Team Reports';
-    else if (url.includes('execution-traces')) this.pageTitle = 'Logs & Traces';
-    else if (url.includes('exceptions')) this.pageTitle = 'Exception Handle';
-    else if (url.includes('settings')) this.pageTitle = 'Factory Configuration';
-    else this.pageTitle = 'AI Development Office';
+    if (url.includes('active-projects')) this.pageTitle = this.i18n.t('header.officeTitle');
+    else if (url.includes('dashboard')) this.pageTitle = this.i18n.t('header.missionHubTitle');
+    else if (url.includes('projects')) this.pageTitle = this.i18n.t('header.projectsTitle');
+    else if (url.includes('reports')) this.pageTitle = this.i18n.t('header.reportsTitle');
+    else if (url.includes('execution-traces')) this.pageTitle = this.i18n.t('header.tracesTitle');
+    else if (url.includes('exceptions')) this.pageTitle = this.i18n.t('header.exceptionsTitle');
+    else if (url.includes('settings')) this.pageTitle = this.i18n.t('header.settingsTitle');
+    else this.pageTitle = this.i18n.t('header.officeTitle');
   }
 
   updateClock() {
@@ -100,5 +115,6 @@ export class HeaderComponent implements OnInit, OnDestroy {
     if (this.uptimeTimer) clearInterval(this.uptimeTimer);
     if (this.sub) this.sub.unsubscribe();
     if (this.routerSub) this.routerSub.unsubscribe();
+    if (this.langSub) this.langSub.unsubscribe();
   }
 }

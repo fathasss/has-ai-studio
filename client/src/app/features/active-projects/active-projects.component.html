@@ -20,8 +20,8 @@
           <button type="button" class="mission-btn" (click)="toggleMissionDropdown()" [class.active]="missionDropdownOpen" title="Mevcut Görevi Değiştir">
             <span class="mission-icon">🎯</span>
             <div class="mission-text-box">
-              <span class="mission-tag">GÖREV:</span>
-              <span class="mission-current-name">{{ activeSprint ? activeSprint : 'Tüm Ajanlar Serbest' }}</span>
+              <span class="mission-tag">{{ 'office.selectMission' | translate }}</span>
+              <span class="mission-current-name">{{ activeSprint ? activeSprint : ('office.allAgentsFree' | translate) }}</span>
             </div>
             <span class="mission-chevron" [class.open]="missionDropdownOpen">▼</span>
           </button>
@@ -325,19 +325,19 @@
     <div class="detail-traces" *ngIf="selectedAgent">
       <div class="trace-tabs">
         <button [class.active]="activeTab === 'WORK'" (click)="activeTab = 'WORK'">
-          <span class="tab-icon">📋</span> Görevler
+          <span class="tab-icon">📋</span> {{ 'office.drawerWork' | translate }}
         </button>
         <button [class.active]="activeTab === 'CHAT'" (click)="activeTab = 'CHAT'">
-          <span class="tab-icon">💬</span> Sohbetler
+          <span class="tab-icon">💬</span> {{ 'office.drawerChat' | translate }}
         </button>
         <button [class.active]="activeTab === 'MEMORY'" (click)="activeTab = 'MEMORY'">
-          <span class="tab-icon">🧠</span> Proje Hafızası
+          <span class="tab-icon">🧠</span> {{ 'office.drawerMemory' | translate }}
         </button>
         <button [class.active]="activeTab === 'TESTS'" (click)="activeTab = 'TESTS'">
-          <span class="tab-icon">🧪</span> Canlı Testler <span class="tab-count" *ngIf="liveTestSteps.length > 0">({{ liveTestSteps.length }})</span>
+          <span class="tab-icon">🧪</span> {{ 'office.drawerTests' | translate }} <span class="tab-count" *ngIf="liveTestSteps.length > 0">({{ liveTestSteps.length }})</span>
         </button>
         <button [class.active]="activeTab === 'LLM'" (click)="activeTab = 'LLM'">
-          <span class="tab-icon">⚙️</span> AI Modeli
+          <span class="tab-icon">⚙️</span> {{ 'office.drawerLLM' | translate }}
         </button>
       </div>
 

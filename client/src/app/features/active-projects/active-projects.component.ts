@@ -5,6 +5,8 @@ import { ActivatedRoute } from '@angular/router';
 import { OrchestratorService, AgentLLMConfig, LLMRoutingConfig, LLMPreset, SprintPhase, SprintPhasesResponse } from '../../services/orchestrator.service';
 
 import { SocketService, LiveTestStep } from '../../services/socket.service';
+import { I18nService } from '../../core/services/i18n.service';
+import { TranslatePipe } from '../../core/pipes/translate.pipe';
 import { Subscription, forkJoin } from 'rxjs';
 import { Office3DScene, Agent3DData, ScreenOverlayPos } from './office-3d.scene';
 
@@ -47,7 +49,7 @@ export interface RendezvousSpot {
 @Component({
   selector: 'app-active-projects',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslatePipe],
   templateUrl: './active-projects.component.html',
   styleUrls: ['./active-projects.component.scss']
 })
@@ -361,7 +363,7 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
   ];
 
   // Solo greetings and quotes when clicked
-  private readonly agentGreetings: Record<string, string> = {
+  private readonly agentGreetingsTr: Record<string, string> = {
     TeamLead: "Sprint hedeflerimiz net! Ekibin mimari bütünlüğünü ve hızını koordine ediyorum.",
     DevOps: "CI/CD boru hatları ve konteynerler hazır. Dağıtımlar sıfır kesintiyle gerçekleşiyor!",
     Database: "Veritabanı şeması ve indeksler optimize edildi. Veri bütünlüğü en üst düzeyde.",
@@ -372,11 +374,29 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
     Documenter: "OpenAPI kontratları, Mermaid mimari diyagramları ve rehberler eksiksiz güncel."
   };
 
+  private readonly agentGreetingsEn: Record<string, string> = {
+    TeamLead: "Sprint objectives are clear! Coordinating architectural integrity and team velocity.",
+    DevOps: "CI/CD pipelines and containers ready. Deployments running with zero downtime!",
+    Database: "Database schemas and indices optimized. Data integrity and ACID at peak performance.",
+    Frontend: "Modern, responsive UI components styled and loaded. CSS and TypeScript in top shape!",
+    Backend: "High-performance REST/gRPC endpoints active. Resilient and fast microservice architecture.",
+    Security: "Zero vulnerability policy active. Inputs sanitized, cyber risks neutralized.",
+    Tester: "Edge cases and end-to-end tests prepared. Not a single bug escapes verification!",
+    Documenter: "OpenAPI contracts, Mermaid architecture diagrams, and dev guides up to date."
+  };
+
+  public getAgentGreeting(agentId: string): string {
+    const isEn = this.i18n.currentLang === 'en';
+    const dict = isEn ? this.agentGreetingsEn : this.agentGreetingsTr;
+    return dict[agentId] || (isEn ? "Ready and awaiting mission assignments!" : "Hazırım, görevimi bekliyorum!");
+  }
+
   constructor(
     private orchestratorService: OrchestratorService,
     private socketService: SocketService,
     private cdr: ChangeDetectorRef,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    public i18n: I18nService
   ) {}
 
   ngOnInit(): void {
@@ -654,7 +674,7 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
 
     const status = this.activeSprint ? this.getJobStatus(agent.id) : 'IDLE';
     if (status !== 'WORKING') {
-      const greeting = this.agentGreetings[agent.id] || "Hazırım, görevimi bekliyorum!";
+      const greeting = this.getAgentGreeting(agent.id);
       agent.idleMessage = greeting;
       this.sync3DScene();
 
@@ -1010,24 +1030,32 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
     this.dialogueTimers.forEach(t => clearTimeout(t));
     this.dialogueTimers = [];
 
+    const isEn = this.i18n.currentLang === 'en';
     const fallbackTurns = fallbackScript.turns || [];
+    const defaultTurn1 = isEn ? "The office vibe today is energetic, all systems ready!" : "Ofisin havası bugün çok dinamik, hazırlıklar tam gaz!";
+    const defaultTurn2 = isEn ? "Exactly, we will keep the architecture running like clockwork." : "Aynen öyle, mimariyi tam bir saat gibi işleteceğiz.";
+    const defaultTurn3 = isEn ? "Great teamwork! Let us let the code speak for itself." : "Süper uyum! Kodlarımızı konuşturalım o zaman.";
+
     const speaker1 = agents[0];
     const partner = agents[1];
 
     // Step 1: First speaker starts dialogue dynamically via LLM (/chat/idle)
-    this.orchestratorService.generateIdleChat(speaker1.id, spot.name, partner.id).subscribe({
+    this.orchestratorService.generateIdleChat(speaker1.id, spot.name, partner.id, undefined, this.i18n.currentLang).subscribe({
       next: (res1) => {
-        const text1 = (res1 && res1.response) ? res1.response : (fallbackTurns[0]?.text || "Ofisin havası bugün çok dinamik, hazırlıklar tam gaz!");
+        const text1 = (res1 && res1.response) ? res1.response : (fallbackTurns[0]?.text || defaultTurn1);
         this.deliverTurn1(agents, spot, text1, fallbackTurns);
       },
       error: () => {
-        const text1 = fallbackTurns[0]?.text || "Ofisin havası bugün çok dinamik, hazırlıklar tam gaz!";
+        const text1 = fallbackTurns[0]?.text || defaultTurn1;
         this.deliverTurn1(agents, spot, text1, fallbackTurns);
       }
     });
   }
 
   private deliverTurn1(agents: AgentConfig[], spot: RendezvousSpot, text1: string, fallbackTurns: Array<{ text: string }>): void {
+    const isEn = this.i18n.currentLang === 'en';
+    const defaultTurn2 = isEn ? "Exactly, we will keep the architecture running like clockwork." : "Aynen öyle, mimariyi tam bir saat gibi işleteceğiz.";
+
     const speaker1 = agents[0];
     speaker1.idleMessage = text1;
     this.recordBanterTrace(speaker1, spot.name, text1);
@@ -1043,13 +1071,13 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
       const speaker2 = agents[1];
 
       // LLM call for speaker2 answering speaker1's dynamic words
-      this.orchestratorService.generateIdleChat(speaker2.id, spot.name, speaker1.id, text1).subscribe({
+      this.orchestratorService.generateIdleChat(speaker2.id, spot.name, speaker1.id, text1, this.i18n.currentLang).subscribe({
         next: (res2) => {
-          const text2 = (res2 && res2.response) ? res2.response : (fallbackTurns[1]?.text || "Aynen öyle, mimariyi tam bir saat gibi işleteceğiz.");
+          const text2 = (res2 && res2.response) ? res2.response : (fallbackTurns[1]?.text || defaultTurn2);
           this.deliverTurn2(agents, spot, text2, fallbackTurns);
         },
         error: () => {
-          const text2 = fallbackTurns[1]?.text || "Aynen öyle, mimariyi tam bir saat gibi işleteceğiz.";
+          const text2 = fallbackTurns[1]?.text || defaultTurn2;
           this.deliverTurn2(agents, spot, text2, fallbackTurns);
         }
       });
@@ -1059,6 +1087,9 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   private deliverTurn2(agents: AgentConfig[], spot: RendezvousSpot, text2: string, fallbackTurns: Array<{ text: string }>): void {
+    const isEn = this.i18n.currentLang === 'en';
+    const defaultTurn3 = isEn ? "Great teamwork! Let us let the code speak for itself." : "Süper uyum! Kodlarımızı konuşturalım o zaman.";
+
     const speaker2 = agents[1];
     speaker2.idleMessage = text2;
     this.recordBanterTrace(speaker2, spot.name, text2);
@@ -1074,13 +1105,13 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
       speaker2.idleMessage = undefined;
 
       // LLM call for speaker3 answering speaker2's dynamic words
-      this.orchestratorService.generateIdleChat(speaker3.id, spot.name, speaker2.id, text2).subscribe({
+      this.orchestratorService.generateIdleChat(speaker3.id, spot.name, speaker2.id, text2, this.i18n.currentLang).subscribe({
         next: (res3) => {
-          const text3 = (res3 && res3.response) ? res3.response : (fallbackTurns[2]?.text || "Süper uyum! Kodlarımızı konuşturalım o zaman.");
+          const text3 = (res3 && res3.response) ? res3.response : (fallbackTurns[2]?.text || defaultTurn3);
           this.deliverTurn3(agents, spot, speaker3, text3);
         },
         error: () => {
-          const text3 = fallbackTurns[2]?.text || "Süper uyum! Kodlarımızı konuşturalım o zaman.";
+          const text3 = fallbackTurns[2]?.text || defaultTurn3;
           this.deliverTurn3(agents, spot, speaker3, text3);
         }
       });
@@ -1120,7 +1151,7 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
 
   private fetchOrGenerateSoloThought(agent: AgentConfig, zone: string): void {
     // If backend /chat/idle is available, call it; otherwise pick a witty remark
-    this.orchestratorService.generateIdleChat(agent.id, zone).subscribe({
+    this.orchestratorService.generateIdleChat(agent.id, zone, undefined, undefined, this.i18n.currentLang).subscribe({
       next: (res) => {
         if (res && res.response) {
           agent.idleMessage = res.response;
@@ -1138,7 +1169,7 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
       },
       error: () => {
         // Fallback witty remark
-        const fallback = this.agentGreetings[agent.id] || "Sıradaki faz için mimari hazır!";
+        const fallback = this.getAgentGreeting(agent.id);
         agent.idleMessage = fallback;
         this.recordBanterTrace(agent, zone, fallback);
         this.sync3DScene();
@@ -1342,11 +1373,12 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   getPhaseStatusLabel(status: string): string {
+    const isEn = this.i18n.currentLang === 'en';
     switch (status) {
-      case 'IN_PROGRESS': return '⚡ ÇALIŞIYOR';
-      case 'COMPLETED': return '✅ TAMAMLANDI';
-      case 'FAILED': return '❌ DÜZELTME';
-      default: return '⏳ BEKLİYOR';
+      case 'IN_PROGRESS': return isEn ? '⚡ WORKING' : '⚡ ÇALIŞIYOR';
+      case 'COMPLETED': return isEn ? '✅ COMPLETED' : '✅ TAMAMLANDI';
+      case 'FAILED': return isEn ? '❌ REVISION' : '❌ DÜZELTME';
+      default: return isEn ? '⏳ PENDING' : '⏳ BEKLİYOR';
     }
   }
 

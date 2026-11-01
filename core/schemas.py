@@ -11,12 +11,14 @@ class LLMJobRequest(BaseModel):
 class ChatRequest(BaseModel):
     history: list
     params: Optional[dict] = {}
+    lang: Optional[str] = "tr"
 
 class IdleChatRequest(BaseModel):
     agent: str
     location: str
     partner: Optional[str] = None
     message_to_reply: Optional[str] = None
+    lang: Optional[str] = "tr"
 
 class ExecuteRequest(BaseModel):
     sprint_id: str

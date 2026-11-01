@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OrchestratorService } from '../../services/orchestrator.service';
+import { TranslatePipe } from '../../core/pipes/translate.pipe';
 import hljs from 'highlight.js';
 
 export interface FileNode {
@@ -15,7 +16,7 @@ export interface FileNode {
 @Component({
   selector: 'app-projects',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslatePipe],
   templateUrl: './projects.component.html',
   styleUrls: ['./projects.component.scss']
 })
