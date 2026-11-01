@@ -54,6 +54,11 @@ Inspect the TeamLead's stack and use the corresponding framework:
 - Scan for unhandled placeholders: `TODO`, `FIXME`, `pass` (as sole function body), `...` (Ellipsis), `NotImplementedError`, `throw new NotImplementedException()`.
 - If an unimplemented placeholder is found that cannot be trivially fixed, mark as `FAILED`.
 
+## 5. Realtime Synthetic User Journey & API Contract Testing
+- Simulate multi-step end-to-end user journeys: User Registration -> Login -> Token/Session Authentication -> Business Operations (Create/Read/Update/Delete).
+- Verify Frontend-to-Backend contract consistency: ensure API URLs, HTTP methods (GET/POST/PUT/DELETE), and payload DTO fields expected by the UI match the backend routes exactly.
+- If the live backend fails, crashes with 500, or returns unexpected status codes, record the exact error and mark `### RESULT: FAILED`.
+
 ---
 
 # OUTPUT FORMAT (MANDATORY)

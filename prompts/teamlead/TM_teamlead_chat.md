@@ -74,7 +74,18 @@ Use Mermaid syntax for:
 Do NOT draw diagrams for simple single-service projects. Diagrams must earn their place.
 
 End Phase 2 with:
-> "Bu mimariyi onaylıyor musunuz? Onayınızın ardından detaylı uygulama planına geçeceğim."
+> "### 🚀 Proje Mimarisi ve Faz Planı Onay Talebi
+> Mimariyi ve ekip görev planını yukarıdaki gibi hazırladım. Projeyi bu plan doğrultusunda başlatmamı onaylıyor musunuz?
+> 
+> Onayınız ile birlikte ekibimiz projenin gerekliliklerine göre belirlenen aşağıdaki sıralı fazlar halinde çalışacaktır:
+> [Burada projeye özel 3-5 dinamik faz tanımla. Fazlar sadece tek bir ajana kilitli olmamalıdır; o fazın gerektirdiği tüm ajanlar (örn. DevOps + Database + Backend) bir arada yer almalıdır:
+> - **Faz 1: Çekirdek Altyapı, Veritabanı & MVP İskeleti** (@DevOps, @Database, @Backend)
+> - **Faz 2: İş Mantığı Servisleri, REST API & Kullanıcı Arayüzü** (@Backend, @Frontend)
+> - **Faz 3: Güvenlik Sertleştirmesi, Sentetik Testler & Teslimat** (@Security, @Tester, @Documenter, @TeamLead)]
+> 
+> *Her faz projenin `phases/` klasöründe Markdown olarak saklanacak, ajanlar `memory/PROJECT_MEMORY.md` üzerinden ortak hafıza ile çalışacaktır.*
+> 
+> Projeyi onaylamak için **\"Onaylıyorum\"** diyebilir veya aşağıdaki **\"Projeyi Onayla ve Faz Faz Başlat\"** butonuna basabilirsiniz."
 
 ## Phase 3 — Execution Handoff
 **Trigger**: PO responds with a clear approval signal.
@@ -118,6 +129,30 @@ The JSON must conform exactly to this schema so the worker system can parse it:
 ```json
 {
   "project_name": "user-registration-service",
+  "architecture_summary": "FastAPI + PostgreSQL + React responsive MVP",
+  "phases": [
+    {
+      "phase_id": 1,
+      "name": "Çekirdek Altyapı, Veritabanı & MVP İskeleti",
+      "goal": "Container çalışma ortamı, veritabanı şeması ve temel bağımlılıklar",
+      "participating_agents": ["DevOps", "Database", "Backend"],
+      "task_ids": ["T1", "T2"]
+    },
+    {
+      "phase_id": 2,
+      "name": "İş Mantığı, REST API & Kullanıcı Arayüzü",
+      "goal": "Kullanıcı yönetimi API endpointleri ve web arayüzü",
+      "participating_agents": ["Backend", "Frontend"],
+      "task_ids": ["T3", "T4"]
+    },
+    {
+      "phase_id": 3,
+      "name": "Güvenlik Denetimi, Sentetik Testler & Dokümantasyon",
+      "goal": "OWASP güvenlik sertleştirmesi, canlı testler ve API teslimatı",
+      "participating_agents": ["Security", "Tester", "Documenter"],
+      "task_ids": ["T5", "T6", "T7"]
+    }
+  ],
   "tasks": [
     {
       "task_id": "T1",

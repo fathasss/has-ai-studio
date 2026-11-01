@@ -30,6 +30,17 @@ export interface SystemUpdate {
   timestamp: string;
 }
 
+export interface LiveTestStep {
+  sprint_id: string;
+  step: number;
+  total: number;
+  name: string;
+  status: 'PASSED' | 'FAILED';
+  duration_ms: number;
+  details?: string;
+  timestamp: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -42,6 +53,9 @@ export class SocketService {
   public metricUpdate$ = new Subject<any>();
   public systemUpdate$ = new Subject<SystemUpdate>();
   public modelPullProgress$ = new Subject<PullProgress>();
+  public liveTestStep$ = new Subject<LiveTestStep>();
+  public llmRoutingUpdate$ = new Subject<any>();
+  public phaseUpdate$ = new Subject<any>();
 
   // Pull State Persistence
   public pullState = {
@@ -84,6 +98,18 @@ export class SocketService {
     this.socket.on('model_pull_progress', (data: PullProgress) => {
       this.updatePullState(data);
       this.modelPullProgress$.next(data);
+    });
+
+    this.socket.on('test_live_step', (data: LiveTestStep) => {
+      this.liveTestStep$.next(data);
+    });
+
+    this.socket.on('llm_routing_updated', (data: any) => {
+      this.llmRoutingUpdate$.next(data);
+    });
+
+    this.socket.on('phase_update', (data: any) => {
+      this.phaseUpdate$.next(data);
     });
   }
 

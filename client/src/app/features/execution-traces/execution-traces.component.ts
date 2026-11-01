@@ -25,7 +25,7 @@ export class ExecutionTracesComponent implements OnInit {
     'Security':   { color: '#a855f7', avatar: 'assets/avatars/security.png', role: 'CISO / Security Guru' },
     'Tester':     { color: '#f43f5e', avatar: 'assets/avatars/tester.png', role: 'QA Lead Architect' },
     'Documenter': { color: '#38bdf8', avatar: 'assets/avatars/teamlead.png', role: 'Lead Technical Writer' },
-    '_default':   { color: '#71717a', avatar: 'assets/has_ai_studio_logo.png', role: 'Senior Engineer' }
+    '_default':   { color: '#71717a', avatar: 'assets/logo.png', role: 'Senior Engineer' }
   };
 
   constructor(private orchestratorService: OrchestratorService) {}
@@ -60,11 +60,11 @@ export class ExecutionTracesComponent implements OnInit {
   }
 
   get systemTraces() {
-    return this.traces.filter(t => t.sprint_id !== 'idle');
+    return this.traces.filter(t => t.sprint_id && t.sprint_id !== 'idle');
   }
 
   get agentTraces() {
-    return this.traces.filter(t => t.sprint_id === 'idle');
+    return this.traces.filter(t => !t.sprint_id || t.sprint_id === 'idle' || t.job_id === 'idle');
   }
 
   get groupedAgentTraces() {

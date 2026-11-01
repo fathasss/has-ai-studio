@@ -1,10 +1,11 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SocketService } from '../../../services/socket.service';
+import { SocketService, SystemUpdate } from '../../../services/socket.service';
 import { Subscription } from 'rxjs';
 
 interface AgentStatus {
   name: string;
+  role: string;
   status: 'WORKING' | 'AVAIL' | 'DOWN';
 }
 
@@ -17,14 +18,14 @@ interface AgentStatus {
 })
 export class RightPanelComponent implements OnInit, OnDestroy {
   agents: AgentStatus[] = [
-    { name: 'TeamLead', status: 'DOWN' },
-    { name: 'DevOps', status: 'DOWN' },
-    { name: 'Database', status: 'DOWN' },
-    { name: 'Backend', status: 'DOWN' },
-    { name: 'Frontend', status: 'DOWN' },
-    { name: 'Security', status: 'DOWN' },
-    { name: 'Tester', status: 'DOWN' },
-    { name: 'Documenter', status: 'DOWN' }
+    { name: 'TeamLead',   role: 'Solution Architect', status: 'AVAIL' },
+    { name: 'DevOps',     role: 'Infrastructure Eng', status: 'AVAIL' },
+    { name: 'Database',   role: 'Data Architect',     status: 'AVAIL' },
+    { name: 'Backend',    role: 'API Engineer',       status: 'AVAIL' },
+    { name: 'Frontend',   role: 'UI/UX Developer',    status: 'AVAIL' },
+    { name: 'Security',   role: 'Security Auditor',   status: 'AVAIL' },
+    { name: 'Tester',     role: 'Synthetic QA',       status: 'AVAIL' },
+    { name: 'Documenter', role: 'Technical Writer',   status: 'AVAIL' }
   ];
 
   private subJob: Subscription | undefined;
@@ -33,7 +34,7 @@ export class RightPanelComponent implements OnInit, OnDestroy {
   constructor(private socketService: SocketService) {}
 
   ngOnInit(): void {
-    // Listen for real-time orchestrator updates
+    // Listen for real-time job updates
     this.subJob = this.socketService.jobUpdate$.subscribe((update: any) => {
       const agentName = update.agent || update.agent_name;
       const rawStatus = update.status;
@@ -48,20 +49,15 @@ export class RightPanelComponent implements OnInit, OnDestroy {
       }
     });
 
-    // Listen for metrics loop system updates
-    this.subSystem = this.socketService.systemUpdate$.subscribe((update: any) => {
-      if (update && update.agent_states) {
-        this.agents.forEach(agent => {
-          const backendState = update.agent_states[agent.name];
-          if (backendState) {
-            if (backendState === 'WORKING' || backendState === 'PROCESSING' || backendState === 'RUNNING') {
-              agent.status = 'WORKING';
-            } else {
-              agent.status = 'AVAIL';
-            }
-          } else {
-            // If agent not in states, it's likely DOWN/Disconnected
-            agent.status = 'DOWN';
+    // Listen for system updates & agent states
+    this.subSystem = this.socketService.systemUpdate$.subscribe((sys: SystemUpdate) => {
+      if (sys && sys.agent_states) {
+        this.agents.forEach(a => {
+          const state = sys.agent_states[a.name];
+          if (state === 'WORKING' || state === 'PROCESSING') {
+            a.status = 'WORKING';
+          } else if (state === 'AVAIL' || state === 'IDLE') {
+            a.status = 'AVAIL';
           }
         });
       }

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { NavigationEnd, Router } from '@angular/router';
 import { OrchestratorService } from '../../../services/orchestrator.service';
@@ -15,7 +15,10 @@ import { Subscription } from 'rxjs';
   styleUrls: ['./header.component.scss']
 })
 export class HeaderComponent implements OnInit, OnDestroy {
-  pageTitle: string = 'Dashboard';
+  @Input() rightPanelOpen: boolean = true;
+  @Output() toggleRightPanel = new EventEmitter<void>();
+
+  pageTitle: string = 'AI Development Office';
   currentTime: string = '';
   uptime: string = '00:00:00';
   tokenRate: string = '0';
@@ -79,12 +82,13 @@ export class HeaderComponent implements OnInit, OnDestroy {
 
   updateTitle(url: string) {
     if (url.includes('active-projects')) this.pageTitle = 'AI Development Office';
+    else if (url.includes('dashboard')) this.pageTitle = 'Mission Hub (TeamLead)';
     else if (url.includes('projects')) this.pageTitle = 'Project Archive';
     else if (url.includes('reports')) this.pageTitle = 'Team Reports';
     else if (url.includes('execution-traces')) this.pageTitle = 'Logs & Traces';
     else if (url.includes('exceptions')) this.pageTitle = 'Exception Handle';
     else if (url.includes('settings')) this.pageTitle = 'Factory Configuration';
-    else this.pageTitle = 'Dashboard';
+    else this.pageTitle = 'AI Development Office';
   }
 
   updateClock() {

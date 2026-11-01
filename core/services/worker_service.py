@@ -21,6 +21,8 @@ from ..utils import (
     get_project_context, map_role, task_to_prompt
 )
 from ..prompts import load_prompt
+from .live_tester import inspect_build_and_syntax, run_live_synthetic_user_tests
+from .unified_llm import call_unified_llm_sync
 
 worker_id = str(uuid.uuid4())
 START_TIME = time.time()
@@ -270,6 +272,17 @@ The agent {agent} has completed the assigned task.
         config.logger.error(f"Failed to generate report for {agent}: {e}")
 
 
+def _get_priority(role: str) -> int:
+    if role == "DevOps":     return 1
+    if role == "Database":   return 2
+    if role == "Backend":    return 3
+    if role == "Frontend":   return 4
+    if role == "Security":   return 5
+    if role == "Tester":     return 6
+    if role == "Documenter": return 7
+    return 3
+
+
 def _submit_job(agent_name: str, sid: str, priority: int, prompt: str) -> bool:
     try:
         resp = requests.post(
@@ -281,6 +294,26 @@ def _submit_job(agent_name: str, sid: str, priority: int, prompt: str) -> bool:
     except Exception as e:
         config.logger.error(f"Failed to submit job for {agent_name}: {e}")
         return False
+
+def _emit_phase_tracking(sprint_id: str, phase_number: int, phase_name: str, agent: str, status: str, message: str):
+    """Notifies the Orchestrator and UI of phase progression with TeamLead tracking commentary."""
+    if not sprint_id:
+        return
+    try:
+        requests.post(
+            f"{config.ORCHESTRATOR_URL}/sprint/phase-update",
+            json={
+                "sprint_id": sprint_id,
+                "phase_number": phase_number,
+                "phase_name": phase_name,
+                "agent": agent,
+                "status": status,
+                "message": message
+            },
+            timeout=5
+        )
+    except Exception as e:
+        config.logger.warning(f"Failed to post phase update: {e}")
 
 
 AGENT_PROMPT_MAP = {
@@ -330,15 +363,19 @@ def llm_worker():
             sid        = job_data["sprint_id"]
             target_dir = f"apps/{sid}" if sid else "workspace"
 
-            model = config.TEAMLEAD_MODEL if agent == "TeamLead" else config.AGENT_MODEL
-            config.logger.info(f"[{jid}] {agent} starting on {model} (provider={config.LLM_PROVIDER}) for {sid}")
+            agent_cfg = config.get_agent_llm_config(agent, purpose="task")
+            provider = agent_cfg["provider"]
+            model = agent_cfg["model"]
+            url = agent_cfg["url"]
+            api_key = agent_cfg["apiKey"]
+            config.logger.info(f"[{jid}] {agent} starting on {provider}:{model} for {sid}")
 
             system_prompt = ""
             if agent in AGENT_PROMPT_MAP:
                 folder, key = AGENT_PROMPT_MAP[agent]
                 system_prompt = load_prompt(folder, key, "")
 
-            project_context = get_project_context(target_dir, sid)
+            project_context = get_project_context(target_dir, sid, agent=agent)
             context_header  = f"# PROJECT CONTEXT (MANDATORY READ)\n{project_context}\n\n"
             user_content = f"{context_header}TASK:\n{prompt}"
 
@@ -357,82 +394,39 @@ def llm_worker():
             max_attempts = max(1, 1 + getattr(config, "LLM_MAX_RETRIES", 2))
             for attempt in range(1, max_attempts + 1):
                 try:
-                    headers = {}
-                    provider = config.LLM_PROVIDER
-                    num_ctx = getattr(config, "LLM_NUM_CTX", 8192)
-
-                    if provider == "openai":
-                        endpoint = config.build_openai_url(config.OLLAMA_URL, "/v1/chat/completions")
-                        if config.LLM_API_KEY:
-                            headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
-                        headers["Content-Type"] = "application/json"
-                        payload = {
-                            "model": model,
-                            "messages": messages,
-                            "stream": False,
-                            "temperature": 0.2,
-                        }
-                    else:
-                        endpoint = f"{config.OLLAMA_URL.rstrip('/')}/api/chat"
-                        if provider == "ollama-cloud" and config.LLM_API_KEY:
-                            headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
-                        payload = {
-                            "model": model,
-                            "messages": messages,
-                            "stream": False,
-                            "options": {
-                                "num_ctx": num_ctx,
-                                "temperature": 0.2,
-                            },
-                        }
-
-                    with httpx.Client(timeout=config.LLM_TIMEOUT) as client:
-                        llm_http_resp = client.post(endpoint, headers=headers, json=payload)
-
-                        if llm_http_resp.status_code != 200:
-                            resp_text = f"Error: LLM returned HTTP {llm_http_resp.status_code}: {llm_http_resp.text[:500]}"
-                            config.logger.warning(f"[{jid}] Attempt {attempt}/{max_attempts} failed: {resp_text}")
-                            if llm_http_resp.status_code >= 500 and attempt < max_attempts:
-                                time.sleep(2 * attempt)
-                                continue
-                            break
-
-                        data = llm_http_resp.json()
-                        if provider == "openai":
-                            choices = data.get("choices", [])
-                            resp_text = choices[0].get("message", {}).get("content", "") if choices else ""
-                            usage = data.get("usage") or {}
-                            prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
-                            completion_tokens = int(usage.get("completion_tokens", 0) or 0)
-                            total_tokens = int(usage.get("total_tokens", 0) or (prompt_tokens + completion_tokens))
-                        else:
-                            resp_text = data.get("message", {}).get("content", "")
-                            prompt_tokens = int(data.get("prompt_eval_count", 0) or 0)
-                            completion_tokens = int(data.get("eval_count", 0) or 0)
-                            total_tokens = prompt_tokens + completion_tokens
-
-                        if not resp_text or not resp_text.strip():
-                            resp_text = f"Error: LLM returned empty response. Provider={provider}, Model={model}"
-                            config.logger.warning(f"[{jid}] Attempt {attempt}/{max_attempts}: {resp_text}")
-                            if attempt < max_attempts:
-                                time.sleep(2 * attempt)
-                                continue
-                            break
-
-                        if total_tokens == 0:
-                            prompt_tokens = int(len(user_content) / 4)
-                            completion_tokens = int(len(resp_text) / 4)
-                            total_tokens = prompt_tokens + completion_tokens
-
-                        llm_ok = True
+                    resp_text, prompt_tokens, completion_tokens = call_unified_llm_sync(
+                        provider=provider,
+                        model=model,
+                        messages=messages,
+                        url=url,
+                        api_key=api_key,
+                        timeout=config.LLM_TIMEOUT,
+                        allow_fallback=True
+                    )
+                    total_tokens = prompt_tokens + completion_tokens
+                    if not resp_text or not resp_text.strip():
+                        resp_text = f"Error: LLM returned empty response. Provider={provider}, Model={model}"
+                        config.logger.warning(f"[{jid}] Attempt {attempt}/{max_attempts}: {resp_text}")
+                        if attempt < max_attempts:
+                            time.sleep(2 * attempt)
+                            continue
                         break
 
+                    if total_tokens == 0:
+                        prompt_tokens = int(len(user_content) / 4)
+                        completion_tokens = int(len(resp_text) / 4)
+                        total_tokens = prompt_tokens + completion_tokens
+
+                    llm_ok = True
+                    break
+
                 except Exception as e:
-                    resp_text = f"Error: {str(e)}"
-                    config.logger.warning(f"[{jid}] Attempt {attempt}/{max_attempts} exception: {e}")
+                    resp_text = f"Error: {e}"
+                    config.logger.warning(f"[{jid}] Attempt {attempt}/{max_attempts} failed: {resp_text}")
                     if attempt < max_attempts:
                         time.sleep(2 * attempt)
                         continue
+                    break
 
             duration = (time.time() - start_t) * 1000
             trace_status = "SUCCESS" if llm_ok else "FAILED"
@@ -485,6 +479,15 @@ def llm_worker():
                 config.logger.info(f"[{jid}] Extracted {num_extracted} files for {sid}")
 
             generate_agent_report(agent, sid, jid, prompt, resp_text, duration)
+            try:
+                extracted_files = re.findall(r"### FILE:\s*([^\n]+)", resp_text) + re.findall(r"\[TARGET FILE\]:\s*([^\n]+)", prompt)
+                extracted_files = list(dict.fromkeys(f.strip() for f in extracted_files if f.strip()))
+                from .phase_service import PhaseService
+                from .memory_service import MemoryService
+                PhaseService.record_agent_task_execution(sid, agent, target_dir, prompt, resp_text, extracted_files)
+                MemoryService.update_agent_memory(sid, agent, target_dir, prompt, resp_text, extracted_files)
+            except Exception as mem_err:
+                config.logger.warning(f"Error updating phase/memory for {sid}: {mem_err}")
             handle_recursive_triggers(agent, resp_text, sid, target_dir)
 
         except Exception as e:
@@ -521,35 +524,31 @@ def handle_recursive_triggers(agent: str, resp: str, sid: str, target_dir: str):
         plan_roles = set(t["_mapped_role"] for t in normalized_tasks)
         config.logger.info(f"Plan roles for {sid}: {plan_roles}")
 
-        devops_tasks   = [t for t in normalized_tasks if t["_mapped_role"] == "DevOps"]
-        db_tasks       = [t for t in normalized_tasks if t["_mapped_role"] == "Database"]
-        backend_tasks  = [t for t in normalized_tasks if t["_mapped_role"] == "Backend"]
-        frontend_tasks = [t for t in normalized_tasks if t["_mapped_role"] == "Frontend"]
+        from .phase_service import PhaseService
+        structured_phases = PhaseService.generate_project_phases(sid, plan, target_dir)
+        p1 = structured_phases[0] if structured_phases else None
 
-        if devops_tasks:
-            config.logger.info(f"Phased Trigger: Starting Phase 1 (DevOps) with {len(devops_tasks)} task(s) for {sid}")
-            for t in devops_tasks:
-                _submit_job("DevOps", sid, 1, task_to_prompt(t))
-        elif db_tasks:
-            config.logger.info(f"Phased Trigger: Starting Phase 2 (Database) with {len(db_tasks)} task(s) for {sid}")
-            for t in db_tasks:
-                _submit_job("Database", sid, 2, task_to_prompt(t))
-        elif backend_tasks:
-            config.logger.info(f"Phased Trigger: Starting Phase 3 (Backend) with {len(backend_tasks)} task(s) for {sid}")
-            for t in backend_tasks:
-                _submit_job("Backend", sid, 3, task_to_prompt(t))
-        elif frontend_tasks:
-            config.logger.info(f"Phased Trigger: Starting Phase 4 (Frontend) with {len(frontend_tasks)} task(s) for {sid}")
-            for t in frontend_tasks:
-                _submit_job("Frontend", sid, 4, task_to_prompt(t))
+        if p1 and p1.get("tasks"):
+            p1_agents = ", ".join(f"@{a}" for a in p1.get("participating_agents", []))
+            config.logger.info(f"Phased Trigger: Starting Phase 1 ({p1['name']}) with {len(p1['tasks'])} task(s) for {sid}. Agents: {p1_agents}")
+            _emit_phase_tracking(
+                sid, 1, p1["name"],
+                p1["participating_agents"][0] if p1.get("participating_agents") else "TeamLead",
+                "IN_PROGRESS",
+                f"Faz 1 ({p1['name']}) başlatıldı. Görevli Ajanlar: {p1_agents}"
+            )
+            for t in p1["tasks"]:
+                r = map_role(t.get("role", "Developer"))
+                prio = _get_priority(r)
+                _submit_job(r, sid, prio, task_to_prompt(t))
         else:
-            # Fix plan targeting Security, Tester, or Documenter directly
+            # Fallback
             for t in normalized_tasks:
                 r = t["_mapped_role"]
                 prio = 5 if r == "Security" else (6 if r == "Tester" else 7)
                 _submit_job(r, sid, prio, task_to_prompt(t))
 
-    if agent == "DevOps":
+    if agent in ["DevOps", "Database", "Backend", "Frontend"]:
         db = SessionLocal()
         try:
             latest_plan_trace = db.query(LLMTrace).filter(
@@ -566,188 +565,81 @@ def handle_recursive_triggers(agent: str, resp: str, sid: str, target_dir: str):
 
             plan_cutoff = (latest_plan_trace.timestamp or datetime.utcnow()) - timedelta(seconds=2)
 
-            plan_db_tasks       = [t for t in plan["tasks"] if map_role(t.get("role", "")) == "Database"]
-            plan_backend_tasks  = [t for t in plan["tasks"] if map_role(t.get("role", "")) == "Backend"]
-            plan_frontend_tasks = [t for t in plan["tasks"] if map_role(t.get("role", "")) == "Frontend"]
-
-            active_devops = db.query(LLMJobRecord).filter(
-                LLMJobRecord.sprint_id == sid,
-                LLMJobRecord.agent_name == "DevOps",
-                LLMJobRecord.status.in_(["PENDING", "PROCESSING"])
-            ).count()
-
-            if active_devops == 0:
-                # 1. Sıradaki faz: Database
-                if plan_db_tasks:
-                    already_db = db.query(LLMJobRecord).filter(
-                        LLMJobRecord.sprint_id == sid,
-                        LLMJobRecord.created_at >= plan_cutoff,
-                        func.lower(LLMJobRecord.agent_name) == "database"
-                    ).count()
-                    if already_db == 0:
-                        config.logger.info(f"DevOps Complete for {sid}. Triggering Phase 2 (Database).")
-                        for t in plan_db_tasks:
-                            _submit_job("Database", sid, 2, task_to_prompt(t))
-                        return
-
-                # 2. Sıradaki faz: Backend
-                if plan_backend_tasks:
-                    already_be = db.query(LLMJobRecord).filter(
-                        LLMJobRecord.sprint_id == sid,
-                        LLMJobRecord.created_at >= plan_cutoff,
-                        func.lower(LLMJobRecord.agent_name) == "backend"
-                    ).count()
-                    if already_be == 0:
-                        config.logger.info(f"DevOps Complete for {sid}. Triggering Phase 3 (Backend).")
-                        for t in plan_backend_tasks:
-                            _submit_job("Backend", sid, 3, task_to_prompt(t))
-                        return
-
-                # 3. Sıradaki faz: Frontend (Sadece UI olan projelerde)
-                if plan_frontend_tasks:
-                    already_fe = db.query(LLMJobRecord).filter(
-                        LLMJobRecord.sprint_id == sid,
-                        LLMJobRecord.created_at >= plan_cutoff,
-                        func.lower(LLMJobRecord.agent_name) == "frontend"
-                    ).count()
-                    if already_fe == 0:
-                        config.logger.info(f"DevOps Complete for {sid}. Triggering Phase 4 (Frontend).")
-                        for t in plan_frontend_tasks:
-                            _submit_job("Frontend", sid, 4, task_to_prompt(t))
-                        return
-
-                # Hiç implementasyon görevi yoksa doğrudan QA'e geç
-                config.logger.info(f"No further implementation tasks in plan for {sid}. Proceeding to QA.")
-                _trigger_qa_phase(sid, plan, target_dir, db, plan_cutoff)
-        finally:
-            db.close()
-
-    if agent == "Database":
-        db = SessionLocal()
-        try:
-            latest_plan_trace = db.query(LLMTrace).filter(
-                LLMTrace.sprint_id == sid,
-                LLMTrace.agent_name == "TeamLead"
-            ).order_by(LLMTrace.timestamp.desc()).first()
-
-            if not latest_plan_trace:
-                return
-
-            plan = safe_json_loads(latest_plan_trace.response)
-            if not (plan and "tasks" in plan):
-                return
-
-            plan_cutoff = (latest_plan_trace.timestamp or datetime.utcnow()) - timedelta(seconds=2)
-            plan_backend_tasks  = [t for t in plan["tasks"] if map_role(t.get("role", "")) == "Backend"]
-            plan_frontend_tasks = [t for t in plan["tasks"] if map_role(t.get("role", "")) == "Frontend"]
-
-            active_db = db.query(LLMJobRecord).filter(
-                LLMJobRecord.sprint_id == sid,
-                LLMJobRecord.agent_name == "Database",
-                LLMJobRecord.status.in_(["PENDING", "PROCESSING"])
-            ).count()
-
-            if active_db == 0:
-                # Database bitti, sıradaki faz: Backend
-                if plan_backend_tasks:
-                    already_be = db.query(LLMJobRecord).filter(
-                        LLMJobRecord.sprint_id == sid,
-                        LLMJobRecord.created_at >= plan_cutoff,
-                        func.lower(LLMJobRecord.agent_name) == "backend"
-                    ).count()
-                    if already_be == 0:
-                        config.logger.info(f"Database Complete for {sid}. Triggering Phase 3 (Backend).")
-                        for t in plan_backend_tasks:
-                            _submit_job("Backend", sid, 3, task_to_prompt(t))
-                        return
-
-                # Backend yoksa ama Frontend varsa: Frontend
-                if plan_frontend_tasks:
-                    already_fe = db.query(LLMJobRecord).filter(
-                        LLMJobRecord.sprint_id == sid,
-                        LLMJobRecord.created_at >= plan_cutoff,
-                        func.lower(LLMJobRecord.agent_name) == "frontend"
-                    ).count()
-                    if already_fe == 0:
-                        config.logger.info(f"Database Complete for {sid}. Triggering Phase 4 (Frontend).")
-                        for t in plan_frontend_tasks:
-                            _submit_job("Frontend", sid, 4, task_to_prompt(t))
-                        return
-
-                # İkisi de yoksa QA fazına geç
-                _trigger_qa_phase(sid, plan, target_dir, db, plan_cutoff)
-        finally:
-            db.close()
-
-    if agent == "Backend":
-        db = SessionLocal()
-        try:
-            latest_plan_trace = db.query(LLMTrace).filter(
-                LLMTrace.sprint_id == sid,
-                LLMTrace.agent_name == "TeamLead"
-            ).order_by(LLMTrace.timestamp.desc()).first()
-
-            if not latest_plan_trace:
-                return
-
-            plan = safe_json_loads(latest_plan_trace.response)
-            if not (plan and "tasks" in plan):
-                return
-
-            plan_cutoff = (latest_plan_trace.timestamp or datetime.utcnow()) - timedelta(seconds=2)
-            plan_frontend_tasks = [t for t in plan["tasks"] if map_role(t.get("role", "")) == "Frontend"]
-
-            active_be = db.query(LLMJobRecord).filter(
-                LLMJobRecord.sprint_id == sid,
-                LLMJobRecord.agent_name == "Backend",
-                LLMJobRecord.status.in_(["PENDING", "PROCESSING"])
-            ).count()
-
-            if active_be == 0:
-                # Backend bitti! Sırada Frontend varsa, Backend handover verilerini alarak Frontend başlar.
-                if plan_frontend_tasks:
-                    already_fe = db.query(LLMJobRecord).filter(
-                        LLMJobRecord.sprint_id == sid,
-                        LLMJobRecord.created_at >= plan_cutoff,
-                        func.lower(LLMJobRecord.agent_name) == "frontend"
-                    ).count()
-                    if already_fe == 0:
-                        config.logger.info(f"Backend Phase Complete for {sid}. Sequentially triggering Phase 4 (Frontend).")
-                        for t in plan_frontend_tasks:
-                            _submit_job("Frontend", sid, 4, task_to_prompt(t))
-                        return
-
-                # Frontend yoksa (salt API/CLI/servis projesi) doğrudan QA fazına geç
-                _trigger_qa_phase(sid, plan, target_dir, db, plan_cutoff)
-        finally:
-            db.close()
-
-    if agent == "Frontend":
-        db = SessionLocal()
-        try:
-            latest_plan_trace = db.query(LLMTrace).filter(
-                LLMTrace.sprint_id == sid,
-                LLMTrace.agent_name == "TeamLead"
-            ).order_by(LLMTrace.timestamp.desc()).first()
-
-            plan_cutoff = (
-                (latest_plan_trace.timestamp - timedelta(seconds=2))
-                if (latest_plan_trace and latest_plan_trace.timestamp)
-                else datetime.min
-            )
-
-            # Tüm ön fazların (DevOps, Database, Backend, Frontend) işleri bitmiş mi kontrol et
+            # Check if other agents in current milestone are still actively working
             active_impl = db.query(LLMJobRecord).filter(
                 LLMJobRecord.sprint_id == sid,
                 LLMJobRecord.agent_name.in_(["DevOps", "Database", "Backend", "Frontend"]),
                 LLMJobRecord.status.in_(["PENDING", "PROCESSING"])
             ).count()
 
-            if active_impl == 0:
-                plan_data = safe_json_loads(latest_plan_trace.response) if latest_plan_trace else None
-                _trigger_qa_phase(sid, plan_data, target_dir, db, plan_cutoff)
+            if active_impl > 0:
+                config.logger.info(f"Agent {agent} finished, but {active_impl} implementation job(s) still active for {sid}. Waiting.")
+                return
+
+            # All active implementation jobs for the current phase are done!
+            from .phase_service import PhaseService
+            summary = PhaseService.get_phase_status_summary(sid, target_dir, db)
+
+            if summary and summary.get("phases"):
+                phases = summary["phases"]
+                next_phase = None
+                for p in phases:
+                    p_tasks = p.get("tasks", [])
+                    if not p_tasks:
+                        continue
+                    # Check if jobs for this phase have been submitted yet
+                    p_agents = p.get("participating_agents", [])
+                    jobs_for_phase = db.query(LLMJobRecord).filter(
+                        LLMJobRecord.sprint_id == sid,
+                        LLMJobRecord.created_at >= plan_cutoff,
+                        LLMJobRecord.agent_name.in_(p_agents)
+                    ).all()
+
+                    if len(jobs_for_phase) < len(p_tasks):
+                        next_phase = p
+                        break
+
+                if next_phase:
+                    p_num = next_phase["phase_id"]
+                    p_name = next_phase["name"]
+                    p_agents = next_phase.get("participating_agents", [])
+                    p_agents_str = ", ".join(f"@{a}" for a in p_agents)
+                    primary_agent = p_agents[0] if p_agents else "Backend"
+
+                    config.logger.info(f"Phased Transition: Starting Phase {p_num} ({p_name}) for {sid}. Agents: {p_agents_str}")
+                    _emit_phase_tracking(
+                        sid, p_num, p_name, primary_agent, "IN_PROGRESS",
+                        f"Faz {p_num} ({p_name}) başlatıldı. Görevli Ajanlar: {p_agents_str}"
+                    )
+                    for t in next_phase.get("tasks", []):
+                        r = map_role(t.get("role", "Developer"))
+                        prio = _get_priority(r)
+                        _submit_job(r, sid, prio, task_to_prompt(t))
+                    return
+
+            # If all implementation phases are completed, run Gatekeeper and proceed to QA
+            config.logger.info(f"All implementation phases completed for {sid}. Running Gatekeeper & QA.")
+            inspection = inspect_build_and_syntax(target_dir, sid)
+            if not inspection["is_valid"]:
+                config.logger.warning(f"Build & Syntax Inspection FAILED for {sid}: {inspection['errors']}")
+                _report_exception(sid, "DevOps", "Build/Syntax Gatekeeper", "\n".join(inspection["errors"]))
+                _submit_job("TeamLead", sid, 1,
+                    f"BUILD & SYNTAX INSPECTION FAILED for {sid}.\n"
+                    f"### RESULT: FAILED\n\n"
+                    f"Please assign fix tasks to repair these syntax/build errors before QA testing.\n\nREPORT:\n{inspection['report']}")
+                return
+
+            _trigger_qa_phase(sid, plan, target_dir, db, plan_cutoff)
         finally:
             db.close()
+
+    if agent == "Tester":
+        # Execute Real-time Synthetic User Journey & Ephemeral Server Tests!
+        config.logger.info(f"Tester completed output. Executing Real-time User Journey & Server Tests for {sid} in {target_dir}...")
+        live_res = run_live_synthetic_user_tests(target_dir, sid, config.ORCHESTRATOR_URL)
+        if not live_res["passed"]:
+            config.logger.warning(f"Realtime Synthetic User Tests FAILED for {sid}: {live_res.get('summary', '')}")
+            resp += f"\n\n### REALTIME TEST RUNNER FAILURE:\n{live_res.get('summary', 'Live user journey tests failed.')}\n### RESULT: FAILED"
 
     if agent in ["Tester", "Security"]:
         has_failure = bool(re.search(r"###\s*RESULT:\s*FAILED", resp, re.IGNORECASE))
@@ -802,6 +694,7 @@ def handle_recursive_triggers(agent: str, resp: str, sid: str, target_dir: str):
 
                 if doc_tasks:
                     config.logger.info(f"Tester passed. Triggering Phase 7 (Documenter) for {sid}.")
+                    _emit_phase_tracking(sid, 7, "Teknik Dokümantasyon", "Documenter", "IN_PROGRESS", "Tüm güvenlik ve test kontrolleri başarıyla onaylandı! TeamLead 7. Fazı (Teknik Dokümantasyon ve README) başlattı.")
                     for t in doc_tasks:
                         _submit_job("Documenter", sid, 7, task_to_prompt(t))
                 else:
@@ -812,6 +705,18 @@ def handle_recursive_triggers(agent: str, resp: str, sid: str, target_dir: str):
 
     if agent == "Documenter":
         config.logger.info(f"Documenter completed for {sid}. Triggering TeamLead completion.")
+        total_p = 3
+        try:
+            from .phase_service import PhaseService
+            psum = PhaseService.get_phase_status_summary(sid, target_dir)
+            if psum and psum.get("total_phases"):
+                total_p = psum["total_phases"]
+        except Exception:
+            pass
+        _emit_phase_tracking(
+            sid, total_p, "Proje Teslimatı & Canlıya Alım", "TeamLead", "COMPLETED",
+            f"🎉 Tebrikler! Tüm geliştirme fazları (1-{total_p}) başarıyla tamamlandı. Proje mimarisi, kodları, testleri ve dokümantasyonu teslim edildi."
+        )
         _submit_job("TeamLead", sid, 8,
             f"Project in {target_dir} passed QA and full documentation is complete. Generate completion message and final README.md.")
 
@@ -834,7 +739,30 @@ def _trigger_qa_phase(sid: str, plan: dict, target_dir: str, db, plan_cutoff: da
     ).count()
 
     if active_qa == 0 and already_qa == 0:
+        # Pre-QA Gatekeeper: DevOps & Build Syntax Inspection
+        inspection = inspect_build_and_syntax(target_dir, sid)
+        if not inspection["is_valid"]:
+            config.logger.warning(f"Build & Syntax Inspection FAILED for {sid}: {inspection['errors']}")
+            _report_exception(sid, "DevOps", "Build/Syntax Gatekeeper", "\n".join(inspection["errors"]))
+            _submit_job("TeamLead", sid, 1,
+                f"BUILD & SYNTAX INSPECTION FAILED for {sid}.\n"
+                f"### RESULT: FAILED\n\n"
+                f"Please assign fix tasks to repair these syntax/build errors before QA testing.\n\nREPORT:\n{inspection['report']}")
+            return
+
         config.logger.info(f"Triggering QA phase for {sid}")
+        total_p = 3
+        try:
+            from .phase_service import PhaseService
+            psum = PhaseService.get_phase_status_summary(sid, target_dir)
+            if psum and psum.get("total_phases"):
+                total_p = psum["total_phases"]
+        except Exception:
+            pass
+        _emit_phase_tracking(
+            sid, total_p, "Güvenlik & Kalite Denetimi", "Security", "IN_PROGRESS",
+            f"Tüm uygulama kod geliştirme fazları tamamlandı. Faz {total_p} (Güvenlik Denetimi & Sentetik Testler) süreci başlatıldı."
+        )
 
         security_prompt = None
         tester_prompt   = None

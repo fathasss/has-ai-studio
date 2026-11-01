@@ -1,230 +1,313 @@
 <div class="office-container">
 
-  <!-- Left Panel: Sprint Selector -->
-  <div class="sprint-panel">
-    <div class="sprint-panel-header">
-      <h3>MISSIONS</h3>
-      <button (click)="loadSprints()" class="refresh-btn" title="Refresh">⟳</button>
-    </div>
-
-    <div *ngIf="sprints.length === 0" class="no-sprints">
-      No active missions yet.
-    </div>
-
-    <div *ngFor="let s of sprints"
-         (click)="selectSprint(s)"
-         class="sprint-card"
-         [class.active]="activeSprint === s">
-      <div class="sprint-icon">📁</div>
-      <div class="sprint-info">
-        <span class="sprint-id">{{ s }}</span>
-        <span class="sprint-label">Active Pipeline</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Main Area: Isometric Office -->
+  <!-- Main Area: 3D Isometric Office Studio -->
   <div class="office-main">
 
-    <!-- Office Header -->
-    <div class="office-header">
-      <div class="office-title">
-        <span class="office-icon">🏢</span>
-        <h2>AI DEVELOPMENT OFFICE</h2>
+    <!-- Unified Glass Studio Header (Top Bar) -->
+    <div class="studio-topbar">
+      <!-- Left: Studio Branding & Mission Dropdown Selector -->
+      <div class="topbar-left">
+        <div class="studio-branding">
+          <span class="studio-live-dot"></span>
+          <div class="studio-title-wrap">
+            <span class="studio-title">3D AI STUDIO</span>
+            <span class="studio-subtitle">AUTONOMOUS AGENTS</span>
+          </div>
+        </div>
+
+        <!-- Sleek Mission / Sprint Dropdown Selector -->
+        <div class="mission-selector-wrap">
+          <button type="button" class="mission-btn" (click)="toggleMissionDropdown()" [class.active]="missionDropdownOpen" title="Mevcut Görevi Değiştir">
+            <span class="mission-icon">🎯</span>
+            <div class="mission-text-box">
+              <span class="mission-tag">GÖREV:</span>
+              <span class="mission-current-name">{{ activeSprint ? activeSprint : 'Tüm Ajanlar Serbest' }}</span>
+            </div>
+            <span class="mission-chevron" [class.open]="missionDropdownOpen">▼</span>
+          </button>
+
+          <!-- Dropdown Card -->
+          <div class="mission-dropdown-card" *ngIf="missionDropdownOpen" (click)="$event.stopPropagation()">
+            <div class="dropdown-head">
+              <span class="dropdown-heading">⚡ AKTİF GÖREVLER (MISSIONS)</span>
+              <button class="dropdown-refresh" (click)="loadSprints()" title="Görevleri Yenile">⟳</button>
+            </div>
+            
+            <div class="dropdown-missions-list">
+              <div *ngIf="sprints.length === 0" class="dropdown-empty">
+                Henüz aktif bir görev bulunmuyor.
+              </div>
+              <div *ngFor="let s of sprints"
+                   class="mission-option"
+                   [class.selected]="activeSprint === s"
+                   (click)="selectSprintFromDropdown(s)">
+                <div class="option-indicator" [class.active]="activeSprint === s"></div>
+                <div class="option-info">
+                  <span class="option-id">{{ s }}</span>
+                  <span class="option-tag">Multi-Agent Development Pipeline</span>
+                </div>
+                <span class="option-badge" *ngIf="activeSprint === s">SEÇİLİ</span>
+              </div>
+            </div>
+
+            <div class="dropdown-foot">
+              <a routerLink="/dashboard" class="btn-create-mission" (click)="missionDropdownOpen = false">
+                <span>+ TeamLead ile Yeni Görev Başlat</span>
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="office-meta" *ngIf="activeSprint">
-        <span class="sprint-badge">{{ activeSprint }}</span>
-        <span class="progress-badge">{{ completedCount }}/{{ agents.length }} Complete</span>
+
+      <!-- Center: Stats Pills & Dual LLM Engine Badges -->
+      <div class="topbar-center">
+        <!-- Live Office Stats -->
+        <div class="office-stats" *ngIf="activeSprint">
+          <span class="stat-pill sprint-badge">
+            <span class="dot live"></span> {{ activeSprint }}
+          </span>
+          <span class="stat-pill working-badge" *ngIf="workingCount > 0">
+            ⚡ {{ workingCount }} Çalışıyor
+          </span>
+          <span class="stat-pill progress-badge">
+            ✅ {{ completedCount }}/{{ agents.length }} Bitti
+          </span>
+          <span class="stat-pill idle-badge">
+            💬 {{ idleCount }} Sohbette
+          </span>
+        </div>
+        <div class="office-stats" *ngIf="!activeSprint">
+          <span class="stat-pill status-idle">
+            <span class="dot idle"></span> TÜM AJANLAR SERBEST & SOHBETTE
+          </span>
+        </div>
+
+        <!-- Dual LLM Engine Indicators -->
+        <div class="llm-engine-indicators">
+          <div class="engine-pill chat-engine" title="Ofisteki serbest sohbetler için çalışan model (Varsayılan: Yerel Ollama)">
+            <span class="engine-indicator-dot local"></span>
+            <span class="engine-tag">💬 SOHBET:</span>
+            <span class="engine-name">{{ globalChatBadge }}</span>
+          </div>
+          <div class="engine-pill task-engine" title="Proje geliştirme ve kod üretiminde çalışan model (Gemini/OpenAI/Ollama)">
+            <span class="engine-indicator-dot cloud"></span>
+            <span class="engine-tag">⚡ GÖREV:</span>
+            <span class="engine-name">{{ globalTaskBadge }}</span>
+          </div>
+        </div>
       </div>
-      <div class="office-meta" *ngIf="!activeSprint">
-        <span class="sprint-badge status-idle">IDLE STATE</span>
+
+      <!-- Right: Unified 3D Camera Controls -->
+      <div class="topbar-right">
+        <div class="camera-toolbar">
+          <button class="cam-btn"
+                  [class.active]="cameraMode === 'iso'"
+                  (click)="setCameraMode('iso')"
+                  title="3D İzometrik Perspektif">
+            📐 3D ISO
+          </button>
+          <button class="cam-btn"
+                  [class.active]="cameraMode === 'cinematic'"
+                  (click)="setCameraMode('cinematic')"
+                  title="Sinematik Perspektif">
+            🎬 SİNEMATİK
+          </button>
+          <button class="cam-btn"
+                  [class.active]="cameraMode === 'topdown'"
+                  (click)="setCameraMode('topdown')"
+                  title="Kuşbakışı Mimari Plan">
+            🗺️ KUŞBAKIŞI
+          </button>
+          <button class="cam-btn"
+                  (click)="setCameraPreset('warroom')"
+                  title="War Room Masasına Odaklan">
+            ⚡ WAR ROOM
+          </button>
+          <button class="cam-btn"
+                  (click)="setCameraPreset('lounge')"
+                  title="Kahve ve Lounge Alanına Odaklan">
+            ☕ LOUNGE
+          </button>
+          <button class="cam-btn reset-btn"
+                  (click)="resetCamera()"
+                  title="Kamerayı Varsayılana Sıfırla">
+            ⟲ SIFIRLA
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Isometric Office Floor -->
-    <div class="iso-office">
+    <!-- 3D WebGL Three.js Office Viewport (Full-Bleed Viewport) -->
+    <div class="webgl-office-container" #threeContainer>
+      <!-- 3D Three.js WebGL Canvas -->
+      <canvas #threeCanvas class="three-canvas"></canvas>
 
-      <!-- The fixed-size stage that scales down if needed -->
-      <div class="office-stage">
-        <!-- Grid Floor (Background) -->
-        <div class="grid-floor"></div>
-
-        <!-- Coffee / Break Stand -->
-        <div class="coffee-stand zone-area">
-           <span class="zone-icon">☕</span>
-           <div class="coffee-machine"></div>
-           <div class="coffee-table"></div>
-           <div class="room-tag">BREAK ROOM</div>
-        </div>
-
-        <!-- Server Rack -->
-        <div class="server-rack zone-area">
-           <span class="zone-icon">💾</span>
-           <div class="server-lights">
-              <span></span><span></span><span></span>
-           </div>
-           <div class="room-tag">IT / SERVERS</div>
-        </div>
-
-        <!-- Water Cooler -->
-        <div class="water-cooler zone-area">
-           <span class="zone-icon">🚰</span>
-           <div class="cooler-bottle"></div>
-           <div class="cooler-base"></div>
-           <div class="room-tag">GOSSIP</div>
-        </div>
-
-        <!-- Arcade Machine -->
-        <div class="arcade-machine zone-area">
-           <span class="zone-icon">🎮</span>
-           <div class="arcade-screen"></div>
-           <div class="arcade-controls"></div>
-           <div class="room-tag">ARCADE</div>
-        </div>
-
-        <!-- Whiteboard -->
-        <div class="whiteboard-area zone-area">
-           <span class="zone-icon">💡</span>
-           <div class="whiteboard-board"></div>
-           <div class="whiteboard-stand"></div>
-           <div class="room-tag">IDEATION</div>
-        </div>
-
-        <!-- Library -->
-        <div class="library-area zone-area">
-           <span class="zone-icon">📚</span>
-           <div class="bookshelf">
-              <div class="book-row"></div>
-              <div class="book-row"></div>
-           </div>
-           <div class="room-tag">DOCS</div>
-        </div>
-
-        <!-- Central Meeting Room (No Avatar inside) -->
-        <!-- Placed around center (x:150 to 450, y:150 to 350) -->
-        <div class="meeting-room">
-          <div class="meeting-table"></div>
-          <div class="plan-board">
-            <div class="board-title">📋 MASTER PLAN</div>
-            <div class="board-lines" *ngIf="tlSummary">{{ tlSummary | slice:0:80 }}...</div>
-            <div class="board-lines" *ngIf="!tlSummary">Awaiting directives...</div>
+      <!-- Floating Ultra-Compact TeamLead Phase HUD (Overlay Bar) -->
+      <div class="floating-phase-hud" *ngIf="activeSprint && sprintPhases">
+        <!-- Minimalist Floating Pill Bar -->
+        <div class="hud-pill-bar">
+          <div class="hud-left-group">
+            <span class="hud-crown-badge">👑 TEAMLEAD FAZ</span>
+            <span class="hud-phase-num">
+              FAZ {{ sprintPhases.current_phase }} / {{ sprintPhases.total_phases || sprintPhases.phases.length || 3 }}
+            </span>
+            <span class="hud-project-title">{{ sprintPhases.project_name }}</span>
           </div>
-          <div class="room-tag">MEETING ROOM</div>
+
+          <div class="hud-center-group">
+            <div class="hud-active-agents" *ngIf="getActivePhaseAgents() as agentsList">
+              <span class="hud-agents-label">👥 Görevli:</span>
+              <span class="hud-agent-tag" *ngFor="let a of agentsList">&#64;{{ a }}</span>
+            </div>
+            <div class="hud-commentary-wrap" *ngIf="sprintPhases.teamlead_status">
+              <span class="hud-pulse-dot"></span>
+              <span class="hud-commentary-text">"{{ sprintPhases.teamlead_status }}"</span>
+            </div>
+          </div>
+
+          <div class="hud-right-group">
+            <div class="hud-progress-wrap" title="Genel Proje İlerlemesi">
+              <div class="hud-progress-bar" [style.width.%]="sprintPhases.overall_progress"></div>
+              <span class="hud-progress-text">%{{ sprintPhases.overall_progress }}</span>
+            </div>
+
+            <button type="button" class="hud-toggle-btn" (click)="togglePhaseTracker()" [class.active]="!phaseTrackerCollapsed" title="Faz Ayrıntılarını Aç / Kapat">
+              <span class="toggle-icon">{{ phaseTrackerCollapsed ? '▾' : '▴' }}</span>
+              <span>{{ phaseTrackerCollapsed ? 'Faz Detayı' : 'Gizle' }}</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Right Aligned Agent Desks -->
-        <div *ngFor="let agent of agents"
-             class="agent-desk"
-             [style.left.px]="agent.deskX - 30"
-             [style.top.px]="agent.deskY - 20"
-             [class.selected]="selectedAgent === agent.id"
-             [class.working]="getJobStatus(agent.id) === 'WORKING'"
-             [class.completed]="getJobStatus(agent.id) === 'COMPLETED'"
-             [style.--agent-color]="agent.color"
-             [style.--agent-glow]="agent.glowColor"
-             (click)="selectDesk(agent.id)">
-             
-          <!-- Desk Surface -->
-          <div class="desk-surface">
-            <div class="desk-monitor">
-              <div class="monitor-screen"
-                   [class.screen-active]="getJobStatus(agent.id) === 'WORKING'"
-                   [class.screen-done]="getJobStatus(agent.id) === 'COMPLETED'">
-                <div class="screen-lines" *ngIf="getJobStatus(agent.id) === 'WORKING'">
-                  <span></span><span></span><span></span>
-                </div>
-                <span class="screen-icon" *ngIf="getJobStatus(agent.id) !== 'WORKING'">
-                  {{ getJobStatus(agent.id) === 'COMPLETED' ? '✓' : '⏸' }}
+        <!-- Expanded Dropdown Cards (Floating Glass Over 3D Scene) -->
+        <div class="hud-expanded-dropdown" *ngIf="!phaseTrackerCollapsed">
+          <div class="phases-stepper-row">
+            <div *ngFor="let p of sprintPhases.phases"
+                 class="phase-card-item"
+                 [class.active]="p.status === 'IN_PROGRESS'"
+                 [class.completed]="p.status === 'COMPLETED'"
+                 [class.pending]="p.status === 'PENDING'"
+                 [class.failed]="p.status === 'FAILED'"
+                 [class.selected]="selectedPhase?.phase_id === p.phase_id"
+                 (click)="selectPhase(p)">
+              
+              <div class="phase-card-top">
+                <span class="phase-badge-id">FAZ {{ p.phase_id }}</span>
+                <span class="phase-status-chip" [ngClass]="p.status.toLowerCase()">
+                  {{ getPhaseStatusLabel(p.status) }}
                 </span>
               </div>
-              <div class="monitor-stand"></div>
+
+              <div class="phase-card-name">{{ p.name }}</div>
+
+              <div class="phase-card-agents">
+                <span class="agents-icon">👥</span>
+                <span class="agents-text" [style.color]="p.color">
+                  &#64;{{ (p.participating_agents && p.participating_agents.length > 0) ? p.participating_agents.join(", &#64;") : p.role }}
+                </span>
+              </div>
+
+              <div class="phase-card-deliverables" *ngIf="p.deliverables && p.deliverables.length > 0">
+                <span class="deliverable-mini-pill" *ngFor="let d of p.deliverables | slice:0:2">
+                  📄 {{ d }}
+                </span>
+                <span class="deliverable-more" *ngIf="p.deliverables.length > 2">+{{ p.deliverables.length - 2 }}</span>
+              </div>
             </div>
-            <div class="desk-keyboard"></div>
-          </div>
-          <div class="desk-chair"></div>
-          
-          <div class="desk-label">
-            <span class="label-name" [style.color]="agent.color">{{ agent.name }}</span>
-            <span class="label-status">{{ getAgentStatusLabel(getJobStatus(agent.id)) }}</span>
           </div>
         </div>
+      </div>
 
-        <!-- DYNAMIC AVATARS LAYER -->
-        <div class="avatars-layer">
-          <div *ngFor="let agent of agents"
-               class="dynamic-avatar"
-               [class.flipped]="agent.isFlipped"
-               [class.working]="getJobStatus(agent.id) === 'WORKING'"
-               [class.completed]="getJobStatus(agent.id) === 'COMPLETED'"
-               [style.transform]="'translate(' + agent.x + 'px, ' + agent.y + 'px)'"
-               (click)="selectDesk(agent.id)">
-               
-            <!-- Status Cloud moves with the avatar -->
-            <div class="status-cloud" *ngIf="getJobStatus(agent.id) === 'WORKING'">
-              <span class="cloud-text">⚡ WORKING...</span>
+      <!-- Realtime Test Execution Floating Alert Banner -->
+      <div class="realtime-test-live-alert" *ngIf="activeTestRunning && liveTestSteps.length > 0">
+        <span class="test-live-indicator"></span>
+        <span class="test-live-title">LIVE SYNTHETIC TEST:</span>
+        <span class="test-live-name">{{ liveTestSteps[0].name }}</span>
+        <span class="test-live-badge" [class.pass]="liveTestSteps[0].status === 'PASSED'" [class.fail]="liveTestSteps[0].status === 'FAILED'">
+          {{ liveTestSteps[0].status }} ({{ liveTestSteps[0].duration_ms }}ms)
+        </span>
+      </div>
+
+      <!-- 3D Floating Projected Overlays Layer (Speech Bubbles, Nameplates, Status) -->
+      <div class="projected-overlays-layer">
+        <ng-container *ngFor="let agent of agents">
+          <div *ngIf="getOverlay(agent.id) as pos"
+               class="agent-3d-billboard"
+               [class.billboard-hidden]="!pos.visible"
+               [style.left.px]="pos.x"
+               [style.top.px]="pos.y">
+
+            <!-- Dynamic 3D Speech Bubble (when chatting / idle banter) -->
+            <div class="speech-bubble-3d"
+                 *ngIf="agent.idleMessage && getJobStatus(agent.id) !== 'WORKING'">
+              <div class="bubble-header" [style.color]="agent.color">
+                <span class="bubble-dot" [style.background]="agent.color"></span>
+                <strong>{{ agent.name }}</strong>
+              </div>
+              <div class="bubble-body">
+                {{ agent.idleMessage }}
+              </div>
+              <div class="bubble-arrow"></div>
             </div>
-            <div class="status-cloud completed" *ngIf="getJobStatus(agent.id) === 'COMPLETED'">
-              <span class="cloud-text">✅ DONE</span>
+
+            <!-- Dynamic Status Badge (Working, Completed) -->
+            <div class="status-cloud-3d working" *ngIf="getJobStatus(agent.id) === 'WORKING'">
+              <span class="pulse-dot"></span>
+              <span>⚡ WORKING...</span>
             </div>
-            
-            <!-- Dynamic Idle Chat Bubble -->
-            <div class="speech-bubble" *ngIf="agent.idleMessage && agent.idleMessage !== '...' && getJobStatus(agent.id) !== 'WORKING'">
-              <span class="cloud-text">{{ agent.idleMessage }}</span>
+            <div class="status-cloud-3d completed" *ngIf="getJobStatus(agent.id) === 'COMPLETED'">
+              <span>✅ COMPLETED</span>
             </div>
-            
-            <img [src]="agent.avatar" class="agent-sprite" [alt]="agent.name" />
-            
-            <span class="agent-name-tag" [style.color]="agent.color">
-              {{ agent.name }}
-              <div class="agent-status-pill" 
-                   [class.status-working]="getJobStatus(agent.id) === 'WORKING'"
-                   [class.status-completed]="getJobStatus(agent.id) === 'COMPLETED'"
-                   [class.status-pending]="getJobStatus(agent.id) === 'PENDING'"
-                   [class.status-standby]="getJobStatus(agent.id) === 'STANDBY'"
-                   [class.status-awaiting]="getJobStatus(agent.id) === 'AWAITING'"
-                   [class.status-idle]="getJobStatus(agent.id) === 'IDLE'">
-                {{ getAgentStatusLabel(getJobStatus(agent.id)) }}
-              </div> 
-            </span>
-            
-            <!-- Selected Indicator -->
-            <div class="selected-ring" *ngIf="selectedAgent === agent.id" [style.border-color]="agent.color"></div>
+
+            <!-- Crisp 3D Nameplate & Role Badge -->
+            <div class="agent-nametag-3d"
+                 [class.selected]="selectedAgent === agent.id"
+                 (click)="onAgentClick(agent, $event)">
+              <span class="nametag-dot" [style.background]="agent.color"></span>
+              <span class="nametag-name" [style.color]="agent.color">{{ agent.name }}</span>
+              <span class="nametag-role">{{ agent.role }}</span>
+            </div>
           </div>
-        </div>
-
-      </div> <!-- /office-stage -->
-    </div> <!-- /iso-office -->
-
-    <!-- Pipeline Progress Bar -->
-    <div class="pipeline-bar" *ngIf="activeSprint">
-      <div class="pipeline-title">PIPELINE PROGRESS</div>
-      <div class="pipeline-steps">
-        <ng-container *ngFor="let agent of agents; let isLast = last">
-          <div class="pipeline-step"
-               [class.step-completed]="getJobStatus(agent.id) === 'COMPLETED'"
-               [class.step-working]="getJobStatus(agent.id) === 'WORKING'">
-            <div class="step-dot">
-              <span *ngIf="getJobStatus(agent.id) === 'COMPLETED'">✓</span>
-              <span *ngIf="getJobStatus(agent.id) === 'WORKING'" class="step-pulse"></span>
-              <span *ngIf="getJobStatus(agent.id) !== 'COMPLETED' && getJobStatus(agent.id) !== 'WORKING'" class="step-empty">{{ agent.id.charAt(0) }}</span>
-            </div>
-            <span class="step-name">{{ agent.name }}</span>
-          </div>
-          <div *ngIf="!isLast" class="pipeline-connector"
-               [class.connector-done]="getJobStatus(agent.id) === 'COMPLETED'"></div>
         </ng-container>
       </div>
+
+      <!-- Floating Office Banter Toast (Bottom-Left) -->
+      <div class="floating-banter-toast" *ngIf="recentBanter">
+        <span class="toast-dot" [style.background]="recentBanter.color"></span>
+        <div class="toast-body">
+          <div class="toast-header">
+            <span class="toast-speaker" [style.color]="recentBanter.color">{{ recentBanter.speaker }}</span>
+            <span class="toast-time">{{ recentBanter.time }}</span>
+          </div>
+          <div class="toast-text">"{{ recentBanter.text }}"</div>
+        </div>
+        <button class="toast-close" (click)="recentBanter = null">✕</button>
+      </div>
+
+      <!-- Hint Badge (Mouse Controls) -->
+      <div class="mouse-hint-pill">
+        <span>🖱️ Sol Tık: 360° Çevir • Scroll: Yakınlaştır • Sağ Tık: Kaydır • Ajan/Masa: Odaklan</span>
+      </div>
     </div>
+
   </div>
 
-  <!-- Right Detail Panel (Slide-in) -->
+  <!-- Right Agent Detail Drawer (Wide 560px Slide-in) -->
   <div class="detail-panel" [class.open]="selectedAgent !== null">
     <div class="detail-header" *ngIf="selectedAgent">
       <div class="detail-agent-info">
         <img [src]="getAgentConfig(selectedAgent)?.avatar" class="detail-avatar" />
-        <div>
-          <h3 [style.color]="getAgentConfig(selectedAgent)?.color">{{ getAgentConfig(selectedAgent)?.name }}</h3>
-          <span class="detail-role">{{ getAgentConfig(selectedAgent)?.role }}</span>
+        <div class="detail-name-wrap">
+          <div class="detail-title-row">
+            <h3 [style.color]="getAgentConfig(selectedAgent)?.color">{{ getAgentConfig(selectedAgent)?.name }}</h3>
+            <button class="btn-focus-cam" (click)="focusAgentFromDrawer(selectedAgent)" title="3D Kamerayı Bu Ajana Çevir">
+              🎯 3D Odakla
+            </button>
+          </div>
+          <span class="detail-role">{{ getAgentConfig(selectedAgent)?.role }} • 3D Agent Model</span>
+          <div class="agent-model-chips">
+            <span class="agent-chip chat" title="Ofis Sohbet Modeli">💬 {{ getAgentChatModelBadge(selectedAgent) }}</span>
+            <span class="agent-chip task" title="Görev / Kod Modeli">⚡ {{ getAgentTaskModelBadge(selectedAgent) }}</span>
+          </div>
         </div>
       </div>
       <button class="close-btn" (click)="closeDetail()">✕</button>
@@ -241,13 +324,27 @@
 
     <div class="detail-traces" *ngIf="selectedAgent">
       <div class="trace-tabs">
-        <button [class.active]="activeTab === 'WORK'" (click)="activeTab = 'WORK'">Project Logs</button>
-        <button [class.active]="activeTab === 'CHAT'" (click)="activeTab = 'CHAT'">Conversations</button>
+        <button [class.active]="activeTab === 'WORK'" (click)="activeTab = 'WORK'">
+          <span class="tab-icon">📋</span> Görevler
+        </button>
+        <button [class.active]="activeTab === 'CHAT'" (click)="activeTab = 'CHAT'">
+          <span class="tab-icon">💬</span> Sohbetler
+        </button>
+        <button [class.active]="activeTab === 'MEMORY'" (click)="activeTab = 'MEMORY'">
+          <span class="tab-icon">🧠</span> Proje Hafızası
+        </button>
+        <button [class.active]="activeTab === 'TESTS'" (click)="activeTab = 'TESTS'">
+          <span class="tab-icon">🧪</span> Canlı Testler <span class="tab-count" *ngIf="liveTestSteps.length > 0">({{ liveTestSteps.length }})</span>
+        </button>
+        <button [class.active]="activeTab === 'LLM'" (click)="activeTab = 'LLM'">
+          <span class="tab-icon">⚙️</span> AI Modeli
+        </button>
       </div>
 
+      <!-- Tab 1: Project Work Logs -->
       <ng-container *ngIf="activeTab === 'WORK'">
         <div *ngIf="selectedAgentWorkTraces.length === 0" class="no-traces">
-          No project activity yet.
+          Henüz bu ajana ait aktif sprint çalışma kaydı bulunmuyor.
         </div>
         <div *ngFor="let t of selectedAgentWorkTraces"
              class="trace-item"
@@ -263,12 +360,13 @@
         </div>
       </ng-container>
 
+      <!-- Tab 2: Conversations & Banter -->
       <ng-container *ngIf="activeTab === 'CHAT'">
         <div *ngIf="selectedAgentChatTraces.length === 0" class="no-traces">
-          No conversations yet.
+          Henüz bu ajan için kayıtlı serbest diyalog bulunmuyor.
         </div>
         <div *ngFor="let t of selectedAgentChatTraces"
-             class="trace-item"
+             class="trace-item chat-trace"
              (click)="toggleTrace(t.timestamp)">
           <div class="trace-header">
             <span class="trace-time">{{ t.timestamp | date:'HH:mm:ss' }}</span>
@@ -279,6 +377,264 @@
           </div>
         </div>
       </ng-container>
+
+      <!-- Tab 3: Project-Based Accumulated Knowledge -->
+      <ng-container *ngIf="activeTab === 'MEMORY'">
+        <div class="agent-memory-view">
+          <div class="memory-section">
+            <div class="memory-section-header">
+              <h4>🧠 &#64;{{ selectedAgent }} Bireysel Proje Hafızası</h4>
+              <span class="memory-tag">Ajan Hafızası</span>
+            </div>
+            <div class="memory-content-box" *ngIf="selectedAgentMemory">
+              <pre>{{ selectedAgentMemory }}</pre>
+            </div>
+            <div class="no-memory" *ngIf="!selectedAgentMemory">
+              Henüz bu ajana ait özel hafıza kaydı bulunmuyor. Görev tamamlandıkça teknik notlar buraya işlenecektir.
+            </div>
+          </div>
+
+          <div class="memory-section">
+            <div class="memory-section-header">
+              <h4>🌐 Ortak Proje Teknik Hafızası (PROJECT_MEMORY.md)</h4>
+              <span class="memory-tag global">Tüm Ekip Paylaşımlı</span>
+            </div>
+            <div class="memory-content-box" *ngIf="sharedProjectMemory">
+              <pre>{{ sharedProjectMemory }}</pre>
+            </div>
+            <div class="no-memory" *ngIf="!sharedProjectMemory">
+              Proje hafızası yükleniyor veya henüz başlatılmadı.
+            </div>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- Tab 4: Live Synthetic Tests -->
+      <ng-container *ngIf="activeTab === 'TESTS'">
+        <div *ngIf="liveTestSteps.length === 0" class="no-traces">
+          Henüz sentetik test kaydı yok. Tester ajanı doğrulama yaptıkça adımlar burada canlı akacaktır.
+        </div>
+        <div *ngFor="let s of liveTestSteps" class="trace-item" [class.test-failed]="s.status === 'FAILED'">
+          <div class="trace-header">
+            <span class="trace-time">{{ s.timestamp | date:'HH:mm:ss' }} • Step {{ s.step }}/{{ s.total }}</span>
+            <span class="test-pill" [class.pill-pass]="s.status === 'PASSED'" [class.pill-fail]="s.status === 'FAILED'">
+              {{ s.status }} ({{ s.duration_ms }}ms)
+            </span>
+          </div>
+          <div class="test-item-body">
+            <strong>{{ s.name }}</strong>
+            <pre *ngIf="s.details">{{ s.details }}</pre>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- Tab 5: Dual LLM Engine Configuration Panel -->
+      <ng-container *ngIf="activeTab === 'LLM'">
+        <div class="llm-config-panel">
+          <div class="llm-config-intro">
+            <h4>🧠 {{ getAgentConfig(selectedAgent)?.name }} Dual-Engine Ayarları</h4>
+            <p>Bu ajanın serbest sohbetlerde (Idle Banter) ve sprint görevlerinde (Task Inference) kullanacağı modelleri seçin.</p>
+          </div>
+
+          <!-- Section 1: Chat / Idle Banter LLM -->
+          <div class="llm-card chat-card">
+            <div class="llm-card-header">
+              <span class="llm-card-icon">💬</span>
+              <div>
+                <h5>Ofis İçi Sohbet Modeli (Idle Banter)</h5>
+                <span class="llm-card-sub">Ofiste gezinirken ve diğer ajanlarla sohbet ederken kullanılır</span>
+              </div>
+            </div>
+
+            <!-- Provider Selector -->
+            <div class="llm-field-group">
+              <label>Sağlayıcı (Provider):</label>
+              <div class="provider-pill-grid">
+                <button type="button" class="provider-pill" [class.selected]="currentAgentLLM.chatProvider === 'ollama'" (click)="setChatProvider('ollama')">
+                  🏠 Ollama (Yerel)
+                </button>
+                <button type="button" class="provider-pill" [class.selected]="currentAgentLLM.chatProvider === 'gemini'" (click)="setChatProvider('gemini')">
+                  ✨ Google Gemini
+                </button>
+                <button type="button" class="provider-pill" [class.selected]="currentAgentLLM.chatProvider === 'openai'" (click)="setChatProvider('openai')">
+                  🟢 OpenAI
+                </button>
+                <button type="button" class="provider-pill" [class.selected]="currentAgentLLM.chatProvider === 'anthropic'" (click)="setChatProvider('anthropic')">
+                  🟣 Anthropic Claude
+                </button>
+              </div>
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="llm-field-group" *ngIf="llmPresets.chat && llmPresets.chat.length > 0">
+              <label>Hızlı Öneri Seçimi:</label>
+              <div class="preset-chips">
+                <button type="button" *ngFor="let p of llmPresets.chat" class="preset-chip"
+                        [class.active]="currentAgentLLM.chatModel === p.model && currentAgentLLM.chatProvider === p.provider"
+                        (click)="setChatPreset(p)">
+                  {{ p.label }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Custom Model Input -->
+            <div class="llm-field-group">
+              <label>Model Adı:</label>
+              <input type="text" class="llm-text-input" [(ngModel)]="currentAgentLLM.chatModel" placeholder="örn. llama3.1:latest, qwen2.5-coder:7b" />
+            </div>
+          </div>
+
+          <!-- Section 2: Task / Work LLM -->
+          <div class="llm-card task-card">
+            <div class="llm-card-header">
+              <span class="llm-card-icon">⚡</span>
+              <div>
+                <h5>Görev & Proje Çalışma Modeli (Task Execution)</h5>
+                <span class="llm-card-sub">Kod yazma, mimari planlama ve sprint işlerinde devreye girer</span>
+              </div>
+            </div>
+
+            <!-- Provider Selector -->
+            <div class="llm-field-group">
+              <label>Sağlayıcı (Provider):</label>
+              <div class="provider-pill-grid">
+                <button type="button" class="provider-pill" [class.selected]="currentAgentLLM.taskProvider === 'gemini'" (click)="setTaskProvider('gemini')">
+                  ✨ Google Gemini (Önerilen)
+                </button>
+                <button type="button" class="provider-pill" [class.selected]="currentAgentLLM.taskProvider === 'openai'" (click)="setTaskProvider('openai')">
+                  🟢 OpenAI
+                </button>
+                <button type="button" class="provider-pill" [class.selected]="currentAgentLLM.taskProvider === 'anthropic'" (click)="setTaskProvider('anthropic')">
+                  🟣 Anthropic Claude
+                </button>
+                <button type="button" class="provider-pill" [class.selected]="currentAgentLLM.taskProvider === 'ollama'" (click)="setTaskProvider('ollama')">
+                  🏠 Ollama (Yerel)
+                </button>
+              </div>
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="llm-field-group" *ngIf="llmPresets.task && llmPresets.task.length > 0">
+              <label>Hızlı Öneri Seçimi:</label>
+              <div class="preset-chips">
+                <button type="button" *ngFor="let p of llmPresets.task" class="preset-chip"
+                        [class.active]="currentAgentLLM.taskModel === p.model && currentAgentLLM.taskProvider === p.provider"
+                        (click)="setTaskPreset(p)">
+                  {{ p.label }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Custom Model Input -->
+            <div class="llm-field-group">
+              <label>Model Adı:</label>
+              <input type="text" class="llm-text-input" [(ngModel)]="currentAgentLLM.taskModel" placeholder="örn. gemini-2.0-flash, gpt-4o, claude-3-5-sonnet" />
+            </div>
+
+            <!-- API Key Input (for cloud providers) -->
+            <div class="llm-field-group" *ngIf="currentAgentLLM.taskProvider !== 'ollama' || currentAgentLLM.chatProvider !== 'ollama'">
+              <label>API Key (Cloud Sağlayıcılar İçin):</label>
+              <input type="password" class="llm-text-input" [(ngModel)]="currentAgentLLM.apiKey" placeholder="Boş bırakılırsa global key veya default kullanılır (örn. AIzaSy... / sk-...)" />
+              <span class="field-hint">API anahtarınız güvenli oturumda saklanır.</span>
+            </div>
+
+            <!-- Custom Endpoint (Optional) -->
+            <div class="llm-field-group">
+              <label>Özel Endpoint / Base URL (Opsiyonel):</label>
+              <input type="text" class="llm-text-input" [(ngModel)]="currentAgentLLM.url" placeholder="Varsayılan endpoint için boş bırakın" />
+            </div>
+          </div>
+
+          <!-- Save Feedback Alert -->
+          <div class="llm-alert-box success" *ngIf="llmSaveSuccess">
+            {{ llmSaveMsg }}
+          </div>
+          <div class="llm-alert-box error" *ngIf="!llmSaveSuccess && llmSaveMsg">
+            {{ llmSaveMsg }}
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="llm-action-buttons">
+            <button type="button" class="llm-btn btn-save" (click)="saveAgentLLM(false)">
+              💾 Bu Ajana Kaydet
+            </button>
+            <button type="button" class="llm-btn btn-apply-all" (click)="saveAgentLLM(true)">
+              🌐 Tüm Ekibe Uygula
+            </button>
+            <button type="button" class="llm-btn btn-reset" (click)="resetCurrentAgentToDefaults()">
+              ⟲ Varsayılana Dön
+            </button>
+          </div>
+        </div>
+      </ng-container>
     </div>
   </div>
+
+  <!-- Phase Detail Inspector Modal -->
+  <div class="phase-detail-overlay" *ngIf="selectedPhase" (click)="closePhaseDetail()">
+    <div class="phase-detail-modal" (click)="$event.stopPropagation()">
+      <div class="phase-modal-header" [style.borderColor]="selectedPhase.color">
+        <div class="phase-modal-title-group">
+          <span class="phase-modal-icon">{{ selectedPhase.icon }}</span>
+          <div>
+            <h3 class="phase-modal-name">Faz {{ selectedPhase.phase_id }}: {{ selectedPhase.name }}</h3>
+            <div class="phase-modal-agents-wrap">
+              <span class="phase-modal-agent" [style.color]="selectedPhase.color">
+                👥 Görevli Ajanlar: &#64;{{ (selectedPhase.participating_agents && selectedPhase.participating_agents.length > 0) ? selectedPhase.participating_agents.join(", &#64;") : selectedPhase.role }}
+              </span>
+              <span class="phase-modal-file-badge" *ngIf="selectedPhase.file_path">📁 {{ selectedPhase.file_path }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="phase-modal-status-badge" [ngClass]="selectedPhase.status.toLowerCase()">
+          {{ getPhaseStatusLabel(selectedPhase.status) }}
+        </div>
+        <button class="phase-modal-close" (click)="closePhaseDetail()">✕</button>
+      </div>
+
+      <div class="phase-modal-body">
+        <p class="phase-modal-desc">{{ selectedPhase.description }}</p>
+
+        <!-- Deliverables -->
+        <div class="phase-section">
+          <h4 class="phase-section-title">📁 Hedef Dosyalar & Çıktılar</h4>
+          <div class="deliverables-tags">
+            <span *ngFor="let d of selectedPhase.deliverables" class="deliverable-tag">
+              📄 {{ d }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Tasks list if any -->
+        <div class="phase-section" *ngIf="selectedPhase.tasks && selectedPhase.tasks.length > 0">
+          <h4 class="phase-section-title">📋 Faz Görevleri ({{ selectedPhase.tasks.length }})</h4>
+          <div class="phase-tasks-list">
+            <div *ngFor="let t of selectedPhase.tasks" class="phase-task-card">
+              <div class="task-card-header">
+                <span class="task-id">{{ t.task_id || 'Görev' }}</span>
+                <span class="task-file" *ngIf="t.target_file">🎯 {{ t.target_file }}</span>
+              </div>
+              <div class="task-desc">{{ t.description }}</div>
+              <div class="task-criteria" *ngIf="t.acceptance_criteria && t.acceptance_criteria.length > 0">
+                <span class="criteria-label">Kabul Kriterleri:</span>
+                <ul>
+                  <li *ngFor="let crit of t.acceptance_criteria">{{ crit }}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phase-modal-actions">
+          <button class="btn-focus-agent" (click)="selectAgentById(selectedPhase.role); closePhaseDetail()">
+            🎯 {{ selectedPhase.role }} Ajanını 3D Odakla
+          </button>
+          <button class="btn-close-modal" (click)="closePhaseDetail()">
+            Kapat
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>

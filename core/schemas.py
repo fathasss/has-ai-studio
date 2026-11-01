@@ -15,6 +15,8 @@ class ChatRequest(BaseModel):
 class IdleChatRequest(BaseModel):
     agent: str
     location: str
+    partner: Optional[str] = None
+    message_to_reply: Optional[str] = None
 
 class ExecuteRequest(BaseModel):
     sprint_id: str

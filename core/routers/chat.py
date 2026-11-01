@@ -15,6 +15,7 @@ from .. import config
 from ..utils import safe_json_loads
 from ..prompts import load_prompt
 from ..app_instance import sio
+from ..services.unified_llm import call_unified_llm_async
 from .sprint import _inject_missing_roles
 
 router = APIRouter(tags=["Chat"])
@@ -55,96 +56,33 @@ def _build_messages(system_prompt: str, history: list, suffix_instruction: str =
     return messages
 
 
-async def _call_llm(messages: list, model: str) -> str:
+async def _call_llm(messages: list, model: str = "", agent: str = "TeamLead", purpose: str = "task") -> str:
     """
-    Calls the LLM using the correct endpoint and format based on provider type.
-    Supports: ollama, ollama-cloud, openai.
-    Raises HTTP 502 if the LLM returns an empty response or an error status.
+    Calls LLM via unified service resolving provider/model/keys.
     """
-    headers = {}
-    provider = config.LLM_PROVIDER
+    agent_cfg = config.get_agent_llm_config(agent, purpose=purpose)
+    chosen_model = model or agent_cfg["model"]
+    chosen_provider = agent_cfg["provider"]
+    chosen_url = agent_cfg["url"]
+    chosen_key = agent_cfg["apiKey"]
 
-    num_ctx = getattr(config, "LLM_NUM_CTX", 8192)
-
-    # --- Build endpoint and payload based on provider ---
-    if provider == "openai":
-        # OpenAI-compatible API (OpenRouter, Azure, vLLM, etc.) — avoids /v1/v1 duplication
-        endpoint = config.build_openai_url(config.OLLAMA_URL, "/v1/chat/completions")
-        if config.LLM_API_KEY:
-            headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
-        headers["Content-Type"] = "application/json"
-        payload = {
-            "model": model,
-            "messages": messages,
-            "stream": False,
-            "temperature": 0.2,
-        }
-    else:
-        # Ollama native API (local or cloud)
-        endpoint = f"{config.OLLAMA_URL.rstrip('/')}/api/chat"
-        if provider == "ollama-cloud" and config.LLM_API_KEY:
-            headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
-        payload = {
-            "model": model,
-            "messages": messages,
-            "stream": False,
-            "options": {
-                "num_ctx": num_ctx,
-                "temperature": 0.2,
-            },
-        }
-
-    config.logger.info(
-        f"LLM call: provider={provider}, model={model}, "
-        f"endpoint={endpoint}, messages={len(messages)}"
-    )
-
-    async with httpx.AsyncClient(timeout=config.LLM_TIMEOUT) as client:
-        resp = await client.post(endpoint, headers=headers, json=payload)
-
-        # --- HTTP error guard ---
-        if resp.status_code != 200:
-            error_detail = resp.text[:500] if resp.text else "No response body"
-            config.logger.error(
-                f"LLM endpoint returned HTTP {resp.status_code}: {error_detail}"
-            )
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    f"LLM endpoint returned HTTP {resp.status_code}. "
-                    f"Check your provider URL and API key in Settings."
-                ),
-            )
-
-        data = resp.json()
-
-        # --- Extract response based on provider format ---
-        if provider == "openai":
-            choices = data.get("choices", [])
-            raw_response = (
-                choices[0].get("message", {}).get("content", "")
-                if choices
-                else ""
-            )
-        else:
-            raw_response = data.get("message", {}).get("content", "")
-
-        # --- Empty response guard ---
-        if not raw_response or not raw_response.strip():
-            config.logger.error(
-                f"LLM returned empty response. Provider={provider}, "
-                f"Model={model}, Raw data keys={list(data.keys())}"
-            )
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    "LLM returned an empty response. Possible causes: "
-                    "wrong provider URL, model not installed, or API key invalid. "
-                    "Check Settings → Active Node configuration."
-                ),
-            )
-
-        return raw_response
+    try:
+        text, _, _ = await call_unified_llm_async(
+            provider=chosen_provider,
+            model=chosen_model,
+            messages=messages,
+            url=chosen_url,
+            api_key=chosen_key,
+            timeout=config.LLM_TIMEOUT
+        )
+        if not text or not text.strip():
+            raise HTTPException(status_code=502, detail="LLM returned empty response.")
+        return text
+    except HTTPException:
+        raise
+    except Exception as e:
+        config.logger.error(f"Unified LLM call failed for {agent} ({chosen_provider}:{chosen_model}): {e}")
+        raise HTTPException(status_code=502, detail=f"LLM inference error: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -289,7 +227,21 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
 
     recent_traces = list(reversed(recent_traces))
 
-    if recent_traces:
+    if req.message_to_reply:
+        partner_name = req.partner or "ekip arkadaşın"
+        context_str = (
+            f"Şu an '{req.location}' konumundasın. Karşındaki çalışma arkadaşın '{partner_name}' az önce sana doğrudan şunu söyledi:\n"
+            f"\"{req.message_to_reply}\"\n\n"
+            f"ÖNEMLİ: Bu söze DOĞRUDAN, ANLAMLI ve ALAKALI bir karşılık ver. Karşındakinin değindiği konuyu devam ettir, "
+            f"sorusunu yanıtla, esprili/teknik bir gözlem ekle veya konuyu zekice tamamla. "
+            f"Asla konudan kopma veya bağımsız bir cümle kurma; birbiriyle konuşan iki mühendis gibi doğal ve bağlantılı cevap ver."
+        )
+    elif req.partner:
+        context_str = (
+            f"Şu an '{req.location}' konumundasın ve yanında ekip arkadaşın '{req.partner}' duruyor.\n"
+            f"'{req.partner}'e yönelik samimi ve doğal bir diyalog başlat (teknik bir gözlem, mimari bir soru, kahve/ofis muhabbeti veya esprili bir laf atma olabilir)."
+        )
+    elif recent_traces:
         conversation_lines = "\n".join(
             [f"  {t.agent_name}: {t.response}" for t in recent_traces]
         )
@@ -309,10 +261,11 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
 
     personality = AGENT_PERSONALITIES.get(req.agent, AGENT_PERSONALITIES["TeamLead"])
     quirks_str = " | ".join(personality["quirks"])
+    partner_ctx = f"Karşında '{req.partner}' bulunuyor ve onunla karşılıklı sohbet ediyorsun.\n" if req.partner else ""
 
     system_prompt = (
         f"Sen '{req.agent}' adlı yazılım geliştirme ekibinin son derece tecrübeli ve kıdemli bir Senior/Lead üyesisin. "
-        f"Şu an '{req.location}' konumundasın.\n\n"
+        f"Şu an '{req.location}' konumundasın.\n{partner_ctx}\n"
         f"Karakterin: {personality['trait']}\n"
         f"Senin uzmanlıkların ve takıntıların: {quirks_str}\n\n"
         f"DAVRANIŞ VE ÜSLUP KURALLARI:\n"
@@ -336,7 +289,16 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
     ]
 
     try:
-        raw_response = await _call_llm(messages, config.AGENT_MODEL)
+        agent_cfg = config.get_agent_llm_config(req.agent, purpose="chat")
+        text, p_tok, c_tok = await call_unified_llm_async(
+            provider=agent_cfg["provider"],
+            model=agent_cfg["model"],
+            messages=messages,
+            url=agent_cfg["url"],
+            api_key=agent_cfg["apiKey"],
+            timeout=min(config.LLM_TIMEOUT, 45.0)
+        )
+        raw_response = text
 
         words = raw_response.split()
         if len(words) > 40:
@@ -353,7 +315,7 @@ async def chat_idle(req: IdleChatRequest, db: Session = Depends(get_db)):
         trace = LLMTrace(
             id=str(uuid.uuid4()),
             job_id="idle",
-            sprint_id="idle",
+            sprint_id=None,
             agent_name=req.agent,
             worker_id="master",
             execution_node="local",

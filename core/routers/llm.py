@@ -485,3 +485,11 @@ async def record_project_exception(
         db.rollback()
         logger.error(f"Failed to record exception: {e}")
         raise HTTPException(500, "Failed to record exception")
+
+
+@router.post("/test/live-step")
+async def record_live_test_step(req: dict):
+    """Broadcasts a realtime test execution step to all connected UI clients via Socket.IO."""
+    await safe_emit("test_live_step", req)
+    return {"status": "ok"}
+

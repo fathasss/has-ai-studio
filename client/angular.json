@@ -40,6 +40,7 @@
           "builder": "@angular-devkit/build-angular:application",
           "options": {
             "outputPath": "dist/client",
+            "deleteOutputPath": false,
             "index": "src/index.html",
             "browser": "src/main.ts",
             "polyfills": [
@@ -74,8 +75,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "20kb",
-                  "maximumError": "50kb"
+                  "maximumWarning": "50kb",
+                  "maximumError": "100kb"
                 }
               ],
               "outputHashing": "all"

@@ -10,5 +10,20 @@
       "teamleadModel": "llama3.1:latest"
     }
   ],
-  "ACTIVE_NODE_ID": "default-edge"
+  "ACTIVE_NODE_ID": "default-edge",
+  "LLM_ROUTING": {
+    "defaultChat": {
+      "provider": "ollama",
+      "model": "llama3.1:latest",
+      "url": "http://has-ai-ollama:11434",
+      "apiKey": ""
+    },
+    "defaultTask": {
+      "provider": "gemini",
+      "model": "gemini-2.0-flash",
+      "url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "apiKey": ""
+    },
+    "agents": {}
+  }
 }

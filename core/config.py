@@ -39,6 +39,22 @@ _DEFAULT_URL            = os.getenv("OLLAMA_URL",     "http://has-ai-ollama:1143
 _DEFAULT_MODEL          = os.getenv("AGENT_MODEL",    "llama3.1:latest")
 _DEFAULT_TEAMLEAD_MODEL = os.getenv("TEAMLEAD_MODEL", _DEFAULT_MODEL)
 
+DEFAULT_LLM_ROUTING = {
+    "defaultChat": {
+        "provider": "ollama",
+        "model": _DEFAULT_MODEL,
+        "url": _DEFAULT_URL,
+        "apiKey": ""
+    },
+    "defaultTask": {
+        "provider": "gemini",
+        "model": "gemini-2.0-flash",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "apiKey": ""
+    },
+    "agents": {}
+}
+
 DEFAULT_CONFIG = {
     "NODES": [
         {
@@ -51,7 +67,8 @@ DEFAULT_CONFIG = {
             "teamleadModel": _DEFAULT_TEAMLEAD_MODEL,   # DÜZELTME 5: Ayrı alan
         }
     ],
-    "ACTIVE_NODE_ID": "default-edge"
+    "ACTIVE_NODE_ID": "default-edge",
+    "LLM_ROUTING": DEFAULT_LLM_ROUTING
 }
 
 config_lock = threading.Lock()
@@ -108,6 +125,9 @@ def load_config() -> dict:
                 _write_config_unsafe(migrated)
                 logger.info("Migration complete.")
                 return migrated
+
+            if "LLM_ROUTING" not in cfg:
+                cfg["LLM_ROUTING"] = copy.deepcopy(DEFAULT_LLM_ROUTING)
 
             return cfg
 
@@ -178,6 +198,60 @@ runtime_config = {}
 # Tek seferlik başlatma — load → refresh zincirine gerek yok
 runtime_config = load_config()
 refresh_runtime_config(runtime_config)
+
+
+def get_agent_llm_config(agent_name: str, purpose: str = "task") -> dict:
+    """
+    Returns resolved LLM configuration {provider, model, url, apiKey}
+    for the given agent and purpose ('chat' or 'task').
+
+    Priority:
+    1. Agent specific override in LLM_ROUTING['agents'][agent_name]
+    2. Global default for purpose (defaultChat or defaultTask in LLM_ROUTING)
+    3. Active node fallback (from NODES)
+    """
+    routing = runtime_config.get("LLM_ROUTING") or {}
+    agent_overrides = routing.get("agents", {}).get(agent_name, {})
+
+    if purpose == "chat":
+        provider = agent_overrides.get("chatProvider") or routing.get("defaultChat", {}).get("provider") or "ollama"
+        model = agent_overrides.get("chatModel") or routing.get("defaultChat", {}).get("model") or AGENT_MODEL
+        url = agent_overrides.get("url") or routing.get("defaultChat", {}).get("url") or OLLAMA_URL
+        api_key = agent_overrides.get("apiKey") or routing.get("defaultChat", {}).get("apiKey") or LLM_API_KEY
+    else:  # task
+        provider = agent_overrides.get("taskProvider") or routing.get("defaultTask", {}).get("provider") or LLM_PROVIDER
+        model = agent_overrides.get("taskModel") or routing.get("defaultTask", {}).get("model") or (TEAMLEAD_MODEL if agent_name == "TeamLead" else AGENT_MODEL)
+        url = agent_overrides.get("url") or routing.get("defaultTask", {}).get("url") or (OLLAMA_URL if provider == "ollama" else "")
+        api_key = agent_overrides.get("apiKey") or routing.get("defaultTask", {}).get("apiKey") or LLM_API_KEY
+
+    # Intelligent endpoint fallbacks for known cloud providers
+    if provider == "gemini":
+        if not url:
+            url = "https://generativelanguage.googleapis.com/v1beta/openai"
+        if not model:
+            model = "gemini-2.0-flash"
+    elif provider == "openai":
+        if not url:
+            url = "https://api.openai.com/v1"
+        if not model:
+            model = "gpt-4o"
+    elif provider == "anthropic":
+        if not url:
+            url = "https://api.anthropic.com/v1"
+        if not model:
+            model = "claude-3-5-sonnet-20241022"
+    elif provider == "ollama":
+        if not url:
+            url = OLLAMA_URL or "http://has-ai-ollama:11434"
+        if not model:
+            model = AGENT_MODEL or "llama3.1:latest"
+
+    return {
+        "provider": provider,
+        "model": model,
+        "url": url,
+        "apiKey": api_key or ""
+    }
 
 # Diğer ayarlar
 DB_PATH          = _normalize_host_path(os.getenv("TRACE_DB_PATH", "data/traceability.db"))

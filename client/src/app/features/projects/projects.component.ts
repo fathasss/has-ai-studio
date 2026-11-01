@@ -50,7 +50,7 @@ export class ProjectsComponent implements OnInit {
     this.loading = true;
     this.orchestratorService.getProjects().subscribe({
       next: (res) => {
-        this.projects = res.projects;
+        this.projects = (res.projects || []).filter(p => p && p.toLowerCase() !== 'idle');
         this.loading = false;
         // Optionally auto-expand first project if available
         if (this.projects.length > 0 && this.expandedProjects.size === 0) {

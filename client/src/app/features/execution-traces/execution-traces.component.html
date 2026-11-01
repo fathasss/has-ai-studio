@@ -1,63 +1,67 @@
-<div class="h-full flex flex-col relative w-full h-[calc(100vh-6rem)]">
-    <div class="mb-6 flex justify-between items-end flex-shrink-0">
+<div class="h-full flex flex-col relative w-full p-6 overflow-y-auto custom-scrollbar bg-transparent">
+    <div class="mb-5 flex justify-between items-end flex-shrink-0">
       <div>
-        <h2 class="text-2xl font-bold text-white mb-1">Global Execution Traces</h2>
-        <p class="text-gray-400 text-sm">Historical agent output replay (Raw Responses)</p>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#06b6d4]"></span>
+          <span class="text-[10px] uppercase font-black tracking-widest text-cyan-400">Canlı Sistem Teşhis & Replay</span>
+        </div>
+        <h2 class="text-2xl font-black text-white tracking-tight">Global Execution Traces</h2>
       </div>
-      <button (click)="loadTraces()" class="px-4 py-2 border border-white/20 rounded-lg text-sm bg-black hover:bg-white/10 transition-colors">
-        Reload Traces
+      <button (click)="loadTraces()" 
+              class="px-4 py-2 border border-cyan-500/30 rounded-xl text-xs font-bold bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 hover:shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all cursor-pointer">
+        Traces Yenile
       </button>
     </div>
   
     <div class="flex-1 flex flex-col gap-4">
       
-      <!-- Tabs Header -->
-      <div class="flex gap-4 border-b border-white/10 pb-2">
-        <button [ngClass]="activeTab === 'SYSTEM' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500 hover:text-gray-300'"
-                class="px-4 py-2 font-bold transition-colors"
+      <!-- Tabs Header (Cyber Glass Segments) -->
+      <div class="flex gap-2 p-1.5 bg-[#0a0e17]/80 border border-white/[0.08] rounded-2xl w-fit backdrop-blur-xl">
+        <button [ngClass]="activeTab === 'SYSTEM' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.15)] font-bold' : 'text-gray-400 hover:text-white border border-transparent'"
+                class="px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
                 (click)="activeTab = 'SYSTEM'">
-          System / Project Logs
+          ⚙️ Sistem & Proje Logları
         </button>
-        <button [ngClass]="activeTab === 'AGENT' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-500 hover:text-gray-300'"
-                class="px-4 py-2 font-bold transition-colors"
+        <button [ngClass]="activeTab === 'AGENT' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)] font-bold' : 'text-gray-400 hover:text-white border border-transparent'"
+                class="px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
                 (click)="activeTab = 'AGENT'">
-          Agent Conversations
+          💬 Ajan Diyalog & Çıktıları
         </button>
       </div>
 
       <!-- Tab Content: SYSTEM -->
-      <div *ngIf="activeTab === 'SYSTEM'" class="flex-1 bg-black/40 border border-white/10 rounded-xl overflow-y-auto p-6 scroll-smooth">
-        <div *ngIf="systemTraces.length === 0" class="text-center text-gray-500 py-10">No system execution traces available...</div>
+      <div *ngIf="activeTab === 'SYSTEM'" class="flex-1 bg-[#0a0e17]/85 border border-white/[0.08] rounded-2xl overflow-y-auto p-6 scroll-smooth backdrop-blur-xl shadow-2xl custom-scrollbar">
+        <div *ngIf="systemTraces.length === 0" class="text-center text-gray-500 py-16 text-xs">Kayıtlı sistem icra izi bulunmuyor...</div>
         
-        <div class="flex flex-col gap-6">
+        <div class="flex flex-col gap-4">
             <div *ngFor="let t of systemTraces" 
-                 class="bg-black/60 border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all cursor-pointer group"
+                 class="bg-[#0c1220]/80 border border-white/[0.08] rounded-2xl overflow-hidden hover:border-cyan-500/30 transition-all cursor-pointer group shadow-lg"
                  (click)="toggleLog(t.id)">
-                <div class="flex justify-between items-center p-4 border-b border-white/10 bg-white/5">
+                <div class="flex justify-between items-center p-4 border-b border-white/[0.08] bg-white/[0.02]">
                     <div class="flex items-center gap-3">
-                        <span class="inline-block px-2 py-1 bg-blue-500/10 text-blue-400 text-xs font-bold uppercase rounded border border-blue-500/20">
-                            {{t.agent_name || t.agent}}
+                        <span class="inline-block px-2.5 py-1 bg-cyan-500/15 text-cyan-300 text-xs font-bold uppercase rounded-lg border border-cyan-500/30">
+                            &#64;{{t.agent_name || t.agent}}
                         </span>
-                        <span class="text-sm font-mono text-gray-400">Pipeline: {{t.sprint_id}}</span>
+                        <span class="text-xs font-mono text-gray-400">Sprint: {{t.sprint_id}}</span>
                     </div>
                     <div class="flex items-center gap-4">
-                        <span class="text-[0.65rem] font-bold text-gray-600 uppercase tracking-widest group-hover:text-blue-400 transition-colors">
-                          {{ isExpanded(t.id) ? 'Click to collapse' : 'Click to expand' }}
+                        <span class="text-[0.65rem] font-bold text-gray-500 uppercase tracking-widest group-hover:text-cyan-400 transition-colors">
+                          {{ isExpanded(t.id) ? 'Daralt' : 'Genişlet' }}
                         </span>
-                        <span class="text-xs text-gray-500">{{t.timestamp | date:'medium'}}</span>
+                        <span class="text-xs text-gray-500 font-mono">{{t.timestamp | date:'medium'}}</span>
                     </div>
                 </div>
-                <div class="p-4">
+                <div class="p-5">
                    <div class="relative transition-all duration-300 overflow-hidden"
-                        [ngClass]="isExpanded(t.id) ? 'max-h-[5000px]' : 'max-h-40'">
-                      <pre class="text-[0.85rem] text-gray-300 font-mono whitespace-pre-wrap">{{t.response}}</pre>
+                        [ngClass]="isExpanded(t.id) ? 'max-h-[5000px]' : 'max-h-36'">
+                      <pre class="text-[0.82rem] text-gray-300 font-mono whitespace-pre-wrap leading-relaxed">{{t.response}}</pre>
                       
                       <!-- Fading effect for collapsed log -->
-                      <div *ngIf="!isExpanded(t.id)" class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
+                      <div *ngIf="!isExpanded(t.id)" class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#0c1220] to-transparent pointer-events-none"></div>
                    </div>
                    
-                   <div class="mt-4 text-xs text-gray-500 font-mono text-right border-t border-white/5 pt-2">
-                       Duration: {{t.duration_ms | number:'1.0-0'}} ms | Status: <span [ngClass]="(t.status === 'SUCCESS' || t.status === 'COMPLETED') ? 'text-green-500' : 'text-red-500'">{{t.status}}</span>
+                   <div class="mt-4 text-xs text-gray-500 font-mono text-right border-t border-white/[0.06] pt-2.5">
+                       Süre: <span class="text-cyan-400 font-bold">{{t.duration_ms | number:'1.0-0'}} ms</span> | Durum: <span [ngClass]="(t.status === 'SUCCESS' || t.status === 'COMPLETED') ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'">{{t.status}}</span>
                    </div>
                 </div>
             </div>
@@ -65,83 +69,82 @@
       </div>
 
       <!-- Tab Content: AGENT -->
-      <div *ngIf="activeTab === 'AGENT'" class="flex-1 bg-black/40 border border-white/10 rounded-xl overflow-y-auto p-4 md:p-8 scroll-smooth">
-        <div *ngIf="agentTraces.length === 0" class="text-center text-gray-500 py-20">
-          <div class="text-4xl mb-4 opacity-20">💬</div>
-          No agent conversations recorded in this cycle...
+      <div *ngIf="activeTab === 'AGENT'" class="flex-1 bg-[#0a0e17]/85 border border-white/[0.08] rounded-2xl overflow-y-auto p-4 md:p-6 scroll-smooth backdrop-blur-xl shadow-2xl custom-scrollbar">
+        <div *ngIf="agentTraces.length === 0" class="text-center text-gray-500 py-20 text-xs">
+          <div class="text-4xl mb-3 opacity-20">💬</div>
+          Bu döngüde henüz kayıtlı diyalog izi bulunamadı...
         </div>
         
-        <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-4">
             <div *ngFor="let group of groupedAgentTraces | keyvalue" 
                  class="flex flex-col group/agent-section">
                 
                 <!-- Premium Agent Header Card -->
-                <div class="sticky top-0 z-20 bg-[#050505]/90 backdrop-blur-xl border border-white/5 rounded-2xl p-3 flex items-center justify-between cursor-pointer hover:border-white/20 transition-all shadow-2xl"
+                <div class="sticky top-0 z-20 bg-[#0a0e17]/95 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-3.5 flex items-center justify-between cursor-pointer hover:border-cyan-500/30 transition-all shadow-xl"
                      [style.border-left-color]="getAgentMeta(group.key).color"
                      [style.border-left-width]="'4px'"
                      (click)="toggleGroup(group.key)">
                     
-                    <div class="flex items-center gap-5">
+                    <div class="flex items-center gap-4">
                         <div class="relative">
                             <img [src]="getAgentMeta(group.key).avatar" 
-                                 class="w-12 h-12 rounded-full border-2 bg-black/40 object-cover p-0.5"
+                                 class="w-11 h-11 rounded-full border-2 bg-black/40 object-cover p-0.5"
                                  [style.border-color]="getAgentMeta(group.key).color">
-                            <div class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-black"
+                            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-black"
                                  [style.background-color]="getAgentMeta(group.key).color"></div>
                         </div>
                         <div class="flex flex-col">
-                            <div class="flex items-center gap-3">
-                                <span class="text-lg font-black text-white uppercase tracking-tighter">{{group.key}}</span>
+                            <div class="flex items-center gap-2.5">
+                                <span class="text-base font-black text-white uppercase tracking-tight">{{group.key}}</span>
                                 <span class="px-2 py-0.5 rounded text-[0.6rem] font-bold bg-white/5 text-gray-400 border border-white/10 uppercase tracking-widest">
-                                    {{group.value.length}} MESSAGES
+                                    {{group.value.length}} MESAJ
                                 </span>
                             </div>
-                            <span class="text-[0.65rem] font-bold tracking-widest uppercase opacity-40" [style.color]="getAgentMeta(group.key).color">
+                            <span class="text-[0.65rem] font-bold tracking-widest uppercase opacity-70" [style.color]="getAgentMeta(group.key).color">
                                 {{getAgentMeta(group.key).role}}
                             </span>
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-4 px-4">
-                        <span class="text-[0.6rem] font-bold text-gray-500 uppercase tracking-widest hidden md:block">
-                            {{ isGroupCollapsed(group.key) ? 'Show Logs' : 'Hide Logs' }}
+                    <div class="flex items-center gap-4 px-3">
+                        <span class="text-[0.65rem] font-bold text-gray-500 uppercase tracking-widest hidden md:block">
+                            {{ isGroupCollapsed(group.key) ? 'Göster' : 'Gizle' }}
                         </span>
                         <div class="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center transition-transform duration-300"
                              [class.rotate-180]="isGroupCollapsed(group.key)">
-                            <span class="text-[0.6rem] opacity-30">▼</span>
+                            <span class="text-[0.6rem] opacity-50">▼</span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Messages Grid (Collapsible) -->
                 <div *ngIf="!isGroupCollapsed(group.key)" 
-                     class="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4 mb-10 transition-all duration-500 animate-in fade-in slide-in-from-top-2 px-2">
+                     class="grid grid-cols-1 xl:grid-cols-2 gap-3.5 mt-3 mb-8 transition-all duration-500 animate-in fade-in slide-in-from-top-2 px-1">
                     <div *ngFor="let t of group.value" 
-                         class="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden hover:border-white/20 hover:bg-white/[0.04] transition-all cursor-pointer group/msg relative"
+                         class="bg-[#0c1220]/80 border border-white/[0.08] rounded-2xl overflow-hidden hover:border-cyan-500/30 transition-all cursor-pointer group/msg relative shadow-lg"
                          (click)="toggleLog(t.id)">
                         
                         <!-- Accent Line -->
                         <div class="absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/msg:opacity-100 transition-opacity"
                              [style.background-color]="getAgentMeta(group.key).color"></div>
 
-                        <div class="flex justify-between items-center p-4 border-b border-white/5 bg-white/[0.01]">
-                            <div class="flex items-center gap-3">
-                                <div class="w-1.5 h-1.5 rounded-full" [style.background-color]="getAgentMeta(group.key).color"></div>
+                        <div class="flex justify-between items-center p-3.5 border-b border-white/[0.08] bg-white/[0.01]">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-2 h-2 rounded-full" [style.background-color]="getAgentMeta(group.key).color"></div>
                                 <span class="text-[0.7rem] text-gray-400 font-mono font-bold">{{t.timestamp | date:'medium'}}</span>
                             </div>
-                            <span class="text-[0.55rem] font-black text-gray-600 uppercase tracking-widest group-hover/msg:text-white transition-colors">
-                              {{ isExpanded(t.id) ? 'Collapse' : 'Expand' }}
+                            <span class="text-[0.6rem] font-black text-gray-500 uppercase tracking-widest group-hover/msg:text-cyan-300 transition-colors">
+                              {{ isExpanded(t.id) ? 'Daralt' : 'Genişlet' }}
                             </span>
                         </div>
 
-                        <div class="p-5">
+                        <div class="p-4">
                            <div class="relative transition-all duration-500 ease-out overflow-hidden"
                                 [ngClass]="isExpanded(t.id) ? 'max-h-[2000px]' : 'max-h-24'">
                               <pre class="text-[0.8rem] text-gray-300 font-mono whitespace-pre-wrap leading-relaxed tracking-wide">{{t.response}}</pre>
                               
-                              <!-- Premium Fade for collapsed view -->
                               <div *ngIf="!isExpanded(t.id)" 
-                                   class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent pointer-events-none">
+                                   class="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#0c1220] via-[#0c1220]/80 to-transparent pointer-events-none">
                               </div>
                            </div>
                         </div>

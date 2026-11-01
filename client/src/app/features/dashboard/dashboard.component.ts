@@ -29,7 +29,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   
   public prompt: string = '';
   public chatHistory: ChatMessage[] = [
-    { role: 'TeamLead', content: 'TeamLead initialized. Factory environment is secured and sequential orchestration bridge is hot-loaded.\n\nAwaiting your project requirements, PO.' }
+    { role: 'TeamLead', content: 'TeamLead devrede. Mimari orkestrasyon hattı hazır ve dinlemede.\n\nYeni proje gereksinimlerinizi bekliyorum, PO.' }
   ];
   
   public rawAgentHistory: any[] = []; // for backend
@@ -174,6 +174,37 @@ export class DashboardComponent implements OnInit, OnDestroy {
         role: (m.role === 'TeamLead' || m.role === 'assistant') ? 'assistant' : 'user',
         content: m.content
       }));
+
+      // Geçmişteki mesajlarda kayıtlı mimari plan var mı tara
+      let foundPlan = false;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (m.role === 'TeamLead' || m.role === 'assistant') {
+          const jsonStr = this.extractJson(m.content);
+          if (jsonStr) {
+            try {
+              this.parsedPlan = JSON.parse(jsonStr);
+              let mdContent = this.parsedPlan.implementation_plan_md || '';
+              if (!mdContent) {
+                mdContent = m.content.replace(/```json[\s\S]*?```/i, '').trim();
+              }
+              if (mdContent) {
+                const htmlValue = marked.parse(mdContent) as string;
+                this.renderedPlanMd = this.sanitizer.bypassSecurityTrustHtml(htmlValue);
+              }
+              this.hasPendingPlan = true;
+              foundPlan = true;
+              break;
+            } catch (e) {}
+          }
+        }
+      }
+      if (!foundPlan) {
+        this.hasPendingPlan = false;
+        this.parsedPlan = null;
+        this.renderedPlanMd = '';
+      }
+
       this.syncState();
       setTimeout(() => this.scrollToBottom(), 50);
     });
@@ -184,7 +215,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   resetEnvironment() {
-    this.chatHistory = [{ role: 'TeamLead', content: 'Environment Reset. Awaiting your project requirements, PO.' }];
+    this.chatHistory = [{ role: 'TeamLead', content: 'Ortam sıfırlandı. Yeni proje gereksinimlerinizi bekliyorum, PO.' }];
     this.rawAgentHistory = [];
     this.hasPendingPlan = false;
     this.parsedPlan = null;
@@ -201,6 +232,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
     } catch(err) { }
   }
 
+  isApprovalText(text: string): boolean {
+    const clean = text.toLowerCase().trim().replace(/[.,!?;:]/g, '');
+    const approvalWords = [
+      'onayliyorum', 'onaylıyorum', 'onayla', 'onay',
+      'evet', 'baslat', 'başlat', 'tamam', 'tamamdir', 'tamamdır',
+      'uygun', 'devam et', 'devam', 'lets go', "let's go",
+      'approved', 'approve', 'looks good', 'harika', 'kabul', 'start'
+    ];
+    return approvalWords.some(w => clean === w || clean.startsWith(w + ' ') || clean.endsWith(' ' + w));
+  }
+
   sendMessage() {
     if (!this.prompt.trim() || this.isTyping) return;
     
@@ -211,6 +253,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.promptInput) {
       const textarea = this.promptInput.nativeElement;
       textarea.style.height = '48px';
+    }
+
+    // Direct approval intercept: if user typed "onaylıyorum" / "başlat" etc.
+    if (this.isApprovalText(userText) && (this.hasPendingPlan || this.chatHistory.length > 1)) {
+      this.chatHistory.push({ role: 'PO', content: userText });
+      this.rawAgentHistory.push({ role: 'user', content: userText });
+      this.orchestratorService.saveChatMessage(this.currentSprintId, 'user', userText).subscribe();
+
+      const tlMsg = "🚀 Harika! Proje onaylandı. Ekip projenin gereksinimlerine göre yapılandırılan dinamik fazlar doğrultusunda geliştirmeye başlıyor. 3D Ofis ortamına aktarılıyorsunuz...";
+      this.chatHistory.push({ role: 'TeamLead', content: tlMsg });
+      this.rawAgentHistory.push({ role: 'assistant', content: tlMsg });
+      this.orchestratorService.saveChatMessage(this.currentSprintId, 'TeamLead', tlMsg).subscribe();
+      this.syncState();
+      setTimeout(() => this.scrollToBottom(), 50);
+
+      this.buildAndExecuteDirectly();
+      return;
     }
     
     this.chatHistory.push({ role: 'PO', content: userText });
@@ -226,8 +285,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.orchestratorService.chatTeamLead(this.rawAgentHistory).subscribe({
       next: (res) => {
         const rawResponse = res.response;
+        const cleanContent = rawResponse.replace(/```json[\s\S]*?```/i, '').trim();
+        const displayContent = cleanContent || rawResponse;
+
+        // Anında sohbet geçmişine ekle (kullanıcı hemen görsün, soket gecikmesinden etkilenmesin)
+        const lastMsg = this.chatHistory.length > 0 ? this.chatHistory[this.chatHistory.length - 1] : null;
+        if (!lastMsg || lastMsg.role !== 'TeamLead' || lastMsg.content !== displayContent) {
+          this.chatHistory.push({ role: 'TeamLead', content: displayContent });
+          this.rawAgentHistory.push({ role: 'assistant', content: rawResponse });
+        }
+        this.latestTeamLeadMessage = this.renderMarkdown(displayContent);
+        this.syncState();
+        setTimeout(() => this.scrollToBottom(), 50);
         
-        // Sadece asistanın yanıtını kaydet (Socket tetiklenecek)
+        // Backend'e kaydet ve oturum listesini tazele
         this.orchestratorService.saveChatMessage(this.currentSprintId, 'TeamLead', rawResponse).subscribe(() => {
           this.loadSessions(); 
         });
@@ -236,7 +307,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         
         // Plan kontrolü (Gerekirse silent refresh tetikle)
         const contentLower = rawResponse.toLowerCase();
-        const triggerKeywords = ['plan', 'architecture', 'mimari', 'tasarım', 'structure', 'blueprint', 'şema', 'hazırl', 'oluştur', 'hazır', 'analiz', 'preview'];
+        const triggerKeywords = ['plan', 'architecture', 'mimari', 'tasarım', 'structure', 'blueprint', 'şema', 'hazırl', 'oluştur', 'hazır', 'analiz', 'preview', 'onay', 'faz'];
         const hasTriggerWord = triggerKeywords.some(word => contentLower.includes(word));
         const hasStructuralMarker = rawResponse.includes('##') || rawResponse.includes('###');
 
@@ -246,7 +317,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         }
       },
       error: (err) => {
-        this.chatHistory.push({ role: 'TeamLead', content: '[Connection Error] Could not reach orchestrator.' });
+        this.chatHistory.push({ role: 'TeamLead', content: '[Bağlantı Hatası] Orkestratöre ulaşılamadı. Lütfen servisi kontrol edin.' });
         this.isTyping = false;
       }
     });
@@ -310,16 +381,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   buildAndExecuteDirectly() {
     if (this.isLoadingPlan) return;
+
+    if (this.parsedPlan && this.parsedPlan.tasks && this.parsedPlan.tasks.length > 0) {
+      this.approveSprint();
+      return;
+    }
+
+    // rawAgentHistory boşsa chatHistory'den yeniden oluştur
+    if (this.rawAgentHistory.length === 0 && this.chatHistory.length > 0) {
+      this.rawAgentHistory = this.chatHistory.map(m => ({
+        role: m.role === 'TeamLead' ? 'assistant' : 'user',
+        content: m.content
+      }));
+    }
     
     this.isLoadingPlan = true;
     this.planError = '';
-    this.executionStatus = 'Preparing plan...';
+    this.executionStatus = 'Plan hazırlanıyor...';
     
     this.orchestratorService.previewSprint(this.rawAgentHistory).subscribe({
       next: (res: any) => {
         try {
           const jsonStr = this.extractJson(res.response);
-          if (!jsonStr) throw new Error("JSON not found in TeamLead response. Try again or check the requirements.");
+          if (!jsonStr) throw new Error("TeamLead yanıtında mimari plan JSON yapısı bulunamadı. Lütfen tekrar deneyin.");
           
           this.parsedPlan = JSON.parse(jsonStr);
           
@@ -335,7 +419,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       error: (err: any) => {
         console.error("Preview call failed:", err);
-        this.planError = err.message || "Failed to reach TeamLead. Check your connection.";
+        this.planError = err.message || "TeamLead'e ulaşılamadı. Bağlantınızı kontrol edin.";
         this.isLoadingPlan = false;
         this.executionStatus = '';
         this.showPreviewModal = true;
@@ -354,38 +438,41 @@ export class DashboardComponent implements OnInit, OnDestroy {
       }
     }
 
-    this.executionStatus = 'Migrating session...';
-    this.orchestratorService.migrateChatHistory(oldId, this.currentSprintId).subscribe({
-      next: () => {
-        this.closePreviewModal();
-        this.hasPendingPlan = false;
-        
-        this.executionStatus = 'Starting workforce...';
-        this.orchestratorService.executeSprint(this.currentSprintId, this.parsedPlan, this.rawAgentHistory).subscribe({
-          next: () => {
-            this.isLoadingPlan = false;
-            this.executionStatus = '';
-            this.router.navigate(['/active-projects']);
-          },
-          error: (err) => {
-            console.error("Sprint execution failed", err);
-            this.planError = "Execution failed: " + (err.message || "Unknown error");
-            this.isLoadingPlan = false;
-            this.executionStatus = '';
-            this.showPreviewModal = true;
-          }
-        });
-        
-        this.syncState();
-      },
-      error: (err) => {
-        console.error("Migration failed", err);
-        this.planError = "Migration failed: " + (err.message || "Unknown error");
-        this.isLoadingPlan = false;
-        this.executionStatus = '';
-        this.showPreviewModal = true;
-      }
-    });
+    const execute = () => {
+      this.closePreviewModal();
+      this.hasPendingPlan = false;
+      
+      this.executionStatus = 'Ajanlar başlatılıyor...';
+      this.orchestratorService.executeSprint(this.currentSprintId, this.parsedPlan, this.rawAgentHistory).subscribe({
+        next: () => {
+          this.isLoadingPlan = false;
+          this.executionStatus = '';
+          this.router.navigate(['/active-projects'], { queryParams: { sprint: this.currentSprintId } });
+        },
+        error: (err) => {
+          console.error("Sprint execution failed", err);
+          this.planError = "Çalıştırma hatası: " + (err.message || "Bilinmeyen hata");
+          this.isLoadingPlan = false;
+          this.executionStatus = '';
+          this.showPreviewModal = true;
+        }
+      });
+      
+      this.syncState();
+    };
+
+    if (oldId && oldId !== this.currentSprintId) {
+      this.executionStatus = 'Oturum taşınıyor...';
+      this.orchestratorService.migrateChatHistory(oldId, this.currentSprintId).subscribe({
+        next: () => execute(),
+        error: (err) => {
+          console.warn("Migration warning, proceeding to execute anyway:", err);
+          execute();
+        }
+      });
+    } else {
+      execute();
+    }
   }
 
   private slugify(text: string): string {

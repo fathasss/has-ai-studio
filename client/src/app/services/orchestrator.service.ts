@@ -17,6 +17,74 @@ export interface DefaultConfig {
   ACTIVE_NODE_ID: string;
 }
 
+export interface AgentLLMConfig {
+  chatProvider: 'ollama' | 'openai' | 'gemini' | 'anthropic';
+  chatModel: string;
+  taskProvider: 'ollama' | 'openai' | 'gemini' | 'anthropic';
+  taskModel: string;
+  apiKey?: string;
+  url?: string;
+}
+
+export interface LLMRoutingConfig {
+  defaultChat: {
+    provider: 'ollama' | 'openai' | 'gemini' | 'anthropic';
+    model: string;
+    url?: string;
+    apiKey?: string;
+  };
+  defaultTask: {
+    provider: 'ollama' | 'openai' | 'gemini' | 'anthropic';
+    model: string;
+    url?: string;
+    apiKey?: string;
+  };
+  agents?: { [agentName: string]: Partial<AgentLLMConfig> };
+}
+
+export interface LLMPreset {
+  provider: string;
+  model: string;
+  label: string;
+}
+
+export interface LLMRoutingResponse {
+  routing: LLMRoutingConfig;
+  presets: {
+    chat: LLMPreset[];
+    task: LLMPreset[];
+  };
+}
+
+export interface SprintPhase {
+  phase_id: number;
+  key?: string;
+  name: string;
+  role: string;
+  participating_agents?: string[];
+  icon: string;
+  color: string;
+  description: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  deliverables: string[];
+  tasks_count: number;
+  tasks: any[];
+  jobs_count?: number;
+  file_path?: string;
+}
+
+export interface SprintPhasesResponse {
+  status: string;
+  sprint_id: string;
+  project_name: string;
+  current_phase: number;
+  total_phases: number;
+  completed_phases: number;
+  overall_progress: number;
+  teamlead_status: string;
+  phases: SprintPhase[];
+}
+
 export interface MetricData {
   performance: {
     total_tokens: number;
@@ -99,8 +167,13 @@ export class OrchestratorService {
     return this.http.post(`${this.apiUrl}/chat/preview`, { history });
   }
 
-  generateIdleChat(agent: string, location: string): Observable<any> {
-    return this.http.post(`${this.apiUrl}/chat/idle`, { agent, location });
+  generateIdleChat(agent: string, location: string, partner?: string, messageToReply?: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/chat/idle`, {
+      agent,
+      location,
+      partner,
+      message_to_reply: messageToReply
+    });
   }
 
   executeSprint(sprintId: string, plan: any, history: any[]): Observable<any> {
@@ -157,5 +230,33 @@ export class OrchestratorService {
     return this.http.get<{content: string, filename: string}>(`${this.apiUrl}/reports/${sid}/content`, {
       params: { filename }
     });
+  }
+
+  getLLMRouting(): Observable<LLMRoutingResponse> {
+    return this.http.get<LLMRoutingResponse>(`${this.apiUrl}/config/llm-routing`);
+  }
+
+  saveAgentLLM(data: {
+    agent: string;
+    chatProvider: string;
+    chatModel: string;
+    taskProvider: string;
+    taskModel: string;
+    apiKey?: string;
+    url?: string;
+  }): Observable<any> {
+    return this.http.post(`${this.apiUrl}/config/agent-llm`, data);
+  }
+
+  getSprintPhases(sprintId: string): Observable<SprintPhasesResponse> {
+    return this.http.get<SprintPhasesResponse>(`${this.apiUrl}/sprint/${sprintId}/phases`);
+  }
+
+  getSprintMemory(sprintId: string): Observable<{
+    sprint_id: string;
+    shared_memory: string;
+    agent_memories: Record<string, string>;
+  }> {
+    return this.http.get<any>(`${this.apiUrl}/sprint/${sprintId}/memory`);
   }
 }

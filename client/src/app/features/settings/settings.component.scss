@@ -1,6 +1,8 @@
-$bg-primary: #09090b;
+$bg-primary: #06080d;
+$bg-surface: #0a0e17;
 $bg-secondary: rgba(255, 255, 255, 0.03);
-$accent-yellow: #eab308;
+$accent-cyan: #06b6d4;
+$accent-yellow: #facc15;
 $accent-purple: #a855f7;
 $border-color: rgba(255, 255, 255, 0.08);
 
@@ -8,48 +10,45 @@ $border-color: rgba(255, 255, 255, 0.08);
     height: 100%;
     width: 100%;
     overflow: hidden;
-    background: radial-gradient(ellipse at top right, var(--tw-gradient-stops));
-    --tw-gradient-from: #18181b;
-    --tw-gradient-to: #09090b;
-    --tw-gradient-stops: var(--tw-gradient-from), #000000, var(--tw-gradient-to);
+    background: transparent;
     color: #e5e7eb;
     padding: 2rem;
 }
 
 .node-card-active {
-    border-color: rgba(234, 179, 8, 0.5) !important;
-    background: rgba(24, 24, 27, 0.8) !important;
-    box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.2);
+    border-color: rgba($accent-cyan, 0.5) !important;
+    background: rgba(12, 18, 32, 0.9) !important;
+    box-shadow: 0 0 20px rgba($accent-cyan, 0.2) !important;
     transform: translateX(0.25rem);
 }
 
 .node-icon-ollama {
-    background: rgba(59, 130, 246, 0.1);
-    color: #60a5fa;
+    background: rgba(6, 182, 212, 0.15);
+    color: #06b6d4;
 }
 
 .node-icon-openai {
-    background: rgba(34, 197, 94, 0.1);
-    color: #4ade80;
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
 }
 
 .node-icon-cloud {
-    background: rgba(168, 85, 247, 0.1);
+    background: rgba(168, 85, 247, 0.15);
     color: #c084fc;
 }
 
 .model-option-active {
-    background: rgba(168, 85, 247, 0.1);
-    color: #c084fc;
+    background: rgba(6, 182, 212, 0.15);
+    color: #06b6d4;
 }
 
 .pull-progress-bar {
-    background: linear-gradient(90deg, #9333ea, #3b82f6, #9333ea);
+    background: linear-gradient(90deg, #06b6d4, #a855f7, #facc15);
 }
 
 .registry-input {
     width: 100%;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(6, 9, 15, 0.85);
     border: 1px solid $border-color;
     color: #fff;
     border-radius: 1rem;
@@ -59,7 +58,7 @@ $border-color: rgba(255, 255, 255, 0.08);
     outline: none;
 
     &::placeholder {
-        color: rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.25);
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.1em;
@@ -67,9 +66,9 @@ $border-color: rgba(255, 255, 255, 0.08);
     }
 
     &:focus {
-        border-color: rgba($accent-yellow, 0.4);
-        box-shadow: 0 0 20px rgba($accent-yellow, 0.1), inset 0 0 10px rgba($accent-yellow, 0.05);
-        background: rgba(0, 0, 0, 0.6);
+        border-color: rgba($accent-cyan, 0.5);
+        box-shadow: 0 0 20px rgba($accent-cyan, 0.2), inset 0 0 10px rgba($accent-cyan, 0.05);
+        background: rgba(10, 14, 23, 0.95);
     }
 
     &:disabled {
@@ -82,14 +81,14 @@ $border-color: rgba(255, 255, 255, 0.08);
     @extend .registry-input;
     appearance: none;
     cursor: pointer;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2306b6d4' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 1.25rem center;
     background-size: 1rem;
     padding-right: 3.5rem;
 
     option {
-        background: $bg-primary;
+        background: $bg-surface;
         color: #fff;
         padding: 1rem;
     }
@@ -97,17 +96,17 @@ $border-color: rgba(255, 255, 255, 0.08);
 
 .custom-model-select-container {
     .registry-input {
-        border-color: rgba($accent-purple, 0.1);
+        border-color: rgba($accent-cyan, 0.15);
 
         &:hover {
-            border-color: rgba($accent-purple, 0.3);
-            box-shadow: 0 0 20px rgba($accent-purple, 0.05);
+            border-color: rgba($accent-cyan, 0.35);
+            box-shadow: 0 0 20px rgba($accent-cyan, 0.1);
         }
 
         &.border-purple-500 {
-            border-color: $accent-purple;
-            box-shadow: 0 0 25px rgba($accent-purple, 0.15);
-            background: rgba(0, 0, 0, 0.6);
+            border-color: $accent-cyan;
+            box-shadow: 0 0 25px rgba($accent-cyan, 0.2);
+            background: rgba(10, 14, 23, 0.9);
         }
     }
 }
@@ -127,11 +126,11 @@ $border-color: rgba(255, 255, 255, 0.08);
     }
 
     &::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.12);
         border-radius: 10px;
 
         &:hover {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(6, 182, 212, 0.4);
         }
     }
 }
@@ -142,18 +141,18 @@ $border-color: rgba(255, 255, 255, 0.08);
 }
 
 .glass-card {
-    background: rgba(15, 15, 18, 0.4);
+    background: rgba(10, 14, 23, 0.85);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border: 1px solid $border-color;
     border-radius: 1.25rem;
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-    transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+    transition: all 0.35s cubic-bezier(0.165, 0.84, 0.44, 1);
 
     &:hover {
-        background: rgba(15, 15, 18, 0.6);
-        border-color: rgba(255, 255, 255, 0.12);
-        box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+        background: rgba(14, 20, 32, 0.95);
+        border-color: rgba($accent-cyan, 0.3);
+        box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.7), 0 0 15px rgba(6, 182, 212, 0.1);
     }
 }
 
@@ -169,7 +168,7 @@ $border-color: rgba(255, 255, 255, 0.08);
 }
 
 .animate-shimmer {
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+    background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.08), transparent);
     background-size: 200% 100%;
     animation: shimmer 2s infinite linear;
 }

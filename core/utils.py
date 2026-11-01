@@ -924,10 +924,18 @@ def get_latest_reports(sprint_id: str) -> str:
     return "\n\n".join(reports_content)
 
 
-def get_project_context(project_dir: str, sprint_id: str = None) -> str:
+def get_project_context(project_dir: str, sprint_id: str = None, agent: str = None) -> str:
     context = []
 
     if sprint_id:
+        try:
+            from .services.memory_service import MemoryService
+            mem_prompt = MemoryService.get_project_memory_prompt(sprint_id, agent or "", project_dir)
+            if mem_prompt:
+                context.append(mem_prompt)
+        except Exception as e:
+            logger.warning(f"Could not load project memory context: {e}")
+
         reports = get_latest_reports(sprint_id)
         if reports:
             context.append("# CRITICAL: WORK COMPLETED BY OTHER AGENTS (MUST READ)\n" + reports)

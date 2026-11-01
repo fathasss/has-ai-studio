@@ -301,21 +301,21 @@ async def _get_sprints(db: Session) -> SprintListResponse:
     if os.path.exists(APPS_DIR):
         fs_sprints = {
             d for d in os.listdir(APPS_DIR)
-            if os.path.isdir(os.path.join(APPS_DIR, d)) and not d.startswith(".")
+            if os.path.isdir(os.path.join(APPS_DIR, d)) and not d.startswith(".") and d.lower() != "idle"
         }
 
     db_sprint_ids = (
         db.query(LLMTrace.sprint_id)
-        .filter(LLMTrace.sprint_id.isnot(None))
+        .filter(LLMTrace.sprint_id.isnot(None), LLMTrace.sprint_id != "", func.lower(LLMTrace.sprint_id) != "idle")
         .union(
             db.query(LLMJobRecord.sprint_id)
-            .filter(LLMJobRecord.sprint_id.isnot(None))
+            .filter(LLMJobRecord.sprint_id.isnot(None), LLMJobRecord.sprint_id != "", func.lower(LLMJobRecord.sprint_id) != "idle")
         )
         .distinct()
         .all()
     )
 
-    all_sprints = fs_sprints | {row[0] for row in db_sprint_ids if row[0]}
+    all_sprints = {s for s in (fs_sprints | {row[0] for row in db_sprint_ids if row[0]}) if s and s.lower() != "idle"}
     sorted_sprints = sorted(all_sprints, reverse=True)
 
     return SprintListResponse(
