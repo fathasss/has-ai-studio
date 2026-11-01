@@ -10,6 +10,10 @@
 
 Powered by a **Dual-Engine LLM Architecture**, the system intelligently routes informal peer conversations to zero-cost local models (**Ollama**) while directing mission-critical planning and coding tasks to high-reasoning cloud or local LLMs (**Google Gemini 2.0 Flash/Pro**, **OpenAI GPT-4o**, **Anthropic Claude 3.5 Sonnet**).
 
+<p align="center">
+  <img src="docs/screenshots/office-3d-preview.jpg" alt="HAS AI Studio - 3D Autonomous AI Virtual Office" width="100%" />
+</p>
+
 ---
 
 ## 🌟 Architectural Overview
