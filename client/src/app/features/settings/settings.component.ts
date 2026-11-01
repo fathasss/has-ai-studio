@@ -73,9 +73,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   @HostListener('document:click', ['$event'])
-  onDocumentClick(event: MouseEvent) {
-    const target = event.target as HTMLElement;
-    if (!target.closest('.custom-model-select-container')) {
+  onDocumentClick(event?: any) {
+    const target = event?.target as HTMLElement;
+    if (target && !target.closest('.custom-model-select-container')) {
       this.closeModelDropdown();
     }
   }

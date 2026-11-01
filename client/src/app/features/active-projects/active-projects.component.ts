@@ -620,10 +620,10 @@ export class ActiveProjectsComponent implements OnInit, AfterViewInit, OnDestroy
     this.officeScene?.focusAgent(agentId);
   }
 
-  @HostListener('document:click', [''])
-  onDocumentClick(event: MouseEvent): void {
-    const target = event.target as HTMLElement;
-    if (!target.closest('.mission-selector-wrap')) {
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event?: any): void {
+    const target = event?.target as HTMLElement;
+    if (target && !target.closest('.mission-selector-wrap')) {
       this.missionDropdownOpen = false;
     }
   }
